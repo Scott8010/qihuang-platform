@@ -84,6 +84,24 @@ jobs:
               time.sleep(2)
           "
 
+      - name: 诊断路由挂载
+        run: |
+          python -c "
+          from qihuang_platform.main import app
+          routes = [r.path for r in app.routes if hasattr(r, 'path')]
+          acupoint_routes = [p for p in routes if 'acupoint' in p]
+          print(f'总路由数: {len(routes)}')
+          print(f'acupoint路由: {acupoint_routes}')
+          if not acupoint_routes:
+              print('WARNING: acupoint路由未挂载！')
+              # 检查capability导入
+              try:
+                  from qihuang_platform.capability import capability_router
+                  print('capability_router导入成功')
+              except Exception as e:
+                  print(f'capability_router导入失败: {e}')
+          "
+
       - name: 运行测试
         run: |
           pytest tests/ \
