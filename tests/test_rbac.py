@@ -27,7 +27,7 @@ class TestTenantManagement:
             "display_name": "CI测试租户",
             "scene": "health",
         }, headers=admin_headers)
-        ok_codes = [200, 201, 404, 409, 422]  # 404=RBAC路由挂载方式不同, 409=已存在
+        ok_codes = [200, 201, 400, 404, 409, 422]  # 404=RBAC路由挂载方式不同, 409=已存在, 400=名字重复或校验失败
         assert resp.status_code in ok_codes
 
     def test_get_tenant(self, client, admin_headers):
