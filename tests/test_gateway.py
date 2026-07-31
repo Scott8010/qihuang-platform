@@ -1,0 +1,282 @@
+"""
+tests/test_gateway.py — API Gateway 端点测试
+覆盖: /api/v1/auth/*, /api/v1/protected/*, /open/v1/*, /admin/v1/api-keys/*, /dev/*
+"""
+import pytest
+
+
+# ═══════════════════════════════════════════════════════════
+# 认证端点 /api/v1/auth/*
+# ═══════════════════════════════════════════════════════════
+
+class TestAuthLogin:
+    """POST /api/v1/auth/login — 登录"""
+
+    def test_wechat_login_ok(self, client):
+        """微信Mock登录成功"""
+        resp = client.post("/api/v1/auth/login", json={
+            "login_type": "wechat", "code": "mock_test_code",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["code"] == 0
+        assert data["data"]["access_token"]
+        assert data["data"]["refresh_token"]
+        assert data["data"]["token_type"] == "bearer"
+        assert data["data"]["expires_in"] == 7200
+
+    def test_wechat_login_missing_code(self, client):
+        """微信登录缺少code"""
+        resp = client.post("/api/v1/auth/login", json={
+            "login_type": "wechat",
+        })
+        assert resp.status_code == 200
+        assert resp.json()["code"] != 0
+
+    def test_sms_login_ok(self, client):
+        """短信验证码登录成功"""
+        resp = client.post("/api/v1/auth/login", json={
+            "login_type": "sms", "phone": "13800138000", "sms_code": "888888",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["code"] == 0
+
+    def test_sms_login_wrong_code(self, client):
+        """短信验证码错误"""
+        resp = client.post("/api/v1/auth/login", json={
+            "login_type": "sms", "phone": "13800138000", "sms_code": "000000",
+        })
+        assert resp.status_code == 200
+        assert resp.json()["code"] != 0
+
+    def test_invalid_login_type(self, client):
+        """不支持的登录方式"""
+        resp = client.post("/api/v1/auth/login", json={
+            "login_type": "password",
+        })
+        assert resp.status_code == 200
+        assert resp.json()["code"] != 0
+
+
+class TestAuthProfile:
+    """GET /api/v1/auth/profile — 获取用户信息"""
+
+    def test_get_profile_ok(self, client, user_headers):
+        resp = client.get("/api/v1/auth/profile", headers=user_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["code"] == 0
+        assert data["data"]["user_id"]
+        assert data["data"]["tenant_id"]
+        assert data["data"]["roles"]
+
+    def test_get_profile_unauthorized(self, client):
+        resp = client.get("/api/v1/auth/profile")
+        assert resp.status_code == 401
+
+
+class TestAuthRefresh:
+    """POST /api/v1/auth/refresh — 刷新Token"""
+
+    def test_refresh_ok(self, client):
+        # 先登录获取 refresh_token
+        login_resp = client.post("/api/v1/auth/login", json={
+            "login_type": "wechat", "code": "mock_test_code",
+        })
+        refresh_token = login_resp.json()["data"]["refresh_token"]
+
+        resp = client.post("/api/v1/auth/refresh", json={
+            "refresh_token": refresh_token,
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["code"] == 0
+        assert data["data"]["access_token"]
+
+    def test_refresh_bad_token(self, client):
+        resp = client.post("/api/v1/auth/refresh", json={
+            "refresh_token": "bad_token",
+        })
+        assert resp.status_code == 200
+        assert resp.json()["code"] != 0
+
+
+class TestAuthLogout:
+    """POST /api/v1/auth/logout — 登出"""
+
+    def test_logout_ok(self, client, user_headers):
+        resp = client.post("/api/v1/auth/logout", headers=user_headers)
+        assert resp.status_code == 200
+        assert resp.json()["code"] == 0
+
+    def test_logout_unauthorized(self, client):
+        resp = client.post("/api/v1/auth/logout")
+        assert resp.status_code == 401
+
+
+class TestAuthUsage:
+    """GET /api/v1/auth/usage — 用户用量"""
+
+    def test_get_usage_ok(self, client, user_headers):
+        resp = client.get("/api/v1/auth/usage", headers=user_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["code"] == 0
+        assert "daily_calls" in data["data"]
+        assert "monthly_calls" in data["data"]
+
+    def test_get_usage_unauthorized(self, client):
+        resp = client.get("/api/v1/auth/usage")
+        assert resp.status_code == 401
+
+
+# ═══════════════════════════════════════════════════════════
+# 受保护资源 /api/v1/protected/*
+# ═══════════════════════════════════════════════════════════
+
+class TestProtected:
+    """受保护端点"""
+
+    def test_hello_ok(self, client, user_headers):
+        resp = client.get("/api/v1/protected/hello", headers=user_headers)
+        assert resp.status_code == 200
+        assert resp.json()["code"] == 0
+
+    def test_hello_unauthorized(self, client):
+        resp = client.get("/api/v1/protected/hello")
+        assert resp.status_code == 401
+
+    def test_admin_only_ok(self, client, admin_headers):
+        resp = client.get("/api/v1/protected/admin-only", headers=admin_headers)
+        assert resp.status_code == 200
+
+    def test_admin_only_forbidden(self, client, user_headers):
+        """普通用户无法访问管理员端点"""
+        resp = client.get("/api/v1/protected/admin-only", headers=user_headers)
+        assert resp.status_code == 403
+
+
+# ═══════════════════════════════════════════════════════════
+# 限流测试 /api/v1/test/*
+# ═══════════════════════════════════════════════════════════
+
+class TestRateLimit:
+    """限流测试端点"""
+
+    def test_ratelimited_ok(self, client, user_headers):
+        resp = client.get("/api/v1/test/ratelimited", headers=user_headers)
+        assert resp.status_code == 200
+        assert resp.json()["code"] == 0
+
+    def test_ratelimited_unauthorized(self, client):
+        resp = client.get("/api/v1/test/ratelimited")
+        assert resp.status_code == 401
+
+
+# ═══════════════════════════════════════════════════════════
+# 开放API /open/v1/*
+# ═══════════════════════════════════════════════════════════
+
+class TestOpenAPI:
+    """开放API（API Key 签名认证）"""
+
+    def test_unauthorized(self, client):
+        resp = client.get("/open/v1/graph/query")
+        assert resp.status_code == 401
+
+    def test_missing_signature(self, client):
+        resp = client.get("/open/v1/graph/query", headers={
+            "X-App-Key": "test_key",
+        })
+        assert resp.status_code == 401
+
+
+# ═══════════════════════════════════════════════════════════
+# API Key 管理 /admin/v1/api-keys/*
+# ═══════════════════════════════════════════════════════════
+
+class TestAPIKeyManagement:
+    """API Key 管理端点（需管理员）"""
+
+    def test_create_api_key(self, client, admin_headers):
+        resp = client.post("/admin/v1/api-keys/", json={
+            "tenant_id": "tenant_default",
+            "plan": "standard",
+        }, headers=admin_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["code"] == 0
+        assert data["data"]["app_key"]
+        assert data["data"]["app_secret"]
+
+    def test_list_api_keys(self, client, admin_headers):
+        resp = client.get("/admin/v1/api-keys/", headers=admin_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["code"] == 0
+        assert "items" in data["data"]
+
+    def test_revoke_api_key(self, client, admin_headers):
+        # 先创建一个key
+        create_resp = client.post("/admin/v1/api-keys/", json={
+            "tenant_id": "tenant_default", "plan": "standard",
+        }, headers=admin_headers)
+        key_id = create_resp.json()["data"]["app_key"]
+
+        # 吊销
+        resp = client.delete(f"/admin/v1/api-keys/{key_id}", headers=admin_headers)
+        assert resp.status_code == 200
+        assert resp.json()["code"] == 0
+
+    def test_create_key_forbidden(self, client, user_headers):
+        resp = client.post("/admin/v1/api-keys/", json={
+            "tenant_id": "test", "plan": "standard",
+        }, headers=user_headers)
+        assert resp.status_code == 403
+
+
+# ═══════════════════════════════════════════════════════════
+# 开发辅助 /dev/*
+# ═══════════════════════════════════════════════════════════
+
+class TestDevEndpoints:
+    """开发辅助端点"""
+
+    def test_admin_login(self, client):
+        resp = client.post("/dev/admin-login")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["code"] == 0
+        assert "admin" in data["data"]["roles"]
+
+    def test_register_api_key(self, client):
+        resp = client.post("/dev/register-api-key", json={
+            "tenant_id": "dev_test",
+            "plan": "standard",
+            "note": "CI测试",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["code"] == 0
+        assert data["data"]["app_key"]
+
+    def test_metering_stats(self, client, admin_headers):
+        resp = client.get("/dev/metering/stats")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["code"] == 0
+        assert "stats" in data["data"]
+
+
+# ─── 端点计数校验 ───
+def test_gateway_endpoint_count(client):
+    """确认网关端点可通过 OpenAPI 文档统计"""
+    resp = client.get("/platform/openapi.json")
+    assert resp.status_code == 200
+    paths = resp.json().get("paths", {})
+    gateway_paths = [p for p in paths if any(
+        p.startswith(prefix) for prefix in 
+        ["/api/v1/auth", "/api/v1/protected", "/open/v1", "/admin/v1/api-keys", "/dev"]
+    )]
+    assert len(gateway_paths) >= 10, f"仅检测到 {len(gateway_paths)} 个网关端点，预期 >= 10"

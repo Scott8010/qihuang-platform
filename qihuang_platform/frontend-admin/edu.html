@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>岐黄智脑 · 培训学习平台</title>
+<style>
+/* ═══════════════ Reset & Variables ═══════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563eb;--primary-hover:#1d4ed8;--primary-light:#eff6ff;
+  --bg:#f8fafc;--surface:#fff;--border:#e2e8f0;--text:#1e293b;--text-secondary:#64748b;
+  --success:#16a34a;--warning:#d97706;--danger:#dc2626;--info:#0ea5e9;
+  --radius:8px;--shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --sidebar-w:238px;--topbar-h:56px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh}
+a{color:var(--primary);text-decoration:none}
+button{cursor:pointer;font-family:inherit}
+
+/* ═══════════════ Login ═══════════════ */
+.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#eff6ff 0%,#f0f9ff 50%,#ecfdf5 100%)}
+.login-card{background:var(--surface);border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.08);padding:40px;width:400px;max-width:90vw}
+.login-card h1{font-size:22px;color:var(--text);margin-bottom:4px;text-align:center}
+.login-card .sub{font-size:13px;color:var(--text-secondary);text-align:center;margin-bottom:28px}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px}
+.form-group input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;transition:border-color .2s;background:var(--bg)}
+.form-group input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.login-card .btn{width:100%;padding:11px;border:none;border-radius:var(--radius);font-size:15px;font-weight:600;background:var(--primary);color:#fff;transition:background .2s}
+.login-card .btn:hover{background:var(--primary-hover)}
+.login-card .btn:disabled{opacity:.6;cursor:not-allowed}
+.login-err{color:var(--danger);font-size:13px;text-align:center;margin-top:12px;display:none}
+
+/* ═══════════════ Layout ═══════════════ */
+.app{display:none;min-height:100vh}
+.app.active{display:flex}
+.sidebar{width:var(--sidebar-w);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100}
+.sidebar-brand{padding:20px 24px;border-bottom:1px solid var(--border)}
+.sidebar-brand h2{font-size:16px;color:var(--text);font-weight:700}
+.sidebar-brand .ver{font-size:11px;color:var(--text-secondary);margin-top:2px}
+.sidebar-nav{flex:1;overflow-y:auto;padding:12px 0}
+.nav-group{padding:0 12px;margin-bottom:4px}
+.nav-group-title{font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;padding:8px 12px 4px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:6px;font-size:14px;color:var(--text-secondary);cursor:pointer;transition:all .15s;margin-bottom:2px;border:none;background:none;width:100%;text-align:left}
+.nav-item:hover{background:var(--bg);color:var(--text)}
+.nav-item.active{background:var(--primary-light);color:var(--primary);font-weight:600}
+.nav-item .icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+.sidebar-footer{padding:12px 24px;border-top:1px solid var(--border);font-size:13px}
+.sidebar-footer .user-info{color:var(--text);font-weight:500;margin-bottom:4px}
+.sidebar-footer .user-role{font-size:11px;color:var(--text-secondary)}
+.sidebar-footer .logout-btn{font-size:12px;color:var(--danger);background:none;border:none;padding:4px 0;margin-top:8px;cursor:pointer}
+
+.main{flex:1;margin-left:var(--sidebar-w);display:flex;flex-direction:column}
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;position:sticky;top:0;z-index:50}
+.topbar h3{font-size:16px;font-weight:600;color:var(--text)}
+.topbar .breadcrumb{font-size:13px;color:var(--text-secondary)}
+.content{padding:24px;flex:1}
+
+/* ═══════════════ Cards & Components ═══════════════ */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.card-header h4{font-size:15px;font-weight:600}
+.card-body{padding:20px}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;box-shadow:var(--shadow)}
+.stat-card .stat-label{font-size:12px;color:var(--text-secondary);margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px}
+.stat-card .stat-value{font-size:28px;font-weight:700;color:var(--text)}
+.stat-card .stat-sub{font-size:12px;color:var(--text-secondary);margin-top:4px}
+
+table{width:100%;border-collapse:collapse;font-size:14px}
+thead th{padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.3px;border-bottom:2px solid var(--border);background:var(--bg)}
+tbody td{padding:10px 14px;border-bottom:1px solid var(--border);color:var(--text)}
+tbody tr:hover{background:var(--bg)}
+
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600}
+.badge-blue{background:var(--primary-light);color:var(--primary)}
+.badge-green{background:#dcfce7;color:var(--success)}
+.badge-yellow{background:#fef3c7;color:var(--warning)}
+.badge-red{background:#fee2e2;color:var(--danger)}
+.badge-gray{background:#f1f5f9;color:var(--text-secondary)}
+
+.btn{padding:8px 16px;border-radius:6px;font-size:13px;font-weight:500;border:1px solid var(--border);background:var(--surface);color:var(--text);transition:all .15s}
+.btn:hover{background:var(--bg)}
+.btn-primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+.btn-primary:hover{background:var(--primary-hover)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+input,select,textarea{font-family:inherit;font-size:14px;padding:9px 12px;border:1px solid var(--border);border-radius:6px;width:100%;transition:border-color .2s;background:var(--surface)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2364748b'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+textarea{resize:vertical;min-height:80px}
+.form-row{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.form-row>*{flex:1;min-width:120px}
+
+.empty-state{padding:48px 20px;text-align:center;color:var(--text-secondary)}
+.empty-state .empty-icon{font-size:40px;margin-bottom:12px}
+.empty-state p{font-size:14px}
+
+.spinner{display:inline-block;width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-size:14px;color:#fff;z-index:9999;animation:toastIn .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.toast-success{background:var(--success)}
+.toast-error{background:var(--danger)}
+.toast-info{background:var(--info)}
+@keyframes toastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+/* Coach chat */
+.chat-box{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.chat-messages{padding:16px;max-height:400px;overflow-y:auto;background:var(--bg);min-height:200px}
+.chat-msg{margin-bottom:12px;display:flex;gap:8px}
+.chat-msg.user{justify-content:flex-end}
+.chat-msg .bubble{max-width:75%;padding:10px 14px;border-radius:12px;font-size:14px;line-height:1.5}
+.chat-msg.user .bubble{background:var(--primary);color:#fff;border-bottom-right-radius:4px}
+.chat-msg.assistant .bubble{background:var(--surface);color:var(--text);border:1px solid var(--border);border-bottom-left-radius:4px}
+.chat-input-area{padding:12px;border-top:1px solid var(--border);display:flex;gap:8px;background:var(--surface)}
+.chat-input-area textarea{flex:1;min-height:40px;max-height:120px;border:1px solid var(--border);border-radius:6px;padding:8px 12px;resize:none}
+
+/* Exam */
+.exam-question{padding:16px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;background:var(--surface)}
+.exam-question .q-title{font-weight:600;margin-bottom:8px;font-size:14px;color:var(--text)}
+.exam-question .q-type{font-size:11px;color:var(--text-secondary);text-transform:uppercase;margin-bottom:4px}
+.exam-question .q-content{font-size:14px;color:var(--text);background:var(--bg);padding:10px 14px;border-radius:6px;margin-bottom:10px;white-space:pre-wrap;line-height:1.6}
+.exam-option{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;cursor:pointer;transition:all .15s;font-size:14px}
+.exam-option:hover{border-color:var(--primary);background:var(--primary-light)}
+.exam-option.selected{border-color:var(--primary);background:var(--primary-light);font-weight:500}
+
+/* Result details */
+.result-item{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:14px}
+.result-item:last-child{border-bottom:none}
+.score-ring{display:inline-flex;align-items:center;justify-content:center;width:80px;height:80px;border-radius:50%;border:4px solid var(--primary);font-size:24px;font-weight:700;color:var(--primary);margin:0 auto 16px}
+
+/* Responsive */
+@media(max-width:768px){
+  .sidebar{width:60px}
+  .sidebar-brand h2,.sidebar-brand .ver,.nav-group-title,.nav-item span:not(.icon),.sidebar-footer{display:none}
+  .nav-item{justify-content:center;padding:10px 0}
+  .nav-item .icon{margin:0}
+  .main{margin-left:60px}
+  :root{--sidebar-w:60px}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ Login Page ═══════════════ -->
+<div id="loginPage" class="login-wrap">
+  <div class="login-card">
+    <h1>岐黄智脑</h1>
+    <div class="sub">培训学习平台</div>
+    <div class="form-group"><label>账号</label><input id="loginUser" placeholder="输入账号" autocomplete="username"></div>
+    <div class="form-group"><label>密码</label><input id="loginPass" type="password" placeholder="输入密码" autocomplete="current-password"></div>
+    <button class="btn" id="loginBtn" onclick="doLogin()">登 录</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ═══════════════ App Layout ═══════════════ -->
+<div class="app" id="app">
+  <aside class="sidebar">
+    <div class="sidebar-brand"><h2>岐黄智脑</h2><div class="ver">培训学习平台 v1.0</div></div>
+    <nav class="sidebar-nav">
+      <div class="nav-group">
+        <div class="nav-group-title">学习工具</div>
+        <button class="nav-item active" data-tab="classics"><span class="icon">📖</span><span>经典检索</span></button>
+        <button class="nav-item" data-tab="coach"><span class="icon">🧠</span><span>AI 陪练</span></button>
+        <button class="nav-item" data-tab="exams"><span class="icon">📝</span><span>考试中心</span></button>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-title">数据中心</div>
+        <button class="nav-item" data-tab="cases"><span class="icon">📋</span><span>病案库</span></button>
+        <button class="nav-item" data-tab="dashboard"><span class="icon">📊</span><span>学情看板</span></button>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info" id="sidebarUser">—</div>
+      <div class="user-role">学员</div>
+      <button class="logout-btn" onclick="doLogout()">退出登录</button>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="topbar"><h3 id="pageTitle">经典检索</h3><span class="breadcrumb" id="breadcrumb"></span></div>
+    <div class="content" id="contentArea"></div>
+  </main>
+</div>
+
+<script>
+/* ═══════════════ Globals ═══════════════ */
+const API='http://localhost:8602';
+let TOKEN='',USER={};
+
+/* ═══════════════ Auth ═══════════════ */
+async function doLogin(){
+  const u=document.getElementById('loginUser').value.trim();
+  const btn=document.getElementById('loginBtn'),err=document.getElementById('loginErr');
+  if(!u){err.textContent='请输入账号';err.style.display='block';return}
+  btn.disabled=true;btn.textContent='登录中...';err.style.display='none';
+  try{
+    const r=await fetch(API+'/dev/admin-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:'x'})});
+    const d=await r.json();
+    if(d.code===0&&d.data&&d.data.access_token){
+      TOKEN=d.data.access_token;USER=d.data.user||{};
+      localStorage.setItem('edu_token',TOKEN);localStorage.setItem('edu_user',JSON.stringify(USER));
+      showApp();
+    }else{err.textContent=d.message||'登录失败';err.style.display='block'}
+  }catch(e){err.textContent='无法连接服务器';err.style.display='block'}
+  btn.disabled=false;btn.textContent='登 录';
+}
+
+function doLogout(){localStorage.removeItem('edu_token');localStorage.removeItem('edu_user');location.reload()}
+
+function api(path,opts={}){
+  const h={Authorization:'Bearer '+TOKEN,'Content-Type':'application/json',...opts.headers};
+  return fetch(API+path,{...opts,headers:h}).then(r=>r.json());
+}
+
+/* ═══════════════ Navigation ═══════════════ */
+const tabs=['classics','coach','exams','cases','dashboard'];
+const titles={classics:'经典检索',coach:'AI 陪练',exams:'考试中心',cases:'病案库',dashboard:'学情看板'};
+
+function switchTab(name){
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active',el.dataset.tab===name));
+  document.getElementById('pageTitle').textContent=titles[name]||name;
+  document.getElementById('breadcrumb').textContent='';
+  const c=document.getElementById('contentArea');
+  switch(name){
+    case 'classics':loadClassics();break;
+    case 'coach':loadCoach();break;
+    case 'exams':loadExams();break;
+    case 'cases':loadCases();break;
+    case 'dashboard':loadDashboard();break;
+  }
+}
+
+document.querySelectorAll('.nav-item').forEach(el=>el.addEventListener('click',()=>switchTab(el.dataset.tab)));
+
+function showApp(){
+  document.getElementById('loginPage').style.display='none';
+  const app=document.getElementById('app');app.classList.add('active');
+  document.getElementById('sidebarUser').textContent=USER.username||USER.sub||'学员';
+  switchTab('classics');
+}
+
+function toast(msg,type='info'){
+  const t=document.createElement('div');t.className='toast toast-'+type;t.textContent=msg;document.body.appendChild(t);
+  setTimeout(()=>{t.remove()},3000);
+}
+
+/* ═══════════════ Auto-login ═══════════════ */
+(function(){
+  TOKEN=localStorage.getItem('edu_token');
+  const u=localStorage.getItem('edu_user');
+  if(TOKEN&&u){try{USER=JSON.parse(u);showApp()}catch(e){localStorage.removeItem('edu_token')}}
+  document.getElementById('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+})();
+
+/* ═══════════════ 1. Classics Search ═══════════════ */
+let classicsPage=1,classicsData=null;
+
+function loadClassics(){
+  document.getElementById('contentArea').innerHTML=`
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-body">
+        <div class="form-row">
+          <input id="clsKeyword" placeholder="搜索关键词，如'太阳病'" onkeydown="if(event.key==='Enter')searchClassics(1)" style="flex:2">
+          <select id="clsClassic" style="flex:1"><option value="">全部经典</option><option value="内经">内经</option><option value="伤寒论">伤寒论</option><option value="金匮要略">金匮要略</option><option value="温病条辨">温病条辨</option></select>
+          <button class="btn btn-primary" onclick="searchClassics(1)">搜索</button>
+        </div>
+      </div>
+    </div>
+    <div class="card"><div class="card-header"><h4>检索结果</h4><span class="badge badge-gray" id="clsTotal">共 0 条</span></div>
+    <div id="clsResults"><div class="empty-state"><div class="empty-icon">📖</div><p>输入关键词开始检索经典条文</p></div></div></div>
+    <div id="clsPager" style="margin-top:16px;text-align:center"></div>`;
+}
+
+async function searchClassics(page){
+  classicsPage=page;
+  const kw=document.getElementById('clsKeyword').value.trim();
+  const cl=document.getElementById('clsClassic').value;
+  if(!kw){toast('请输入关键词','error');return}
+  try{
+    const params=new URLSearchParams({keyword:kw,page:String(page),page_size:'20'});
+    if(cl)params.set('classic',cl);
+    const d=await api('/api/v1/edu/classics/search?'+params);
+    if(d.code!==0){toast(d.message||'检索失败','error');return}
+    classicsData=d.data;
+    document.getElementById('clsTotal').textContent='共 '+(classicsData.total||0)+' 条';
+    if(!classicsData.items||classicsData.items.length===0){
+      document.getElementById('clsResults').innerHTML='<div class="empty-state"><p>未找到匹配的经典条文</p></div>';
+    }else{
+      document.getElementById('clsResults').innerHTML=`<table><thead><tr><th style="width:60px">#</th><th>条文内容</th><th style="width:100px">来源</th></tr></thead><tbody>`+
+        classicsData.items.map((it,i)=>`<tr><td>${(page-1)*20+i+1}</td><td style="white-space:pre-wrap;line-height:1.6">${esc(it.content||it.text||it.passage||JSON.stringify(it))}</td><td><span class="badge badge-blue">${esc(it.classic||it.source||'—')}</span></td></tr>`).join('')+'</tbody></table>';
+    }
+    renderPager('clsPager',classicsData.total,page,20,'searchClassics');
+  }catch(e){toast('检索失败: '+e.message,'error')}
+}
+
+/* ═══════════════ 2. AI Coach ═══════════════ */
+let coachSessionId=null,coachMsgs=[];
+
+function loadCoach(){
+  document.getElementById('contentArea').innerHTML=`
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header"><h4>创建陪练会话</h4></div>
+      <div class="card-body">
+        <div class="form-row">
+          <input id="coachTopic" placeholder="陪练主题，如'太阳病辨证'" style="flex:2">
+          <select id="coachDifficulty" style="flex:1"><option value="easy">初级</option><option value="medium" selected>中级</option><option value="hard">高级</option></select>
+          <button class="btn btn-primary" onclick="createCoachSession()">开始陪练</button>
+        </div>
+      </div>
+    </div>
+    <div class="card" id="coachPanel" style="display:none">
+      <div class="card-header"><h4 id="coachTopicTitle">—</h4><span class="badge badge-gray" id="coachStatus"></span></div>
+      <div class="chat-box">
+        <div class="chat-messages" id="coachMessages"></div>
+        <div class="chat-input-area">
+          <textarea id="coachInput" placeholder="输入你的辨证分析和方药选择..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendCoachAnswer()}"></textarea>
+          <button class="btn btn-primary" onclick="sendCoachAnswer()">提交</button>
+        </div>
+      </div>
+      <div class="card-body" id="coachEval" style="display:none"></div>
+    </div>`;
+}
+
+async function createCoachSession(){
+  const topic=document.getElementById('coachTopic').value.trim();
+  const diff=document.getElementById('coachDifficulty').value;
+  if(!topic){toast('请输入陪练主题','error');return}
+  try{
+    const d=await api('/api/v1/edu/coach/sessions',{method:'POST',body:JSON.stringify({topic:topic,difficulty:diff})});
+    if(d.code!==0){toast(d.message||'创建失败','error');return}
+    coachSessionId=d.data.session_id;coachMsgs=[];
+    document.getElementById('coachPanel').style.display='block';
+    document.getElementById('coachTopicTitle').textContent=topic;
+    document.getElementById('coachStatus').textContent='进行中';
+    document.getElementById('coachMessages').innerHTML='<div class="chat-msg assistant"><div class="bubble">已为你创建"' + esc(topic) + '"陪练会话，请开始作答。</div></div>';
+    document.getElementById('coachEval').style.display='none';
+    coachMsgs.push({role:'assistant',content:'已为你创建"' + topic + '"陪练会话，请开始作答。'});
+  }catch(e){toast('创建失败: '+e.message,'error')}
+}
+
+async function sendCoachAnswer(){
+  const input=document.getElementById('coachInput');
+  const answer=input.value.trim();
+  if(!answer||!coachSessionId)return;
+  input.value='';input.disabled=true;
+  coachMsgs.push({role:'user',content:answer});
+  renderCoachMessages();
+  try{
+    const d=await api('/api/v1/edu/coach/evaluate',{method:'POST',body:JSON.stringify({session_id:coachSessionId,answer:answer})});
+    if(d.code!==0){toast(d.message||'评估失败','error');input.disabled=false;return}
+    const ai=d.data.ai_response||'(AI服务暂不可用)';
+    coachMsgs.push({role:'assistant',content:ai});
+    renderCoachMessages();
+    const evalMap={PERFECT:'green',GOOD:'blue',PARTIAL:'yellow',WRONG:'red'};
+    const evalText={PERFECT:'完美',GOOD:'良好',PARTIAL:'部分正确',WRONG:'错误'};
+    const cls=evalMap[d.data.evaluation]||'gray';
+    document.getElementById('coachEval').style.display='block';
+    document.getElementById('coachEval').innerHTML=`
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span class="badge badge-${cls}" style="font-size:14px;padding:4px 12px">${evalText[d.data.evaluation]||d.data.evaluation}</span>
+        <span style="font-size:14px;color:var(--text)">得分: <b>${d.data.score||0}</b></span>
+        <span style="font-size:13px;color:var(--text-secondary)">${esc(d.data.feedback||'')}</span>
+      </div>`;
+    if(d.data.reasoning_chain&&d.data.reasoning_chain.length){
+      document.getElementById('coachEval').innerHTML+=`<div style="margin-top:12px;padding:12px;background:var(--bg);border-radius:6px;font-size:13px;color:var(--text-secondary)"><b>推理链:</b><br>`+d.data.reasoning_chain.map(r=>'• '+esc(typeof r==='string'?r:JSON.stringify(r))).join('<br>')+'</div>';
+    }
+  }catch(e){toast('评估失败: '+e.message,'error')}
+  input.disabled=false;input.focus();
+}
+
+function renderCoachMessages(){
+  document.getElementById('coachMessages').innerHTML=coachMsgs.map(m=>`<div class="chat-msg ${m.role}"><div class="bubble">${esc(m.content)}</div></div>`).join('');
+  document.getElementById('coachMessages').scrollTop=document.getElementById('coachMessages').scrollHeight;
+}
+
+/* ═══════════════ 3. Exams ═══════════════ */
+let examQuestions=[],examId=null,examAnswers={};
+
+function loadExams(){
+  document.getElementById('contentArea').innerHTML=`
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header"><h4>智能组卷</h4></div>
+      <div class="card-body">
+        <div class="form-row">
+          <input id="examCategory" placeholder="类别，如'伤寒论'" style="flex:1.5">
+          <select id="examDifficulty" style="flex:1"><option value="easy">初级</option><option value="medium" selected>中级</option><option value="hard">高级</option></select>
+          <select id="examCount" style="flex:0.5"><option value="5">5题</option><option value="10" selected>10题</option><option value="15">15题</option><option value="20">20题</option></select>
+          <select id="examTypes" style="flex:1"><option value="choice">选择题</option><option value="choice,fill">选择+填空</option><option value="choice,fill,short_answer" selected>全题型</option></select>
+          <button class="btn btn-primary" onclick="generateExam()">生成试卷</button>
+        </div>
+      </div>
+    </div>
+    <div id="examPanel"></div>`;
+}
+
+async function generateExam(){
+  const cat=document.getElementById('examCategory').value.trim();
+  if(!cat){toast('请输入类别','error');return}
+  const diff=document.getElementById('examDifficulty').value;
+  const count=parseInt(document.getElementById('examCount').value);
+  const types=document.getElementById('examTypes').value.split(',');
+  try{
+    const d=await api('/api/v1/edu/exams/generate',{method:'POST',body:JSON.stringify({category:cat,difficulty:diff,question_count:count,question_types:types})});
+    if(d.code!==0){toast(d.message||'组卷失败','error');return}
+    examId=d.data.exam_id;examQuestions=d.data.questions;examAnswers={};
+    if(!examQuestions||examQuestions.length===0){toast('未获取到题目，请检查8601服务','error');return}
+    renderExamQuestions();
+  }catch(e){toast('组卷失败: '+e.message,'error')}
+}
+
+function renderExamQuestions(){
+  let html='<div class="card"><div class="card-header"><h4>试卷 · '+(examQuestions[0].content||'').substring(0,20)+'...</h4><span class="badge badge-blue">'+examQuestions.length+'题</span></div><div class="card-body">';
+  examQuestions.forEach((q,i)=>{
+    html+=`<div class="exam-question"><div class="q-type">第${i+1}题 · ${q.type==='choice'?'选择题':q.type==='fill'?'填空题':'简答题'}</div><div class="q-content">${esc(q.content||'')}</div>`;
+    if(q.type==='choice'&&q.options){
+      Object.entries(q.options).forEach(([k,v])=>{
+        html+=`<div class="exam-option${examAnswers[q.id]===k?' selected':''}" onclick="selectOption('${q.id}','${k}',this)"><b>${k}.</b> ${esc(v)}</div>`;
+      });
+    }else{
+      html+=`<textarea id="ans_${q.id}" placeholder="输入你的答案..." oninput="examAnswers['${q.id}']=this.value" style="margin-top:8px">${esc(examAnswers[q.id]||'')}</textarea>`;
+    }
+    html+='</div>';
+  });
+  html+=`<button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="submitExam()">提交试卷</button></div></div>`;
+  document.getElementById('examPanel').innerHTML=html;
+}
+
+function selectOption(qid,opt,el){
+  examAnswers[qid]=opt;
+  el.parentElement.querySelectorAll('.exam-option').forEach(e=>e.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+async function submitExam(){
+  if(Object.keys(examAnswers).length===0){toast('请至少作答一题','error');return}
+  try{
+    const d=await api('/api/v1/edu/exams/submit',{method:'POST',body:JSON.stringify({exam_id:examId,answers:examAnswers})});
+    if(d.code!==0){toast(d.message||'提交失败','error');return}
+    const pass=d.data.pass;
+    document.getElementById('examPanel').innerHTML=`
+      <div class="card"><div class="card-body" style="text-align:center">
+        <div class="score-ring" style="border-color:${pass?'var(--success)':'var(--danger)'};color:${pass?'var(--success)':'var(--danger)'}">${d.data.score}/${d.data.max_score}</div>
+        <h4 style="margin-bottom:8px">${pass?'✅ 通过':'❌ 未通过'}</h4>
+        <p style="font-size:14px;color:var(--text-secondary)">得分率 ${Math.round(d.data.score/d.data.max_score*100)}%</p>
+        <div style="margin-top:16px;text-align:left">${(d.data.details||[]).map(r=>`
+          <div class="result-item"><span>第${r.question_id}题</span><span class="badge badge-${r.correct?'green':'red'}">${r.correct?'正确':'错误'}</span></div>
+        `).join('')}</div>
+        <button class="btn" style="margin-top:16px" onclick="loadExams()">重新组卷</button>
+      </div></div>`;
+  }catch(e){toast('提交失败: '+e.message,'error')}
+}
+
+/* ═══════════════ 4. Cases Library ═══════════════ */
+let casesPage=1;
+
+function loadCases(){
+  document.getElementById('contentArea').innerHTML=`
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-body">
+        <div class="form-row">
+          <input id="casesKeyword" placeholder="搜索关键词（患者代号/诊断/备注）" onkeydown="if(event.key==='Enter')searchCases(1)" style="flex:2">
+          <button class="btn btn-primary" onclick="searchCases(1)">搜索</button>
+        </div>
+      </div>
+    </div>
+    <div class="card"><div class="card-header"><h4>病案列表</h4><span class="badge badge-gray" id="casesTotal">共 0 条</span></div>
+    <div id="casesResults"><div class="empty-state"><div class="empty-icon">📋</div><p>暂无病案记录</p></div></div></div>
+    <div id="casesPager" style="margin-top:16px;text-align:center"></div>`;
+  searchCases(1);
+}
+
+async function searchCases(page){
+  casesPage=page;
+  const kw=document.getElementById('casesKeyword').value.trim();
+  const params=new URLSearchParams({page:String(page),page_size:'20'});
+  if(kw)params.set('keyword',kw);
+  try{
+    const d=await api('/api/v1/edu/cases/library?'+params);
+    if(d.code!==0){toast(d.message||'查询失败','error');return}
+    const data=d.data;
+    document.getElementById('casesTotal').textContent='共 '+(data.total||0)+' 条';
+    if(!data.items||data.items.length===0){
+      document.getElementById('casesResults').innerHTML='<div class="empty-state"><p>暂无病案记录</p></div>';
+    }else{
+      document.getElementById('casesResults').innerHTML=`<table><thead><tr><th>患者代号</th><th>诊断信息</th><th>处方</th><th style="width:140px">归档时间</th></tr></thead><tbody>`+
+        data.items.map(c=>`<tr><td><b>${esc(c.patient_alias||'—')}</b></td><td style="max-width:250px;white-space:pre-wrap;font-size:13px">${esc(typeof c.diagnoses==='string'?c.diagnoses:JSON.stringify(c.diagnoses||{}))}</td><td style="max-width:250px;font-size:13px">${esc(typeof c.prescriptions==='string'?c.prescriptions:JSON.stringify(c.prescriptions||[]))}</td><td style="font-size:12px;color:var(--text-secondary)">${c.created_at?new Date(c.created_at).toLocaleString('zh-CN'):'—'}</td></tr>`).join('')+'</tbody></table>';
+    }
+    renderPager('casesPager',data.total,page,20,'searchCases');
+  }catch(e){toast('查询失败: '+e.message,'error')}
+}
+
+/* ═══════════════ 5. Dashboard ═══════════════ */
+async function loadDashboard(){
+  document.getElementById('contentArea').innerHTML='<div class="stat-grid">'+['陪练次数','陪练均分','测评次数','测评均分'].map(l=>`<div class="stat-card"><div class="stat-label">${l}</div><div class="stat-value"><span class="spinner"></span></div></div>`).join('')+'</div><div class="card"><div class="card-header"><h4>薄弱知识域</h4></div><div class="card-body" id="weakAreas"><div class="empty-state"><p>加载中...</p></div></div></div>';
+
+  try{
+    const d=await api('/api/v1/edu/progress/dashboard');
+    if(d.code!==0){toast(d.message||'加载失败','error');return}
+    const data=d.data;
+    const stats=document.querySelectorAll('.stat-card .stat-value');
+    stats[0].textContent=data.coach_sessions||0;
+    stats[1].textContent=(data.coach_avg_score||0).toFixed(1);
+    stats[2].textContent=data.exams_taken||0;
+    stats[3].textContent=(data.exam_avg_score||0).toFixed(1);
+
+    if(data.weak_areas&&data.weak_areas.length){
+      document.getElementById('weakAreas').innerHTML=`<table><thead><tr><th>知识域</th><th>平均分</th><th>练习次数</th><th>状态</th></tr></thead><tbody>`+
+        data.weak_areas.map(w=>`<tr><td><b>${esc(w.topic)}</b></td><td><span style="color:var(--danger);font-weight:600">${w.avg_score}</span></td><td>${w.session_count}</td><td><span class="badge badge-yellow">需加强</span></td></tr>`).join('')+'</tbody></table>';
+    }else{
+      document.getElementById('weakAreas').innerHTML='<div class="empty-state"><div class="empty-icon">✅</div><p>暂无薄弱知识域</p></div>';
+    }
+  }catch(e){toast('加载失败: '+e.message,'error')}
+}
+
+/* ═══════════════ Helpers ═══════════════ */
+function esc(s){if(!s)return'';const d=document.createElement('div');d.textContent=String(s);return d.innerHTML}
+
+function renderPager(elId,total,page,size,fn){
+  const el=document.getElementById(elId);
+  if(!el||total<=size){el.innerHTML='';return}
+  const totalPages=Math.ceil(total/size);
+  let html='<div style="display:inline-flex;gap:4px">';
+  if(page>1)html+=`<button class="btn btn-sm" onclick="${fn}(${page-1})">上一页</button>`;
+  for(let i=1;i<=totalPages;i++){
+    html+=`<button class="btn btn-sm${i===page?' btn-primary':''}" onclick="${fn}(${i})">${i}</button>`;
+  }
+  if(page<totalPages)html+=`<button class="btn btn-sm" onclick="${fn}(${page+1})">下一页</button>`;
+  html+=`<span style="font-size:13px;color:var(--text-secondary);padding:0 8px;line-height:30px">${page}/${totalPages}</span></div>`;
+  el.innerHTML=html;
+}
+</script>
+</body>
+</html>

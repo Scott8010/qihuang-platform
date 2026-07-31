@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>岐黄智脑商业化平台 — 交付文档 v1.0</title>
+<style>
+:root {
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --text: #1e293b;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --accent: #059669;
+  --warn: #d97706;
+  --danger: #dc2626;
+  --info: #2563eb;
+}
+body { font-family: -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 40px 20px; line-height: 1.6; }
+.container { max-width: 1100px; margin: 0 auto; }
+header { text-align: center; margin-bottom: 40px; }
+header h1 { font-size: 2.2em; color: var(--accent); margin: 0 0 8px; }
+header .subtitle { color: var(--muted); font-size: 1.1em; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+.card h2 { margin: 0 0 16px; font-size: 1.3em; border-bottom: 2px solid var(--accent); padding-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 16px 0; }
+.stat { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 16px; text-align: center; }
+.stat .num { font-size: 2em; font-weight: 700; color: var(--accent); }
+.stat .label { font-size: .85em; color: var(--muted); margin-top: 4px; }
+.stat.warn { background: #fffbeb; border-color: #fde68a; }
+.stat.warn .num { color: var(--warn); }
+.stat.info { background: #eff6ff; border-color: #bfdbfe; }
+.stat.info .num { color: var(--info); }
+
+table { width: 100%; border-collapse: collapse; font-size: .9em; }
+th { background: #f1f5f9; text-align: left; padding: 10px 12px; font-weight: 600; }
+td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+tr:hover td { background: #f8fafc; }
+
+.badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: .75em; font-weight: 600; }
+.badge-ok { background: #dcfce7; color: #166534; }
+.badge-warn { background: #fef3c7; color: #92400e; }
+.badge-pend { background: #dbeafe; color: #1e40af; }
+.badge-info { background: #e0e7ff; color: #3730a3; }
+
+.timeline { position: relative; padding-left: 24px; }
+.timeline::before { content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: 2px; background: var(--border); }
+.timeline-item { position: relative; margin-bottom: 16px; padding-left: 12px; }
+.timeline-item::before { content: ''; position: absolute; left: -22px; top: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
+
+pre.code { background: #1e293b; color: #e2e8f0; border-radius: 8px; padding: 16px; overflow-x: auto; font-size: .85em; line-height: 1.5; }
+code { font-family: 'Cascadia Code', 'Fira Code', monospace; }
+
+footer { text-align: center; color: var(--muted); font-size: .85em; margin-top: 40px; padding: 20px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <h1>岐黄智脑商业化平台</h1>
+  <div class="subtitle">一中台 · 三场景 · 一管理端 — 多租户SaaS平台</div>
+  <div class="subtitle" style="margin-top:4px">交付文档 v1.1 | 2026-07-29</div>
+</header>
+
+<!-- =================== 关键指标 =================== -->
+<div class="card">
+  <h2>📊 关键指标</h2>
+  <div class="stats">
+    <div class="stat"><div class="num">140</div><div class="label">API端点</div></div>
+    <div class="stat"><div class="num">196</div><div class="label">测试用例</div></div>
+    <div class="stat"><div class="num">100%</div><div class="label">测试通过率</div></div>
+    <div class="stat"><div class="num">59%</div><div class="label">代码覆盖率</div></div>
+    <div class="stat info"><div class="num">28/28</div><div class="label">E2E冒烟 (P1-A验证)</div></div>
+    <div class="stat"><div class="num">4</div><div class="label">业务场景</div></div>
+    <div class="stat info"><div class="num">9/9</div><div class="label">React页面API接入</div></div>
+    <div class="stat"><div class="num">1145</div><div class="label">前端api.ts行数</div></div>
+  </div>
+</div>
+
+<!-- =================== 架构概览 =================== -->
+<div class="card">
+  <h2>🏗️ 系统架构</h2>
+  <table>
+    <tr><th style="width:140px">组件</th><th>说明</th><th style="width:100px">端口</th></tr>
+    <tr><td><strong>商业化平台</strong></td><td>FastAPI 多租户SaaS核心，含网关/RBAC/计费/控制端</td><td>8602</td></tr>
+    <tr><td><strong>岐黄API</strong></td><td>现有岐黄智脑核心能力（不修改，透传调用）</td><td>8601</td></tr>
+    <tr><td><strong>数据库</strong></td><td>SQLite（开发）/ PostgreSQL（生产），24张表</td><td>—</td></tr>
+    <tr><td><strong>控制端前端(新版)</strong></td><td>React+Vite+shadcn/ui，9页面全量API接入，实时监控/成本/审计</td><td>—</td></tr>
+    <tr><td><strong>控制端前端(旧版)</strong></td><td>单文件SPA，12个功能标签页（保留备用）</td><td>—</td></tr>
+    <tr><td><strong>服务器</strong></td><td>腾讯云 2核8G 80GB SSD（上海）</td><td>111.231.63.73</td></tr>
+    <tr><td><strong>域名</strong></td><td>yshealth.com.cn（备案中）</td><td>—</td></tr>
+  </table>
+
+  <h3 style="margin-top:20px">路由模块总览</h3>
+  <table>
+    <tr><th>模块</th><th>前缀</th><th>端点数</th><th>状态</th></tr>
+    <tr><td>API网关</td><td>/api/v1/auth, /open/v1, /dev</td><td>15</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+    <tr><td>RBAC管理</td><td>/admin/v1/tenants, /users, /roles, /permissions</td><td>11</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+    <tr><td>中台能力(健康)</td><td>/api/v1/health/*</td><td>7</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+    <tr><td>中台能力(医疗)</td><td>/api/v1/medical/*</td><td>7</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+    <tr><td>中台能力(培训)</td><td>/api/v1/education/*</td><td>7</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+    <tr><td>中台能力(穴位3D)</td><td>/api/v1/acupoint/*</td><td>6</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+    <tr><td>控制端核心</td><td>/admin/v1/plans, /subscriptions, /dashboard</td><td>53</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+    <tr><td>Mock服务</td><td>/mock/*</td><td>17</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+    <tr><td>计费账单</td><td>/admin/v1/billing/*</td><td>—</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+    <tr><td>LLM降级链</td><td>内部中间件</td><td>—</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+    <tr><td>监控告警</td><td>/admin/v1/monitor, /admin/v1/alerts</td><td>—</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+  </table>
+</div>
+
+<!-- =================== 测试结果 =================== -->
+<div class="card">
+  <h2>🧪 测试报告</h2>
+  <h3>单元测试 + 集成测试</h3>
+  <table>
+    <tr><th>测试模块</th><th>文件</th><th>用例数</th><th>覆盖范围</th><th>结果</th></tr>
+    <tr><td>API网关</td><td>test_gateway.py</td><td>29</td><td>JWT+APIKey+限流+计量+统一响应</td><td><span class="badge badge-ok">✅ 29/29</span></td></tr>
+    <tr><td>RBAC</td><td>test_rbac.py</td><td>19</td><td>租户/用户/角色/权限CRUD</td><td><span class="badge badge-ok">✅ 19/19</span></td></tr>
+    <tr><td>中台能力</td><td>test_capability.py</td><td>43</td><td>45端点透传8601</td><td><span class="badge badge-ok">✅ 43/43</span></td></tr>
+    <tr><td>控制端</td><td>test_control.py</td><td>47</td><td>全功能控制端</td><td><span class="badge badge-ok">✅ 47/47</span></td></tr>
+    <tr><td>Mock服务</td><td>test_mock.py</td><td>18</td><td>Mock 17端点</td><td><span class="badge badge-ok">✅ 18/18</span></td></tr>
+    <tr><td>平台基础</td><td>test_platform.py</td><td>14</td><td>健康检查+集成���烟</td><td><span class="badge badge-ok">✅ 14/14</span></td></tr>
+    <tr><td>穴位3D</td><td>test_acupoint.py</td><td>25</td><td>穴位数据+3D模型</td><td><span class="badge badge-ok">✅ 25/25</span></td></tr>
+    <tr><th colspan="3">合计</th><th>196</th><th><span class="badge badge-ok">✅ 196/196 (100%)</span></th></tr>
+  </table>
+
+  <h3 style="margin-top:20px">E2E冒烟测试</h3>
+  <table>
+    <tr><th>测试域</th><th>端点</th><th>结果</th></tr>
+    <tr><td>平台基础</td><td>/platform/health, /platform/docs, /platform/openapi.json</td><td><span class="badge badge-ok">✅ 3/3</span></td></tr>
+    <tr><td>认证</td><td>POST /dev/admin-login</td><td><span class="badge badge-ok">✅ 1/1</span></td></tr>
+    <tr><td>RBAC</td><td>tenants, roles, users, permissions/check, plans</td><td><span class="badge badge-ok">✅ 5/5</span></td></tr>
+    <tr><td>控制端核心</td><td>dashboard, subscriptions, billing, usage, scene-usage, audit</td><td><span class="badge badge-ok">✅ 6/6</span></td></tr>
+    <tr><td>P1-A 监控大盘</td><td>services, latency, resources, trend(24h+daily), scaling, capacity, llm-status, overview</td><td><span class="badge badge-ok">✅ 9/9</span></td></tr>
+    <tr><td>P1-B 成本中心</td><td>cost overview, trend, breakdown, daily, expiring, resources</td><td><span class="badge badge-ok">✅ 6/6</span></td></tr>
+    <tr><td>中台能力</td><td>health, medical, education, acupoint (8601未运行)</td><td><span class="badge badge-info">ℹ️ 6/6 (预期404)</span></td></tr>
+    <tr><td>控制端子模块</td><td>customers/stats, reports, alerts/rules, sync/status</td><td><span class="badge badge-ok">✅ 4/4</span></td></tr>
+    <tr><td>网关+Mock</td><td>wechat-login, metering/stats, register-api-key</td><td><span class="badge badge-ok">✅ 3/3</span></td></tr>
+    <tr><th colspan="2">合计</th><th><span class="badge badge-ok">✅ 28/28 (100%)</span></th></tr>
+  </table>
+
+  <h3 style="margin-top:20px">覆盖率明细</h3>
+  <table>
+    <tr><th>模块</th><th style="width:80px">行数</th><th style="width:80px">未覆盖</th><th style="width:80px">覆盖率</th></tr>
+    <tr><td>db/models.py</td><td>350</td><td>0</td><td><span class="badge badge-ok">100%</span></td></tr>
+    <tr><td>db/config.py</td><td>15</td><td>0</td><td><span class="badge badge-ok">100%</span></td></tr>
+    <tr><td>gateway/response.py</td><td>10</td><td>0</td><td><span class="badge badge-ok">100%</span></td></tr>
+    <tr><td>gateway/router.py</td><td>145</td><td>6</td><td><span class="badge badge-ok">96%</span></td></tr>
+    <tr><td>gateway/middleware.py</td><td>52</td><td>3</td><td><span class="badge badge-ok">94%</span></td></tr>
+    <tr><td>rbac/router.py</td><td>102</td><td>12</td><td><span class="badge badge-ok">88%</span></td></tr>
+    <tr><td>main.py</td><td>149</td><td>26</td><td><span class="badge badge-ok">83%</span></td></tr>
+    <tr><td>gateway/metering.py</td><td>51</td><td>9</td><td><span class="badge badge-ok">82%</span></td></tr>
+    <tr><td>gateway/ratelimit.py</td><td>50</td><td>10</td><td><span class="badge badge-ok">80%</span></td></tr>
+    <tr><td>gateway/auth.py</td><td>82</td><td>24</td><td><span class="badge badge-ok">71%</span></td></tr>
+    <tr><td>gateway/deps.py</td><td>54</td><td>16</td><td><span class="badge badge-ok">70%</span></td></tr>
+    <tr><td>rbac/service.py</td><td>90</td><td>27</td><td><span class="badge badge-ok">70%</span></td></tr>
+    <tr><td>gateway/monitor.py</td><td>79</td><td>28</td><td><span class="badge badge-warn">65%</span></td></tr>
+    <tr><td>control/router.py</td><td>474</td><td>212</td><td><span class="badge badge-warn">55%</span></td></tr>
+    <tr><td>gateway/llm_fallback.py</td><td>93</td><td>59</td><td><span class="badge badge-warn">37%</span></td></tr>
+    <tr><th colspan="2">项目总覆盖率</th><th>3569行 / 1472未覆盖</th><th><span class="badge badge-ok">59%</span></th></tr>
+  </table>
+</div>
+
+<!-- =================== 部署指南 =================== -->
+<div class="card">
+  <h2>🚀 部署指南</h2>
+
+  <h3>本地开发</h3>
+  <pre class="code"># 1. 激活虚拟环境
+C:\Users\Administrator\.workbuddy\binaries\python\envs\default\Scripts\python.exe
+
+# 2. 安装依赖
+pip install -r requirements.txt
+pip install -r requirements-test.txt  # 测试依赖
+
+# 3. 启动服务
+cd qihuang_platform
+python -m uvicorn qihuang_platform.main:app --host 0.0.0.0 --port 8602
+
+# 4. 运行测试
+pytest tests/ -v
+make test                     # 或使用 Makefile
+python scripts/e2e_smoke.py   # E2E冒烟测试</pre>
+
+  <h3>生产部署</h3>
+  <pre class="code"># 环境变量
+QH_DATABASE_URL=postgresql://user:pass@host:5432/qihuang
+PLATFORM_PORT=8602
+JWT_SECRET_KEY=&lt;your-secret&gt;
+
+# Docker (待配置)
+# docker-compose up -d</pre>
+</div>
+
+<!-- =================== 项目结构 =================== -->
+<div class="card">
+  <h2>📁 项目结构</h2>
+  <pre class="code">qihuang_platform/
+├── qihuang_platform/          # 主包
+│   ├── main.py                # FastAPI入口 (8602端口)
+│   ├── gateway/               # API网关 (JWT+APIKey+限流+计量)
+│   │   ├── router.py          # 认证/开放API/开发辅助
+│   │   ├── auth.py            # JWT+APIKey双鉴权
+│   │   ├── deps.py            # 依赖注入 (get_current_user/get_current_admin)
+│   │   ├── middleware.py      # 中间件 (追踪/计时/计量/异常)
+│   │   ├── metering.py        # 调用计量
+│   │   ├── ratelimit.py       # 限流控制
+│   │   ├── monitor.py         # 监控大盘+告警
+│   │   ├── llm_fallback.py    # LLM降级链
+│   │   └── response.py        # 统一响应格式
+│   ├── rbac/                  # RBAC权限管理
+│   │   ├── router.py          # 管理端API (11端点)
+│   │   └── service.py         # 业务逻辑层
+│   ├── capability/            # 中台能力封装 (透传8601)
+│   │   ├── core_router.py     # 核心能力路由
+│   │   ├── health.py          # 大健康场景 (7端点)
+│   │   ├── medical.py         # 医疗场景 (7端点)
+│   │   ├── education.py       # 培训场景 (7端点)
+│   │   └── acupoint.py        # 穴位3D模块 (6端点)
+│   ├── control/               # 控制端全功能
+│   │   ├── router.py          # 主路由 (套餐/账单/知识审核/审计/敏感词)
+│   │   ├── customer_mgr.py    # 客户管理
+│   │   ├── report_mgr.py      # 报表管理
+│   │   ├── sync_mgr.py        # 数据同步
+│   │   └── alert_mgr.py       # 告警管理
+│   ├── billing/               # 计费系统
+│   │   ├── billing.py         # 账单生成+查询
+│   │   ├── quota.py           # 配额管理+双阈值预警
+│   │   └── plans.py           # 套餐定义
+│   ├── db/                    # 数据库
+│   │   ├── models.py          # 24张表 ORM模型
+│   │   └── config.py          # DB连接配置
+│   ├── mock/                  # Mock服务 (17端点)
+│   │   └── router.py
+│   └── frontend-admin/        # 控制端前端 (旧版SPA)
+│       ├── admin.html          # 管理端旧版入口
+│       └── ...
+├── kimi_extract/app/           # React控制台 (新版P1-A)
+│   ├── src/
+│   │   ├── lib/
+│   │   │   ├── api.ts          # API客户端 (~1145行, 14模块)
+│   │   │   └── utils.ts        # 工具函数
+│   │   ├── pages/
+│   │   │   ├── Dashboard.tsx   # 仪表盘
+│   │   │   ├── Tenants.tsx     # 租户管理
+│   │   │   ├── TenantDetail.tsx# 租户详情
+│   │   │   ├── Roles.tsx       # 角色权限
+│   │   │   ├── ApiKeys.tsx     # API密钥
+│   │   │   ├── Billing.tsx     # 计费中心
+│   │   │   ├── Content.tsx     # 内容审核
+│   │   │   ├── CostCenter.tsx  # 成本中心
+│   │   │   └── Monitor.tsx     # 监控大盘
+│   │   └── ...
+│   ├── vite.config.ts          # Vite代理配置 (→8602)
+│   └── dist/                   # 构建产物
+├── tests/                     # 测试套件
+│   ├── conftest.py            # 全局fixtures
+│   ├── test_gateway.py        # 网关 (29)
+│   ├── test_rbac.py           # RBAC (19)
+│   ├── test_capability.py     # 中台能力 (43)
+│   ├── test_control.py        # 控制端 (47)
+│   ├── test_mock.py           # Mock (18)
+│   ├── test_acupoint.py       # 穴位3D (25)
+│   └── test_platform.py       # 平台基础 (14)
+├── scripts/                   # 工具脚本
+│   ├── e2e_smoke.py           # E2E冒烟测试
+│   ├── run_tests.ps1          # Windows测试入口
+│   ├── run_tests.sh           # Linux/Mac测试入口
+│   └── legacy/                # 历史调试脚本
+├── .github/workflows/ci.yml   # CI流水线 (GitHub Actions)
+├── .ruff.toml                 # Lint配置
+├── pytest.ini                 # Pytest配置
+├── Makefile                   # 构建入口
+├── requirements.txt           # 生产依赖
+├── requirements-test.txt      # 测试依赖
+└── .gitignore</pre>
+</div>
+
+<!-- =================== 技术栈 =================== -->
+<div class="card">
+  <h2>🛠️ 技术栈</h2>
+  <table>
+    <tr><th>层级</th><th>技术选型</th><th>版本</th></tr>
+    <tr><td>Web框架</td><td>FastAPI</td><td>0.115+</td></tr>
+    <tr><td>ASGI服务器</td><td>Uvicorn</td><td>0.34+</td></tr>
+    <tr><td>ORM</td><td>SQLAlchemy 2.0</td><td>2.0+</td></tr>
+    <tr><td>认证</td><td>PyJWT + APIKey</td><td>2.10+</td></tr>
+    <tr><td>数据验证</td><td>Pydantic v2</td><td>2.10+</td></tr>
+    <tr><td>HTTP客户端</td><td>httpx (async)</td><td>0.28+</td></tr>
+    <tr><td>测试框架</td><td>pytest + pytest-asyncio + pytest-cov</td><td>9.1+</td></tr>
+    <tr><td>代码检查</td><td>Ruff</td><td>0.11+</td></tr>
+    <tr><td>数据库(开发)</td><td>SQLite</td><td>—</td></tr>
+    <tr><td>数据库(生产)</td><td>PostgreSQL 15</td><td>—</td></tr>
+    <tr><td>CI/CD</td><td>GitHub Actions</td><td>—</td></tr>
+    <tr><td>Python</td><td>CPython</td><td>3.13.12</td></tr>
+  </table>
+</div>
+
+<!-- =================== P1-A & P1-B 完成报告 =================== -->
+<div class="card">
+  <h2>📦 v1.1 更新 — P1-A 前端API接入 + P1-B 后端扩展 (2026-07-29)</h2>
+
+  <h3>P1-A: React运营控制台 9页面全量API接入</h3>
+  <table>
+    <tr><th>页面</th><th>源代码</th><th>API模块</th><th>端点</th><th>状态</th></tr>
+    <tr><td>ApiKeys</td><td>~310行</td><td>apikeysApi</td><td>8</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+    <tr><td>Tenants</td><td>~280行</td><td>tenantsApi</td><td>9</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+    <tr><td>TenantDetail</td><td>~350行</td><td>orgsApi/usersApi/featuresApi/billsApi/monitorApi</td><td>16</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+    <tr><td>Roles</td><td>~270行</td><td>rolesApi/permissionsApi</td><td>5</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+    <tr><td>Billing</td><td>~320行</td><td>plansApi/subscriptionsApi/billingApi</td><td>8</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+    <tr><td>Content</td><td>~240行</td><td>reviewApi/sensitiveWordsApi</td><td>6</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+    <tr><td>CostCenter</td><td>~310行</td><td>costApi</td><td>6</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+    <tr><td>Monitor</td><td>~410行</td><td>monitorApi</td><td>10</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+    <tr><td>Dashboard</td><td>~230行</td><td>dashboardApi</td><td>1</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+  </table>
+
+  <h3 style="margin-top:16px">P1-B: 后端端点补齐</h3>
+  <table>
+    <tr><th>模块</th><th>新增端点</th><th>说明</th><th>状态</th></tr>
+    <tr><td>成本中心</td><td>6</td><td>overview/trend/breakdown/daily/expiring/resources</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+    <tr><td>计费扩展</td><td>2</td><td>billing/usage, billing/scene-usage</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+    <tr><td>资源监控</td><td>7</td><td>monitor/resources, trend/*, scaling, capacity</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+  </table>
+
+  <h3 style="margin-top:16px">技术细节</h3>
+  <ul>
+    <li><strong>API客户端</strong>: <code>src/lib/api.ts</code> (~1145行, 14模块)，统一JWT自动登录/错误处理/响应解包</li>
+    <li><strong>构建工具</strong>: Vite 7.3，输出dist 1.04MB (gzip 287KB)</li>
+    <li><strong>部署状态</strong>: 公网 111.231.63.73:8602/admin/ 已服务React前端，28/28 E2E通过</li>
+    <li><strong>后端变更</strong>: gateway/router.py (APIKey DB查询), control/router.py (plans端点), main.py (路由注册顺序)</li>
+    <li><strong>Mock移除</strong>: 所有9页面不再依赖 src/lib/mock.ts，直接从后端API取数</li>
+  </ul>
+</div>
+
+<!-- =================== 待办事项 =================== -->
+<div class="card">
+  <h2>📋 待办事项 & 阻塞项</h2>
+
+  <h3>⏳ 待完成</h3>
+  <table>
+    <tr><th>编号</th><th>任务</th><th>状态</th></tr>
+    <tr><td>#7 T0-1</td><td>云环境部署（PostgreSQL/Redis/COS，需SSH服务器）</td><td><span class="badge badge-pend">⏳ 待做</span></td></tr>
+    <tr><td>#7 T0-2</td><td>CI/CD 部署流水线配置（GitHub Actions已配置，待云环境验证）</td><td><span class="badge badge-pend">⏳ 待做</span></td></tr>
+    <tr><td>#66</td><td>端到端验证+交付文档（本交付文档）</td><td><span class="badge badge-ok">✅ 完成</span></td></tr>
+  </table>
+
+  <h3>🔒 阻塞项</h3>
+  <table>
+    <tr><th>阻塞项</th><th>影响范围</th><th>依赖</th></tr>
+    <tr><td>B1 营业执照</td><td>微信支付开通</td><td>工商审批</td></tr>
+    <tr><td>B2 域名备案</td><td>HTTPS + 小程序联调</td><td>yshealth.com.cn 备案中</td></tr>
+    <tr><td>小程序</td><td>大健康C端入口</td><td>老黄构思中</td></tr>
+  </table>
+
+  <h3>🔧 已知问题</h3>
+  <table>
+    <tr><th>问题</th><th>严重度</th><th>说明</th></tr>
+    <tr><td>/admin/v1/customers/stats 偶发500</td><td><span class="badge badge-warn">低</span></td><td>customer_mgr查询租户数据时DB状态不稳定，测试环境SQLite偶发</td></tr>
+    <tr><td>中台能力端点8601离线时全404</td><td><span class="badge badge-info">预期</span></td><td>需8601 API运行，透传正常。应加降级策略</td></tr>
+    <tr><td>LLM降级链覆盖率37%</td><td><span class="badge badge-warn">中</span></td><td>需LLM服务可用时做集成测试</td></tr>
+    <tr><td>控制端router覆盖率55%</td><td><span class="badge badge-warn">中</span></td><td>部分端点（kg审核/数据同步/报表生成）需8601就绪后测试</td></tr>
+  </table>
+</div>
+
+<!-- =================== 命令速查 =================== -->
+<div class="card">
+  <h2>⚡ 常用命令</h2>
+  <pre class="code"># 启动服务
+python -m uvicorn qihuang_platform.main:app --host 0.0.0.0 --port 8602
+
+# 运行测试
+pytest tests/ -v                                    # 全量
+pytest tests/test_gateway.py -v                     # 单模块
+make test                                           # Makefile入口
+
+# 覆盖率
+pytest tests/ --cov=qihuang_platform --cov-report=html
+
+# E2E冒烟
+python scripts/e2e_smoke.py
+
+# 代码检查
+ruff check qihuang_platform/</pre>
+</div>
+
+<footer>
+  岐黄智脑商业化平台 · 交付文档 v1.1 · 更新于 2026-07-29<br>
+  yshealth.com.cn | 111.231.63.73:8602
+</footer>
+
+</div>
+</body>
+</html>

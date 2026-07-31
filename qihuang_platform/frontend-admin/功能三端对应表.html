@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>岐黄智脑 · 功能三端对应表</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:#f1f5f9; color:#1e293b; padding:24px; }
+  h1 { font-size:22px; margin-bottom:4px; }
+  .sub { color:#64748b; font-size:13px; margin-bottom:20px; }
+  .legend { display:flex; gap:16px; margin-bottom:20px; flex-wrap:wrap; }
+  .legend span { padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; }
+  .lg-admin { background:#dbeafe; color:#1d4ed8; }
+  .lg-ops { background:#d1fae5; color:#065f46; }
+  .lg-biz { background:#fef3c7; color:#92400e; }
+  .lg-consumer { background:#fce7f3; color:#9d174d; }
+
+  .section { background:#fff; border-radius:12px; margin-bottom:20px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  .section-hd { padding:14px 20px; font-weight:700; font-size:15px; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; gap:8px; }
+  .section-hd .badge { font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { background:#f8fafc; text-align:left; padding:10px 16px; font-weight:600; color:#475569; border-bottom:2px solid #e2e8f0; white-space:nowrap; }
+  td { padding:10px 16px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:#f8fafc; }
+  .domain { font-weight:700; color:#334155; }
+  .feature { color:#1e293b; }
+  .end { white-space:nowrap; }
+  .end-tag { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; }
+  .end-admin { background:#dbeafe; color:#1d4ed8; }
+  .end-ops { background:#d1fae5; color:#065f46; }
+  .end-biz { background:#fef3c7; color:#92400e; }
+  .end-consumer { background:#fce7f3; color:#9d174d; }
+  .end-multi { background:#e0e7ff; color:#3730a3; }
+  .entry { color:#64748b; font-size:12px; }
+  .entry strong { color:#334155; }
+  .note { color:#94a3b8; font-size:11px; font-style:italic; }
+  .api { font-family:"SF Mono","Fira Code",monospace; font-size:11px; color:#6366f1; background:#eef2ff; padding:1px 5px; border-radius:3px; white-space:nowrap; }
+
+  @media (max-width:900px) {
+    body { padding:12px; }
+    td, th { padding:8px 10px; font-size:12px; }
+    .api { font-size:10px; }
+  }
+</style>
+</head>
+<body>
+
+<h1>岐黄智脑 · 全功能三端对应表</h1>
+<div class="sub">平台总端点 108 条 · 管理端 8 Tab · 运维端 8 Tab · 运营端 7 Tab · C端 5 子平台</div>
+
+<div class="legend">
+  <span class="lg-admin">管理端</span> 平台后台管理
+  <span class="lg-ops">运维端</span> 基础设施运维
+  <span class="lg-biz">运营端</span> 商业运营
+  <span class="lg-consumer">C端用户</span> 最终用户功能
+</div>
+
+<!-- ═══ 1. 平台治理 ═══ -->
+<div class="section">
+<div class="section-hd"><span class="badge lg-admin">管理端</span> 一、平台治理（租户/用户/权限/密钥）</div>
+<table>
+<thead><tr><th style="width:15%">功能域</th><th style="width:22%">功能</th><th style="width:28%">说明</th><th style="width:10%">归属端</th><th style="width:25%">操作入口</th></tr></thead>
+<tbody>
+<tr>
+  <td class="domain">租户管理</td>
+  <td class="feature">开通/暂停/恢复租户</td>
+  <td>按场景（大健康/医疗/培训）开通租户，设置状态与配额</td>
+  <td class="end"><span class="end-tag end-admin">管理端</span></td>
+  <td class="entry"><strong>管理端</strong> → 租户管理 Tab<br><span class="api">POST /admin/v1/subscriptions</span></td>
+</tr>
+<tr>
+  <td class="domain">用户管理</td>
+  <td class="feature">添加/禁用用户、分配角色</td>
+  <td>管理平台用户账号，绑定租户，分配角色权限</td>
+  <td class="end"><span class="end-tag end-admin">管理端</span></td>
+  <td class="entry"><strong>管理端</strong> → 用户管理 Tab<br><span class="api">RBAC 用户CRUD</span></td>
+</tr>
+<tr>
+  <td class="domain">角色权限</td>
+  <td class="feature">9角色 × 18权限矩阵</td>
+  <td>超级管理员/租户管理员/审核员/运营/运维/数据分析师/培训师/医生/普通用户，按数据范围隔离</td>
+  <td class="end"><span class="end-tag end-admin">管理端</span></td>
+  <td class="entry"><strong>管理端</strong> → 角色权限 Tab<br>权限矩阵可视化列表</td>
+</tr>
+<tr>
+  <td class="domain">密钥配额</td>
+  <td class="feature">签发/吊销API Key + 配额</td>
+  <td>为租户签发API密钥，管理调用配额和有效期</td>
+  <td class="end"><span class="end-tag end-admin">管理端</span></td>
+  <td class="entry"><strong>管理端</strong> → 密钥配额 Tab<br><span class="api">POST/DELETE /admin/v1/api-keys</span></td>
+</tr>
+<tr>
+  <td class="domain">内容审核</td>
+  <td class="feature">知识入库审批流</td>
+  <td>待审条目审核（通过/驳回+意见），知识版本管理（回滚）</td>
+  <td class="end"><span class="end-tag end-admin">管理端</span></td>
+  <td class="entry"><strong>管理端</strong> → 内容审核 Tab<br><span class="api">GET/POST /admin/v1/kg/review</span></td>
+</tr>
+<tr>
+  <td class="domain">操作日志</td>
+  <td class="feature">全局操作审计</td>
+  <td>按租户/用户/操作/目标类型/日期范围筛选，分页浏览</td>
+  <td class="end"><span class="end-tag end-admin">管理端</span></td>
+  <td class="entry"><strong>管理端</strong> → 操作日志 Tab<br><span class="api">GET /admin/v1/audit-logs</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<!-- ═══ 2. 商业运营 ═══ -->
+<div class="section">
+<div class="section-hd"><span class="badge lg-biz">运营端</span> 二、商业运营（计费/套餐/客户/资产/报表）</div>
+<table>
+<thead><tr><th style="width:15%">功能域</th><th style="width:22%">功能</th><th style="width:28%">说明</th><th style="width:10%">归属端</th><th style="width:25%">操作入口</th></tr></thead>
+<tbody>
+<tr>
+  <td class="domain">套餐管理</td>
+  <td class="feature">创建/编辑套餐 + 订阅记录</td>
+  <td>定义套餐（名称/月费/3D模块开关），查看所有订阅记录和到期时间</td>
+  <td class="end"><span class="end-tag end-biz">运营端</span><br><span class="end-tag end-admin">管理端</span></td>
+  <td class="entry"><strong>运营端</strong> → 套餐订阅 Tab<br><strong>管理端</strong> → 工作台快捷入口<br><span class="api">POST/PUT /admin/v1/plans</span></td>
+</tr>
+<tr>
+  <td class="domain">计费账单</td>
+  <td class="feature">用量统计 + 月账单 + 出账/收款/逾期</td>
+  <td>按租户汇总调用量/Token消耗，自动生成月账单，管理收款状态</td>
+  <td class="end"><span class="end-tag end-biz">运营端</span></td>
+  <td class="entry"><strong>运营端</strong> → 计费账单 Tab<br><span class="api">GET /admin/v1/billing/usage</span><br><span class="api">POST /admin/v1/billing/bills/generate</span></td>
+</tr>
+<tr>
+  <td class="domain">客户运营</td>
+  <td class="feature">客户画像 + 价值标签</td>
+  <td>租户列表含画像卡片（场景/价值等级），识别高价值与流失风险客户</td>
+  <td class="end"><span class="end-tag end-biz">运营端</span></td>
+  <td class="entry"><strong>运营端</strong> → 客户运营 Tab</td>
+</tr>
+<tr>
+  <td class="domain">知识资产</td>
+  <td class="feature">图谱规模 + 增长趋势 + 场景分布</td>
+  <td>节点/关系统计，趋势折线图，大健康/医疗/培训场景占比</td>
+  <td class="end"><span class="end-tag end-biz">运营端</span></td>
+  <td class="entry"><strong>运营端</strong> → 知识资产 Tab<br><span class="api">GET /api/v1/core/graph/query</span></td>
+</tr>
+<tr>
+  <td class="domain">报表导出</td>
+  <td class="feature">多类型报表生成 + 历史下载</td>
+  <td>日报/周报/月报/财务报表/客户分析，支持Excel/PDF/CSV格式</td>
+  <td class="end"><span class="end-tag end-biz">运营端</span></td>
+  <td class="entry"><strong>运营端</strong> → 报表导出 Tab</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<!-- ═══ 3. 基础设施运维 ═══ -->
+<div class="section">
+<div class="section-hd"><span class="badge lg-ops">运维端</span> 三、基础设施运维（监控/容器/告警/同步/安全）</div>
+<table>
+<thead><tr><th style="width:15%">功能域</th><th style="width:22%">功能</th><th style="width:28%">说明</th><th style="width:10%">归属端</th><th style="width:25%">操作入口</th></tr></thead>
+<tbody>
+<tr>
+  <td class="domain">监控大屏</td>
+  <td class="feature">CPU/内存/QPS/P95延迟/错误率/Token</td>
+  <td>8个梯度指标卡 + 服务状态栏 + 吞吐趋势图 + LLM降级链状态</td>
+  <td class="end"><span class="end-tag end-ops">运维端</span></td>
+  <td class="entry"><strong>运维端</strong> → 监控大屏 Tab<br><span class="api">GET /admin/v1/monitor/overview</span><br><span class="api">GET /admin/v1/monitor/llm-status</span></td>
+</tr>
+<tr>
+  <td class="domain">容器管理</td>
+  <td class="feature">容器状态 + 重启 + 自动恢复</td>
+  <td>5容器实时状态（Docker ps）+ 单容器/全量重启 + 每个容器独立自动恢复开关 + 恢复日志</td>
+  <td class="end"><span class="end-tag end-ops">运维端</span></td>
+  <td class="entry"><strong>运维端</strong> → 容器状态 Tab<br><span class="api">GET /admin/v1/containers</span><br><span class="api">POST /admin/v1/containers/{name}/restart</span><br><span class="api">POST /admin/v1/containers/{name}/auto-recovery</span></td>
+</tr>
+<tr>
+  <td class="domain">告警中心</td>
+  <td class="feature">告警列表 + 确认 + 规则管理</td>
+  <td>级别筛选（严重/警告/信息）、确认/解决操作、告警规则CRUD</td>
+  <td class="end"><span class="end-tag end-ops">运维端</span></td>
+  <td class="entry"><strong>运维端</strong> → 告警中心 Tab</td>
+</tr>
+<tr>
+  <td class="domain">日志审计</td>
+  <td class="feature">操作日志多条件筛选 + 分页</td>
+  <td>按用户/操作/目标类型/日期范围筛选，分页查看，行详情展开</td>
+  <td class="end"><span class="end-tag end-ops">运维端</span></td>
+  <td class="entry"><strong>运维端</strong> → 日志审计 Tab<br><span class="api">GET /admin/v1/audit-logs</span></td>
+</tr>
+<tr>
+  <td class="domain">数据同步</td>
+  <td class="feature">本地→云端数据同步</td>
+  <td>6类数据（图谱节点/关系/租户/用户/审计/版本），差异对比 + 单项/全量同步</td>
+  <td class="end"><span class="end-tag end-ops">运维端</span></td>
+  <td class="entry"><strong>运维端</strong> → 数据同步 Tab</td>
+</tr>
+<tr>
+  <td class="domain">敏感词库</td>
+  <td class="feature">敏感词增删 + 批量导入</td>
+  <td>分场景（通用/大健康/医疗/培训）+ 级别管理 + 批量导入textarea</td>
+  <td class="end"><span class="end-tag end-ops">运维端</span></td>
+  <td class="entry"><strong>运维端</strong> → 敏感词库 Tab<br><span class="api">GET/POST/DELETE /admin/v1/content/words</span></td>
+</tr>
+<tr>
+  <td class="domain">系统信息</td>
+  <td class="feature">版本/状态/端口/端点一览</td>
+  <td>10项系统信息 + 6服务端点状态表</td>
+  <td class="end"><span class="end-tag end-ops">运维端</span></td>
+  <td class="entry"><strong>运维端</strong> → 系统信息 Tab<br><span class="api">GET /platform/health</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<!-- ═══ 4. C端 — 知识探索 ═══ -->
+<div class="section">
+<div class="section-hd"><span class="badge lg-consumer">C端用户</span> 四、知识探索平台（中医综合能力 · 端口 8688）</div>
+<table>
+<thead><tr><th style="width:15%">功能域</th><th style="width:22%">功能</th><th style="width:28%">说明</th><th style="width:10%">归属端</th><th style="width:25%">操作入口</th></tr></thead>
+<tbody>
+<tr>
+  <td class="domain">辨证诊断</td>
+  <td class="feature">八纲/六经/脏腑/方证对应辨证</td>
+  <td>多体系辨证推理 + 四诊合参 + 多模型共识投票 + 推理链展示</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry"><strong>知识探索平台</strong> → 辨证诊断<br><span class="api">POST /api/v1/core/reasoning/diagnose</span></td>
+</tr>
+<tr>
+  <td class="domain">方剂查询</td>
+  <td class="feature">方剂检索 + 君臣佐使分析</td>
+  <td>按名称/功效/组成检索方剂，展示配伍结构分析</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry"><strong>知识探索平台</strong> → 方剂查询<br><span class="api">GET /api/v1/core/query/formulas</span></td>
+</tr>
+<tr>
+  <td class="domain">中药查询</td>
+  <td class="feature">中药详情检索</td>
+  <td>按名称查性味归经/功效/禁忌</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry"><strong>知识探索平台</strong> → 中药查询<br><span class="api">GET /api/v1/core/query/herbs</span></td>
+</tr>
+<tr>
+  <td class="domain">经典原文</td>
+  <td class="feature">内经/伤寒/金匮/温病检索</td>
+  <td>按关键词和经典来源检索原文条文</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry"><strong>知识探索平台</strong> → 经典原文<br><strong>培训平台</strong> → 经典检索<br><span class="api">GET /api/v1/edu/classics/search</span></td>
+</tr>
+<tr>
+  <td class="domain">知识图谱</td>
+  <td class="feature">3D可视化探索（岐黄三境）</td>
+  <td>D3.js + Three.js 3D图谱，4041节点/10141关系/166推理规则</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry"><strong>知识探索平台</strong> → 岐黄三境<br><span class="api">GET /api/v1/core/graph/query</span></td>
+</tr>
+<tr>
+  <td class="domain">智能对话</td>
+  <td class="feature">中医AI问答</td>
+  <td>自然语言中医问答，底层多模型共识推理</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry"><strong>知识探索平台</strong> → 智能对话<br><span class="api">POST /api/v1/core/agent/chat</span></td>
+</tr>
+<tr>
+  <td class="domain">用药安全</td>
+  <td class="feature">配伍禁忌审查</td>
+  <td>十八反十九畏检测 + 证候禁忌 + 特殊人群警示</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry"><strong>知识探索平台</strong> → 用药安全<br><span class="api">POST /api/v1/core/safety/check</span></td>
+</tr>
+<tr>
+  <td class="domain">情志转化</td>
+  <td class="feature">五志相胜调理</td>
+  <td>基于五行生克的情绪调理推演</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry"><strong>知识探索平台</strong> → 情志转化</td>
+</tr>
+<tr>
+  <td class="domain">文献库</td>
+  <td class="feature">中医文献检索</td>
+  <td>文献全文检索 + 文献雷达热点发现</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry"><strong>知识探索平台</strong> → 文献库 / 文献雷达<br><span class="api">GET /api/v1/core/literature/search</span></td>
+</tr>
+<tr>
+  <td class="domain">用量统计</td>
+  <td class="feature">个人API用量查询</td>
+  <td>查看日/月调用次数和配额使用情况</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry"><strong>知识探索平台</strong> → 用量统计<br><span class="api">GET /api/v1/auth/usage</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<!-- ═══ 5. C端 — 大健康 ═══ -->
+<div class="section">
+<div class="section-hd"><span class="badge lg-consumer">C端用户</span> 五、大健康场景（体质调理 · 端口 8602 → 8601）</div>
+<table>
+<thead><tr><th style="width:15%">功能域</th><th style="width:22%">功能</th><th style="width:28%">说明</th><th style="width:10%">归属端</th><th style="width:25%">操作入口</th></tr></thead>
+<tbody>
+<tr>
+  <td class="domain">体质辨识</td>
+  <td class="feature">九大体质评估</td>
+  <td>输入体征信息，AI评估体质类型（平和/气虚/阳虚/阴虚/痰湿/湿热/血瘀/气郁/特禀）</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry">通过 API 调用<br><span class="api">POST /api/v1/health/constitution/assess</span></td>
+</tr>
+<tr>
+  <td class="domain">调理方案</td>
+  <td class="feature">个性化方案生成</td>
+  <td>根据体质输出穴位/饮食/生活方式/商品推荐</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry">通过 API 调用<br><span class="api">POST /api/v1/health/plans</span></td>
+</tr>
+<tr>
+  <td class="domain">健康档案</td>
+  <td class="feature">时间轴档案</td>
+  <td>按时间线查看体质变化和调理记录</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry">通过 API 调用<br><span class="api">GET /api/v1/health/archive/timeline</span></td>
+</tr>
+<tr>
+  <td class="domain">穴位保健</td>
+  <td class="feature">3D穴位模型 + 经络循行</td>
+  <td>按症状/体质/经络/季节获取穴位指导，3D人体模型交互</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry">通过 API 调用（需套餐含3D模块）<br><span class="api">GET /api/v1/core/acupoint/model</span><br><span class="api">POST /api/v1/core/acupoint/guide</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<!-- ═══ 6. C端 — 医疗 ═══ -->
+<div class="section">
+<div class="section-hd"><span class="badge lg-consumer">C端用户</span> 六、医疗辅助场景（诊疗+处方+报告 · 端口 8602 → 8601）</div>
+<table>
+<thead><tr><th style="width:15%">功能域</th><th style="width:22%">功能</th><th style="width:28%">说明</th><th style="width:10%">归属端</th><th style="width:25%">操作入口</th></tr></thead>
+<tbody>
+<tr>
+  <td class="domain">辅助辨证</td>
+  <td class="feature">四诊录入 → AI辨证</td>
+  <td>录入舌象/面象/脉象/症状 → 辨证结果 + 推理链 + 多体系共识</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry"><strong>医疗辅助平台</strong> → 辅助辨证<br><span class="api">POST /api/v1/med/diagnose/assist</span></td>
+</tr>
+<tr>
+  <td class="domain">处方审查</td>
+  <td class="feature">四级安全审查</td>
+  <td>高危(十八反十九畏)/中危(相恶)/低危(证候禁忌)/警示(特殊人群)分级审查</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry"><strong>医疗辅助平台</strong> → 处方审查<br><span class="api">POST /api/v1/med/prescription/review</span></td>
+</tr>
+<tr>
+  <td class="domain">方剂推荐</td>
+  <td class="feature">证候 → 方剂匹配</td>
+  <td>输入证候获取方剂推荐列表</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry"><strong>医疗辅助平台</strong> → 方剂推荐<br><span class="api">GET /api/v1/med/formula/recommend</span></td>
+</tr>
+<tr>
+  <td class="domain">医案管理</td>
+  <td class="feature">医案归档 + 列表检索</td>
+  <td>新建医案（幂等归档），搜索历史医案</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry"><strong>医疗辅助平台</strong> → 医案管理<br><span class="api">POST /api/v1/med/cases</span></td>
+</tr>
+<tr>
+  <td class="domain">报告中心</td>
+  <td class="feature">辨证/处方审查/��合报告生成</td>
+  <td>异步生成报告，含PDF下载链接 + AI分析内容</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry"><strong>医疗辅助平台</strong> → 报告中心<br><span class="api">POST /api/v1/med/reports</span></td>
+</tr>
+<tr>
+  <td class="domain">文献佐证</td>
+  <td class="feature">证候关联文献检索</td>
+  <td>按证候ID检索学术文献证据</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry"><strong>医疗辅助平台</strong> → 文献佐证<br><span class="api">GET /api/v1/med/evidence/{syndrome_id}</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<!-- ═══ 7. C端 — 培训 ═══ -->
+<div class="section">
+<div class="section-hd"><span class="badge lg-consumer">C端用户</span> 七、培训学习场景（教+学+练+考 · 端口 8602 → 8601）</div>
+<table>
+<thead><tr><th style="width:15%">功能域</th><th style="width:22%">功能</th><th style="width:28%">说明</th><th style="width:10%">归属端</th><th style="width:25%">操作入口</th></tr></thead>
+<tbody>
+<tr>
+  <td class="domain">AI 陪练</td>
+  <td class="feature">辨证对话训练 + AI评估</td>
+  <td>创建陪练会话（主题+难度）→ 学员辨证分析 → AI评分（完美/良好/部分正确/错误）+ 反馈</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry"><strong>培训学习平台</strong> → AI 陪练<br><span class="api">POST /api/v1/edu/coach/sessions</span><br><span class="api">POST /api/v1/edu/coach/evaluate</span></td>
+</tr>
+<tr>
+  <td class="domain">考试中心</td>
+  <td class="feature">智能组卷 + 自动判分</td>
+  <td>按类别/难度/题数/题型组卷 → 选择题/填空/简答 → 自动判分 + 通过状态</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry"><strong>培训学习平台</strong> → 考试中心<br><span class="api">POST /api/v1/edu/exams/generate</span><br><span class="api">POST /api/v1/edu/exams/submit</span></td>
+</tr>
+<tr>
+  <td class="domain">病案库</td>
+  <td class="feature">教学病案检索</td>
+  <td>搜索教学病案（患者代号/诊断/处方），分页浏览，可跳转生成报告</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry"><strong>培训学习平台</strong> → 病案库<br><strong>医疗辅助平台</strong> → 医案管理<br><span class="api">GET /api/v1/edu/cases/library</span></td>
+</tr>
+<tr>
+  <td class="domain">学情看板</td>
+  <td class="feature">学员统计分析</td>
+  <td>陪练次数/均分/测评次数/均分统计 + 薄弱知识域诊断</td>
+  <td class="end"><span class="end-tag end-consumer">C端</span></td>
+  <td class="entry"><strong>培训学习平台</strong> → 学情看板<br><span class="api">GET /api/v1/edu/progress/dashboard</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<!-- ═══ 8. 认证与计量 ═══ -->
+<div class="section">
+<div class="section-hd">八、认证与计量（全端共用基础设施）</div>
+<table>
+<thead><tr><th style="width:15%">功能域</th><th style="width:22%">功能</th><th style="width:28%">说明</th><th style="width:10%">归属端</th><th style="width:25%">操作入口</th></tr></thead>
+<tbody>
+<tr>
+  <td class="domain">用户认证</td>
+  <td class="feature">JWT登录/刷新/登出 + API Key验证</td>
+  <td>双通道认证体系：JWT（用户端）+ API Key（机器端），开发环境mock登录</td>
+  <td class="end"><span class="end-tag end-multi">全端</span></td>
+  <td class="entry"><span class="api">POST /api/v1/auth/login</span><br><span class="api">POST /dev/admin-login</span></td>
+</tr>
+<tr>
+  <td class="domain">API网关</td>
+  <td class="feature">限流 + 计量 + 统一响应</td>
+  <td>令牌桶5QPS限流，每次调用记录CallLog计费，统一{code,message,data,trace_id}响应</td>
+  <td class="end"><span class="end-tag end-multi">全端</span></td>
+  <td class="entry">网关中间件自动处理，无需手动操作</td>
+</tr>
+<tr>
+  <td class="domain">LLM降级</td>
+  <td class="feature">多Provider自动降级链</td>
+  <td>主Provider异常时自动切换到备用，运维端可查看降级状态</td>
+  <td class="end"><span class="end-tag end-ops">运维端</span></td>
+  <td class="entry"><strong>运维端</strong> → 监控大屏 Tab（LLM状态区）<br><span class="api">GET /admin/v1/monitor/llm-status</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<!-- 汇总 -->
+<div style="margin-top:24px; background:#fff; border-radius:12px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,.06);">
+  <h3 style="font-size:15px; margin-bottom:12px;">汇总统计</h3>
+  <table style="width:auto">
+    <tr><td style="border:none;padding:4px 12px;font-weight:600">总功能域</td><td style="border:none;padding:4px 12px;">20 个业务域 + 3 个基础设施域</td></tr>
+    <tr><td style="border:none;padding:4px 12px;font-weight:600">管理端入口</td><td style="border:none;padding:4px 12px;">8 Tab（租户/用户/角色/密钥/审核/日志 + 首页/工作台）</td></tr>
+    <tr><td style="border:none;padding:4px 12px;font-weight:600">运维端入口</td><td style="border:none;padding:4px 12px;">8 Tab（监控/容器/告警/日志/同步/敏感词/系统 + 首页/工作台）</td></tr>
+    <tr><td style="border:none;padding:4px 12px;font-weight:600">运营端入口</td><td style="border:none;padding:4px 12px;">7 Tab（计费/套餐/客户/资产/报表 + 首页/工作台）</td></tr>
+    <tr><td style="border:none;padding:4px 12px;font-weight:600">C端子平台</td><td style="border:none;padding:4px 12px;">5个：知识探索(14模块) + 大健康(4端点) + 医疗(6端点) + 培训(4端点) + 3D穴位(5端点)</td></tr>
+    <tr><td style="border:none;padding:4px 12px;font-weight:600">后端端点</td><td style="border:none;padding:4px 12px;">108条（api/v1 52 + admin/v1 29 + mock 17 + dev 3 + platform 2 + 其他 5）</td></tr>
+  </table>
+</div>
+
+<div style="margin-top:16px; color:#94a3b8; font-size:12px;">
+  生成时间: 2026-07-26 · 岐黄智脑商业化平台 v1.1
+</div>
+
+</body>
+</html>

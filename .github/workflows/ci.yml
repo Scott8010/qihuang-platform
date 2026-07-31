@@ -1,0 +1,203 @@
+name: 岐黄智脑 CI/CD
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:  # 手动触发
+
+jobs:
+  test:
+    name: 测试 (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: qihuang_test
+          POSTGRES_USER: qihuang
+          POSTGRES_PASSWORD: qihuang_test_pwd
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      QH_DATABASE_URL: postgresql://qihuang:qihuang_test_pwd@localhost:5432/qihuang_test
+      QH_REDIS_URL: redis://localhost:6379/0
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-test.txt
+
+      - name: 等待 PostgreSQL 就绪
+        run: |
+          for i in $(seq 1 15); do
+            pg_isready -h localhost -U qihuang -d qihuang_test && break
+            echo "等待 PostgreSQL... $i/15"
+            sleep 2
+          done
+
+      - name: 等待 Redis 就绪
+        run: |
+          pip install redis -q
+          python -c "
+          import redis, time
+          for i in range(10):
+              try:
+                  r = redis.Redis(host='localhost', port=6379)
+                  if r.ping(): break
+              except: pass
+              time.sleep(2)
+          "
+
+      - name: 运行测试
+        run: |
+          pytest tests/ \
+            -v \
+            --tb=short \
+            --cov=qihuang_platform \
+            --cov-report=term-missing \
+            --cov-report=html \
+            --cov-report=xml \
+            --junitxml=junit.xml \
+            -p no:cacheprovider
+
+      - name: 上传覆盖率报告
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-${{ matrix.python-version }}
+          path: |
+            htmlcov/
+            coverage.xml
+            junit.xml
+
+      - name: 覆盖率徽章
+        if: matrix.python-version == '3.13'
+        run: |
+          echo "## 覆盖率报告" >> $GITHUB_STEP_SUMMARY
+          python -c "
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('coverage.xml')
+          root = tree.getroot()
+          rate = root.attrib.get('line-rate', '0')
+          pct = float(rate) * 100
+          print(f'行覆盖率: {pct:.1f}%')
+          " >> $GITHUB_STEP_SUMMARY
+
+  lint:
+    name: 代码检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: 安装 linter
+        run: pip install ruff
+      - name: Ruff 检查
+        run: ruff check qihuang_platform/ tests/ --ignore=E501,F841
+      - name: AST 语法检查
+        run: |
+          python -c "
+          import ast, sys, os
+          errors = 0
+          for root_name in ['qihuang_platform', 'tests']:
+              for root, dirs, files in os.walk(root_name):
+                  dirs[:] = [d for d in dirs if d not in ('__pycache__', '.pytest_cache', 'frontend-admin')]
+                  for f in files:
+                      if f.endswith('.py'):
+                          path = os.path.join(root, f)
+                          try:
+                              with open(path) as fp:
+                                  ast.parse(fp.read())
+                          except SyntaxError as e:
+                              print(f'SYNTAX ERROR: {path}: {e}')
+                              errors += 1
+          if errors:
+              print(f'共 {errors} 个语法错误')
+              sys.exit(1)
+          print('所有 Python 文件语法检查通过')
+          "
+
+  deploy:
+    name: 部署到生产服务器
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: SSH 部署
+        uses: easingthemes/ssh-deploy@main
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          ARGS: "-rlgoDzvc -i --exclude='.git/' --exclude='.github/' --exclude='tests/' --exclude='__pycache__/' --exclude='*.pyc' --exclude='.pytest_cache/' --exclude='test_*.db' --exclude='*.md' --exclude='docs/'"
+          SOURCE: "qihuang_platform/"
+          REMOTE_HOST: ${{ secrets.SSH_HOST }}
+          REMOTE_USER: ${{ secrets.SSH_USER }}
+          TARGET: "/root/qihuang_platform/qihuang_platform/"
+
+      - name: 安装依赖 & 重启服务
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /root/qihuang_platform
+            pip install -r requirements.txt -q 2>&1 | tail -3
+            # 重启 uvicorn
+            pkill -f "uvicorn qihuang_platform.main:app" || true
+            sleep 2
+            nohup python -m uvicorn qihuang_platform.main:app --host 0.0.0.0 --port 8602 > /var/log/qihuang_8602.log 2>&1 &
+            sleep 3
+            # 健康检查
+            for i in $(seq 1 10); do
+              code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8602/platform/health)
+              if [ "$code" = "200" ]; then
+                echo "部署成功: http://localhost:8602/platform/health → $code"
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "健康检查超时，查看日志:"
+            tail -20 /var/log/qihuang_8602.log
+            exit 1

@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>岐黄智脑 · 管理端</title>
+<style>
+/* ═══════════ SaaS Pro Theme ═══════════ */
+:root {
+  --primary: #2563eb; --primary-light: #eff6ff; --primary-hover: #1d4ed8;
+  --success: #10b981; --success-light: #ecfdf5;
+  --warning: #f59e0b; --warning-light: #fffbeb;
+  --danger: #ef4444; --danger-light: #fef2f2;
+  --info: #3b82f6; --info-light: #eff6ff;
+  --purple: #8b5cf6; --purple-light: #f5f3ff;
+  --bg: #f8fafc; --surface: #ffffff;
+  --sidebar-bg: #ffffff; --sidebar-hover: #f1f5f9; --sidebar-active: #eff6ff;
+  --topbar-bg: #ffffff;
+  --text: #1e293b; --text-secondary: #64748b; --text-muted: #94a3b8;
+  --border: #e2e8f0; --border-light: #f1f5f9;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.03);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.03);
+  --shadow-lg: 0 10px 25px rgba(0,0,0,0.08), 0 4px 10px rgba(0,0,0,0.04);
+  --radius: 10px; --radius-lg: 14px;
+  --sidebar-width: 240px; --topbar-height: 60px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh}
+body.login{display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#eff6ff 0%,#f8fafc 50%,#f1f5f9 100%)}
+
+/* Login */
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:48px 40px;width:400px;text-align:center;box-shadow:var(--shadow-lg)}
+.login-card .brand{font-size:28px;font-weight:700;color:var(--text);margin-bottom:4px;letter-spacing:-0.5px}
+.login-card .brand span{color:var(--primary)}
+.login-card .sub{color:var(--text-secondary);font-size:13px;margin-bottom:32px}
+.login-card input{width:100%;padding:12px 16px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;margin-bottom:12px;outline:none;transition:border-color .2s,box-shadow .2s}
+.login-card input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,0.1)}
+.login-card button{width:100%;padding:12px;background:var(--primary);color:#fff;border:none;border-radius:var(--radius);font-size:15px;font-weight:600;cursor:pointer;transition:background .2s}
+.login-card button:hover{background:var(--primary-hover)}
+.login-err{color:var(--danger);font-size:12px;margin-top:8px;min-height:18px}
+
+/* Layout */
+#app{display:none;min-height:100vh}
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-width);background:var(--sidebar-bg);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:50;overflow-y:auto}
+.sidebar-brand{padding:22px 20px 18px;border-bottom:1px solid var(--border)}
+.sidebar-brand h1{font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.3px}
+.sidebar-brand h1 span{color:var(--primary)}
+.sidebar-brand .brand-sub{font-size:11px;color:var(--text-muted);margin-top:2px}
+.sidebar-section{padding:18px 12px 6px}
+.sidebar-section-title{font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;padding:0 12px 8px}
+.sidebar-item{display:flex;align-items:center;gap:10px;padding:10px 14px;margin:2px 8px;border-radius:8px;color:var(--text-secondary);font-size:13px;font-weight:450;cursor:pointer;transition:all .15s;text-decoration:none;border-left:3px solid transparent}
+.sidebar-item:hover{background:var(--sidebar-hover);color:var(--text)}
+.sidebar-item.active{background:var(--sidebar-active);color:var(--primary);font-weight:600;border-left-color:var(--primary)}
+.sidebar-item .icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+.sidebar-spacer{flex:1}
+.sidebar-footer{padding:12px 16px;border-top:1px solid var(--border);font-size:12px;color:var(--text-muted)}
+.sidebar-footer a{color:var(--text-muted);text-decoration:none;font-size:11px;display:block;margin-top:4px}
+.sidebar-footer a:hover{color:var(--primary)}
+
+.topbar{position:fixed;left:var(--sidebar-width);right:0;top:0;height:var(--topbar-height);background:var(--topbar-bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;z-index:40}
+.topbar h2{font-size:16px;font-weight:600;color:var(--text)}
+.topbar .user{display:flex;align-items:center;gap:12px;font-size:13px}
+.topbar .user-avatar{width:34px;height:34px;border-radius:50%;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.topbar .user button{background:none;border:1px solid var(--border);color:var(--text-secondary);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;transition:all .15s}
+.topbar .user button:hover{color:var(--danger);border-color:var(--danger);background:var(--danger-light)}
+
+.content{margin-left:var(--sidebar-width);margin-top:calc(var(--topbar-height) + 42px);padding:24px;min-height:calc(100vh - var(--topbar-height) - 42px)}
+.tab{display:none}.tab.active{display:block}
+
+/* ═══════════ Multi-Tab Bar ═══════════ */
+.tab-bar{position:fixed;left:var(--sidebar-width);right:0;top:var(--topbar-height);height:42px;background:var(--topbar-bg);border-bottom:1px solid var(--border);display:flex;align-items:flex-end;padding:0 0 0 12px;gap:0;z-index:39;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.tab-bar::-webkit-scrollbar{display:none}
+.tab-card{display:flex;align-items:center;gap:7px;padding:8px 16px;background:#f1f5f9;border:1px solid var(--border);border-bottom:none;border-radius:8px 8px 0 0;font-size:12px;color:var(--text-secondary);cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0;max-width:180px;position:relative;user-select:none}
+.tab-card:hover{background:#e2e8f0;color:var(--text)}
+.tab-card.active{background:var(--bg);color:var(--text);font-weight:600;border-color:var(--border);margin-bottom:-1px;padding-bottom:9px;box-shadow:0 -2px 6px rgba(0,0,0,0.04)}
+.tab-card .tab-title{overflow:hidden;text-overflow:ellipsis}
+.tab-card .tab-close{margin-left:2px;width:18px;height:18px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;color:var(--text-muted);transition:all .15s;flex-shrink:0}
+.tab-card .tab-close:hover{color:#fff;background:var(--danger)}
+.tab-card.pinned .tab-close{display:none}
+.tab-card.dragging{opacity:0.5}
+
+/* ═══════════ Gradient Stat Cards ═══════════ */
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
+.stat-card-gradient{position:relative;border-radius:var(--radius-lg);padding:22px 20px;color:#fff;overflow:hidden;box-shadow:var(--shadow-md);min-height:110px;display:flex;flex-direction:column;justify-content:space-between}
+.stat-card-gradient::before{content:'';position:absolute;top:0;right:0;width:120px;height:120px;background:rgba(255,255,255,0.08);border-radius:50%;transform:translate(30%,-30%)}
+.stat-card-gradient .label{position:relative;z-index:1;font-size:12px;font-weight:500;opacity:.9;margin-bottom:6px}
+.stat-card-gradient .value{position:relative;z-index:1;font-size:32px;font-weight:700;line-height:1;letter-spacing:-0.5px}
+.stat-card-gradient .sub{position:relative;z-index:1;font-size:11px;opacity:.75;margin-top:6px}
+.stat-blue{background:linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%)}
+.stat-green{background:linear-gradient(135deg,#10b981 0%,#059669 100%)}
+.stat-orange{background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%)}
+.stat-red{background:linear-gradient(135deg,#ef4444 0%,#dc2626 100%)}
+.stat-purple{background:linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)}
+
+/* ═══════════ Plain Stat Cards (for secondary rows) ═══════════ */
+.stat-card-plain{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow-sm);text-align:center}
+.stat-card-plain .value{font-size:28px;font-weight:700;color:var(--text);line-height:1}
+.stat-card-plain .value.primary{color:var(--primary)}
+.stat-card-plain .value.success{color:var(--success)}
+.stat-card-plain .value.warning{color:var(--warning)}
+.stat-card-plain .value.danger{color:var(--danger)}
+.stat-card-plain .label{font-size:12px;color:var(--text-secondary);margin-top:8px;font-weight:500}
+
+/* ═══════════ System Status ═══════════ */
+.status-bar{display:flex;gap:24px;align-items:center;padding:14px 20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:20px;box-shadow:var(--shadow-sm)}
+.status-bar .status-label{font-size:13px;font-weight:600;color:var(--text);margin-right:4px}
+.status-bar .status-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-secondary)}
+.status-bar .status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.status-bar .status-dot.green{background:var(--success);box-shadow:0 0 0 3px rgba(16,185,129,0.15)}
+.status-bar .status-dot.red{background:var(--danger);box-shadow:0 0 0 3px rgba(239,68,68,0.15)}
+.status-bar .status-dot.yellow{background:var(--warning);box-shadow:0 0 0 3px rgba(245,158,11,0.15)}
+
+/* ═══════════ Cards ═══════════ */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px;box-shadow:var(--shadow-sm)}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.card h3{font-size:14px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px}
+.card h3 .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot.green{background:var(--success)}.dot.warning{background:var(--warning)}.dot.danger{background:var(--danger)}.dot.info{background:var(--info)}.dot.primary{background:var(--primary)}.dot.gray{background:#94a3b8}
+
+/* ═══════════ Feature Grid Cards (Workbench style) ═══════════ */
+.feature-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
+.feature-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px 16px;text-align:center;cursor:pointer;transition:all .2s;box-shadow:var(--shadow-sm)}
+.feature-card:hover{border-color:var(--primary);box-shadow:var(--shadow-md);transform:translateY(-2px)}
+.feature-card .icon-box{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:22px}
+.feature-card .icon-box.blue{background:var(--primary-light);color:var(--primary)}
+.feature-card .icon-box.green{background:var(--success-light);color:var(--success)}
+.feature-card .icon-box.orange{background:var(--warning-light);color:var(--warning)}
+.feature-card .icon-box.red{background:var(--danger-light);color:var(--danger)}
+.feature-card .icon-box.purple{background:var(--purple-light);color:var(--purple)}
+.feature-card .icon-box.info{background:var(--info-light);color:var(--info)}
+.feature-card h4{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px}
+.feature-card p{font-size:12px;color:var(--text-secondary);line-height:1.4}
+
+/* ═══════════ Todo List ═══════════ */
+.todo-item{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--border-light)}
+.todo-item:last-child{border-bottom:none}
+.todo-item .todo-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.todo-item .todo-icon.blue{background:var(--primary-light);color:var(--primary)}
+.todo-item .todo-icon.orange{background:var(--warning-light);color:var(--warning)}
+.todo-item .todo-icon.red{background:var(--danger-light);color:var(--danger)}
+.todo-item .todo-icon.green{background:var(--success-light);color:var(--success)}
+.todo-item .todo-body{flex:1;min-width:0}
+.todo-item .todo-body .title{font-size:13px;font-weight:500;color:var(--text);margin-bottom:2px}
+.todo-item .todo-body .meta{font-size:12px;color:var(--text-muted)}
+.todo-item .todo-tag{padding:3px 10px;border-radius:6px;font-size:11px;font-weight:500}
+.todo-item .todo-tag.urgent{background:var(--danger-light);color:var(--danger)}
+.todo-item .todo-tag.normal{background:var(--warning-light);color:var(--warning)}
+.todo-item .todo-tag.low{background:var(--info-light);color:var(--info)}
+.todo-item .todo-actions{display:flex;gap:6px}
+.todo-item .todo-actions button{padding:5px 12px;border-radius:6px;font-size:12px;font-weight:500;border:none;cursor:pointer;transition:all .15s}
+.todo-item .todo-actions .btn-go{background:var(--primary);color:#fff}
+.todo-item .todo-actions .btn-go:hover{background:var(--primary-hover)}
+.todo-item .todo-actions .btn-skip{background:#f1f5f9;color:var(--text-secondary)}
+.todo-item .todo-actions .btn-skip:hover{background:var(--border)}
+
+/* ═══════════ Chart ═══════════ */
+.chart-card{flex:1;min-width:0}
+.chart-container{height:200px;position:relative}
+
+/* ═══════════ Two column layout ═══════════ */
+.two-col{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
+
+/* ═══════════ Recent logs timeline ═══════════ */
+.recent-log{font-size:13px;color:var(--text-secondary);padding:10px 0;border-bottom:1px solid var(--border-light);display:flex;gap:12px;align-items:center}
+.recent-log:last-child{border-bottom:none}
+.recent-log .time{color:var(--text-muted);font-size:12px;min-width:36px}
+.recent-log .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.recent-log .dot.green{background:var(--success)}.recent-log .dot.blue{background:var(--primary)}.recent-log .dot.orange{background:var(--warning)}
+.recent-log .action{flex:1}
+.recent-log .action strong{color:var(--text);font-weight:600}
+
+/* ═══════════ KG Stats ═══════════ */
+.kg-stat{text-align:center;padding:16px}
+.kg-stat .num{font-size:32px;font-weight:700;color:var(--primary);line-height:1}
+.kg-stat .num.warning{color:var(--warning)}
+.kg-stat .label{font-size:12px;color:var(--text-secondary);margin-top:6px}
+
+/* ═══════════ Tables ═══════════ */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:10px 12px;border-bottom:2px solid var(--border);color:var(--text-secondary);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.3px}
+td{padding:10px 12px;border-bottom:1px solid var(--border-light)}
+tr:hover{background:#f8fafc}
+
+/* ═══════════ Badges ═══════════ */
+.badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;letter-spacing:0.2px}
+.badge.success{background:var(--success-light);color:var(--success)}
+.badge.warning{background:var(--warning-light);color:var(--warning)}
+.badge.danger{background:var(--danger-light);color:var(--danger)}
+.badge.info{background:var(--info-light);color:var(--info)}
+.badge.primary{background:var(--primary-light);color:var(--primary)}
+.badge.neutral{background:#f1f5f9;color:#64748b}
+
+/* ═══════════ Buttons ═══════════ */
+.btn{padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;border:none;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:var(--primary-hover)}
+.btn-danger{background:#fff;color:var(--danger);border:1px solid var(--danger)}.btn-danger:hover{background:var(--danger-light)}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-ghost{background:#fff;border:1px solid var(--border);color:var(--text-secondary)}.btn-ghost:hover{color:var(--text);border-color:var(--text-muted);background:#f8fafc}
+
+/* ═══════════ Forms ═══════════ */
+.form-row{display:flex;gap:12px;margin-bottom:12px;align-items:flex-end;flex-wrap:wrap}
+.form-row input,.form-row select{padding:10px 14px;background:#fff;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none;min-width:160px}
+.form-row input:focus,.form-row select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,0.08)}
+.form-row label{font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px;font-weight:500}
+
+/* ═══════════ Modal ═══════════ */
+.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,0.4);backdrop-filter:blur(2px);z-index:200;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:28px;width:440px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,0.12)}
+.modal h3{font-size:16px;font-weight:600;color:var(--text);margin-bottom:16px}
+.modal input,.modal select{width:100%;padding:10px 14px;background:#fff;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none;margin-bottom:12px}
+.modal input:focus,.modal select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,0.08)}
+.modal label{display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.modal-msg{font-size:12px;min-height:18px;margin-top:8px;color:var(--danger)}
+.confirm-danger{background:var(--danger-light);border:1px solid #fecaca;border-radius:var(--radius);padding:14px;margin:12px 0;color:var(--danger);font-size:13px}
+.confirm-danger strong{display:block;margin-bottom:4px;font-size:14px}
+
+/* ═══════════ Toast ═══════════ */
+.toast{position:fixed;top:20px;right:20px;z-index:300;padding:12px 20px;border-radius:var(--radius);font-size:13px;font-weight:500;animation:slideIn .3s ease;max-width:360px;box-shadow:var(--shadow-md)}
+.toast.success{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0}
+.toast.error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+
+.empty{text-align:center;padding:40px;color:var(--text-muted);font-size:14px}
+
+/* ═══════════ Responsive ═══════════ */
+@media(max-width:768px){
+  .sidebar{width:60px}.sidebar-brand h1{display:none}.sidebar-brand .brand-sub{display:none}.sidebar-item span:not(.icon){display:none}.sidebar-section-title{display:none}
+  .topbar{left:60px}.content{margin-left:60px}:root{--sidebar-width:60px}
+  .stat-row{grid-template-columns:1fr 1fr}.two-col{grid-template-columns:1fr}.three-col{grid-template-columns:1fr}.feature-grid{grid-template-columns:1fr 1fr}.form-row{flex-direction:column}
+}
+</style>
+</head>
+<body class="login" id="body">
+
+<!-- ═══════════════ Login ═══════════════ -->
+<div id="loginPage" class="login-card">
+  <div class="brand">岐黄<span>智脑</span></div>
+  <div class="sub">管理端 · 平台管理</div>
+  <input type="text" id="loginUser" placeholder="管理员账号" value="admin">
+  <input type="password" id="loginPass" placeholder="密码" value="admin123">
+  <button onclick="doLogin()">登 录</button>
+  <div class="login-err" id="loginErr"></div>
+</div>
+
+<!-- ═══════════════ Main App ═══════════════ -->
+<div id="app">
+
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <h1>岐黄<span>智脑</span></h1>
+    <div class="brand-sub">管理端 · 平台管理</div>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">核心管理</div>
+    <a class="sidebar-item active" data-tab="dashboard"><span class="icon">📊</span><span>平台首页</span></a>
+    <a class="sidebar-item" data-tab="workbench"><span class="icon">🖥️</span><span>工作台</span></a>
+    <a class="sidebar-item" data-tab="tenants"><span class="icon">🏢</span><span>租户管理</span></a>
+    <a class="sidebar-item" data-tab="users"><span class="icon">👥</span><span>用户管理</span></a>
+    <a class="sidebar-item" data-tab="roles"><span class="icon">🛡️</span><span>角色权限</span></a>
+    <a class="sidebar-item" data-tab="keys"><span class="icon">🔑</span><span>密钥配额</span></a>
+    <a class="sidebar-item" data-tab="review"><span class="icon">📋</span><span>内容审核</span></a>
+    <a class="sidebar-item" data-tab="audit"><span class="icon">📜</span><span>操作日志</span></a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">其他端入口</div>
+    <a class="sidebar-item" href="/ops" style="color:var(--info)"><span class="icon">🔧</span><span>运维端</span></a>
+    <a class="sidebar-item" href="/business" style="color:var(--warning)"><span class="icon">💼</span><span>运营端</span></a>
+  </div>
+  <div class="sidebar-spacer"></div>
+  <div class="sidebar-footer">
+    v2.0 · 岐黄智脑商业平台
+    <a href="/admin">管理端</a>
+  </div>
+</nav>
+
+<div class="topbar">
+  <h2 id="pageTitle">平台首页</h2>
+  <div class="user">
+    <span id="displayName">管理员</span>
+    <span class="badge primary" id="displayRole">超管</span>
+    <div class="user-avatar" id="userAvatar">管</div>
+    <button onclick="doLogout()">退出</button>
+  </div>
+</div>
+
+<div class="tab-bar" id="tabBar"></div>
+
+<div class="content">
+
+<!-- ═══ 平台首页（数据大屏）═══ -->
+<div id="tab-dashboard" class="tab active">
+  <!-- Gradient Stat Cards -->
+  <div class="stat-row">
+    <div class="stat-card-gradient stat-blue">
+      <div class="label">活跃租户</div>
+      <div class="value" id="s-tenants">-</div>
+      <div class="sub">较昨日 +3</div>
+    </div>
+    <div class="stat-card-gradient stat-green">
+      <div class="label">今日调用量</div>
+      <div class="value" id="s-calls">-</div>
+      <div class="sub">API 请求总计</div>
+    </div>
+    <div class="stat-card-gradient stat-orange">
+      <div class="label">本月收入</div>
+      <div class="value" id="s-income">-</div>
+      <div class="sub">订阅 + 按量计费</div>
+    </div>
+    <div class="stat-card-gradient stat-purple">
+      <div class="label">待处理告警</div>
+      <div class="value" id="s-alerts">-</div>
+      <div class="sub">需运维关注</div>
+    </div>
+  </div>
+
+  <!-- System Status Bar -->
+  <div class="status-bar">
+    <span class="status-label">系统状态</span>
+    <div class="status-item"><span class="status-dot green" id="st-api"></span><span>API服务 正常</span></div>
+    <div class="status-item"><span class="status-dot green" id="st-neo4j"></span><span>Neo4j 正常</span></div>
+    <div class="status-item"><span class="status-dot green" id="st-frontend"></span><span>前端 正常</span></div>
+    <div class="status-item"><span class="status-dot green" id="st-engine"></span><span>自生长引擎 正常</span></div>
+  </div>
+
+  <!-- Chart + KG Stats -->
+  <div class="two-col">
+    <div class="card chart-card">
+      <div class="card-header"><h3>调用量趋势（近7天）</h3></div>
+      <div class="chart-container" id="trendChart"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>知识图谱</h3></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr">
+        <div class="kg-stat"><div class="num" id="kg-nodes">-</div><div class="label">节点</div></div>
+        <div class="kg-stat"><div class="num" id="kg-rels">-</div><div class="label">关系</div></div>
+        <div class="kg-stat"><div class="num warning" id="kg-pending">-</div><div class="label">待审核</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Operations -->
+  <div class="card">
+    <div class="card-header"><h3><span class="dot info"></span>最近操作</h3></div>
+    <div id="recentOps"></div>
+  </div>
+</div>
+
+<!-- ═══ 工作台 ═══ -->
+<div id="tab-workbench" class="tab">
+  <!-- Secondary Stats -->
+  <div class="stat-row">
+    <div class="stat-card-plain">
+      <div class="value warning" id="wb-pending">-</div>
+      <div class="label">待审核条目</div>
+    </div>
+    <div class="stat-card-plain">
+      <div class="value danger" id="wb-alerts">-</div>
+      <div class="label">未处理告警</div>
+    </div>
+    <div class="stat-card-plain">
+      <div class="value primary" id="wb-tenants">-</div>
+      <div class="label">本周新租户</div>
+    </div>
+    <div class="stat-card-plain">
+      <div class="value success" id="wb-calls">-</div>
+      <div class="label">今日调用量</div>
+    </div>
+  </div>
+
+  <!-- Quick Feature Cards (full width, horizontal) -->
+  <div class="card">
+    <div class="card-header"><h3>快捷功能入口</h3></div>
+    <div class="feature-grid" id="workbenchFeatures">
+      <div class="feature-card" onclick="openModal('tenant')">
+        <div class="icon-box blue">🏢</div>
+        <h4>开通租户</h4>
+        <p>创建新租户并分配资源</p>
+      </div>
+      <div class="feature-card" onclick="switchTab('users')">
+        <div class="icon-box green">👤</div>
+        <h4>添加用户</h4>
+        <p>为新租户添加管理员账号</p>
+      </div>
+      <div class="feature-card" onclick="switchTab('review')">
+        <div class="icon-box orange">📋</div>
+        <h4>审核待办</h4>
+        <p>知识审核与内容校验</p>
+      </div>
+      <div class="feature-card" onclick="openModal('key')">
+        <div class="icon-box purple">🔑</div>
+        <h4>签发密钥</h4>
+        <p>为新客户端生成 API Key</p>
+      </div>
+      <div class="feature-card" onclick="switchTab('audit')">
+        <div class="icon-box info">📜</div>
+        <h4>审计日志</h4>
+        <p>查看系统操作记录</p>
+      </div>
+      <div class="feature-card" onclick="toast('报表导出开发中','success')">
+        <div class="icon-box red">📄</div>
+        <h4>导出报表</h4>
+        <p>运营数据与审计报表</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Links (full width, horizontal) -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-header"><h3>常用链接</h3></div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <a href="/ops" target="_blank" style="flex:1;min-width:200px;display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:8px;background:#f8fafc;text-decoration:none;color:var(--text);font-size:13px;transition:background .15s;border:1px solid var(--border)"><span style="font-size:18px">🔧</span><span>运维端 — 系统监控与告警</span><span style="margin-left:auto;color:var(--text-muted)">→</span></a>
+      <a href="/business" target="_blank" style="flex:1;min-width:200px;display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:8px;background:#f8fafc;text-decoration:none;color:var(--text);font-size:13px;transition:background .15s;border:1px solid var(--border)"><span style="font-size:18px">💼</span><span>运营端 — 账单与客户运营</span><span style="margin-left:auto;color:var(--text-muted)">→</span></a>
+      <a href="/admin-static/edu.html" target="_blank" style="flex:1;min-width:200px;display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:8px;background:#f8fafc;text-decoration:none;color:var(--text);font-size:13px;transition:background .15s;border:1px solid var(--border)"><span style="font-size:18px">🎓</span><span>培训平台 — 学员学习端</span><span style="margin-left:auto;color:var(--text-muted)">→</span></a>
+      <a href="/admin-static/medical.html" target="_blank" style="flex:1;min-width:200px;display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:8px;background:#f8fafc;text-decoration:none;color:var(--text);font-size:13px;transition:background .15s;border:1px solid var(--border)"><span style="font-size:18px">🏥</span><span>医疗平台 — 医师辅助端</span><span style="margin-left:auto;color:var(--text-muted)">→</span></a>
+    </div>
+  </div>
+
+  <!-- Todo List (full width) -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-header"><h3>待办提醒</h3><span class="badge danger" id="todoCount">4</span></div>
+    <div id="todoList">
+      <div class="todo-item">
+        <div class="todo-icon orange">📋</div>
+        <div class="todo-body"><div class="title">知识条目审核</div><div class="meta">12条新提交知识待人工审核确认</div></div>
+        <span class="todo-tag urgent">紧急</span>
+        <div class="todo-actions"><button class="btn-go" onclick="switchTab('review')">去处理</button></div>
+      </div>
+      <div class="todo-item">
+        <div class="todo-icon red">🚨</div>
+        <div class="todo-body"><div class="title">系统异常告警</div><div class="meta">API 错误率超过阈值 (12%)</div></div>
+        <span class="todo-tag urgent">紧急</span>
+        <div class="todo-actions"><button class="btn-go" onclick="window.open('/ops','_blank')">查看</button></div>
+      </div>
+      <div class="todo-item">
+        <div class="todo-icon blue">🔑</div>
+        <div class="todo-body"><div class="title">密钥续期提醒</div><div class="meta">3个租户 API 密钥将在7天内到期</div></div>
+        <span class="todo-tag normal">一般</span>
+        <div class="todo-actions"><button class="btn-go" onclick="switchTab('keys')">处理</button></div>
+      </div>
+      <div class="todo-item">
+        <div class="todo-icon green">🏢</div>
+        <div class="todo-body"><div class="title">新租户入驻</div><div class="meta">「社区康养中心」已提交入驻申请</div></div>
+        <span class="todo-tag low">低</span>
+        <div class="todo-actions"><button class="btn-go" onclick="switchTab('tenants')">审核</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 租户管理 ═══ -->
+<div id="tab-tenants" class="tab">
+  <div class="card-header"><h3>🏢 租户列表</h3><button class="btn btn-primary" onclick="openModal('tenant')">+ 开通租户</button></div>
+  <div class="card" style="overflow-x:auto">
+    <table><thead><tr><th>租户名称</th><th>显示名称</th><th>场景</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+    <tbody id="tenantTable"><tr><td colspan="6" class="empty">加载中...</td></tr></tbody></table>
+  </div>
+</div>
+
+<!-- ═══ 用户管理 ═══ -->
+<div id="tab-users" class="tab">
+  <div class="card-header"><h3>👥 用户列表</h3><button class="btn btn-primary" onclick="openModal('user')">+ 添加用户</button></div>
+  <div class="card" style="overflow-x:auto">
+    <table><thead><tr><th>用户名</th><th>显示名</th><th>手机号</th><th>状态</th><th>操作</th></tr></thead>
+    <tbody id="userTable"><tr><td colspan="5" class="empty">加载中...</td></tr></tbody></table>
+  </div>
+</div>
+
+<!-- ═══ 角色权限 ═══ -->
+<div id="tab-roles" class="tab">
+  <div class="card-header"><h3>🛡️ 角色权限</h3></div>
+  <div class="card" style="overflow-x:auto">
+    <table><thead><tr><th>角色名</th><th>显示名</th><th>数据范围</th><th>描述</th></tr></thead>
+    <tbody id="roleTable"><tr><td colspan="4" class="empty">加载中...</td></tr></tbody></table>
+  </div>
+</div>
+
+<!-- ═══ 密钥配额 ═══ -->
+<div id="tab-keys" class="tab">
+  <div class="card-header"><h3>🔑 API 密钥</h3><button class="btn btn-primary" onclick="openModal('key')">+ 签发密钥</button></div>
+  <div class="card" style="overflow-x:auto">
+    <table><thead><tr><th>密钥标识</th><th>密钥前缀</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+    <tbody id="keyTable"><tr><td colspan="5" class="empty">加载中...</td></tr></tbody></table>
+  </div>
+</div>
+
+<!-- ═══ 内容审核 ═══ -->
+<div id="tab-review" class="tab">
+  <div class="card">
+    <h3><span class="dot warning"></span>待审核知识条目</h3>
+    <table><thead><tr><th>条目ID</th><th>类型</th><th>内容摘要</th><th>提交者</th><th>提交时间</th><th>操作</th></tr></thead>
+    <tbody id="reviewPendingTable"><tr><td colspan="6" class="empty">加载中...</td></tr></tbody></table>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h3><span class="dot info"></span>知识版本历史</h3>
+    <table><thead><tr><th>版本ID</th><th>实体</th><th>版本号</th><th>状态</th><th>操作</th></tr></thead>
+    <tbody id="kgVersionTable"><tr><td colspan="5" class="empty">加载中...</td></tr></tbody></table>
+  </div>
+</div>
+
+<!-- ═══ 操作日志 ═══ -->
+<div id="tab-audit" class="tab">
+  <div class="card">
+    <h3><span class="dot primary"></span>操作审计日志</h3>
+    <div class="form-row" style="margin-bottom:12px">
+      <div><label>租户ID</label><input id="af-tenant" placeholder="筛选租户" style="min-width:140px"></div>
+      <div><label>用户ID</label><input id="af-user" placeholder="筛选用户" style="min-width:140px"></div>
+      <div><label>操作类型</label><input id="af-action" placeholder="例：PRESCRIPTION_REVIEW" style="min-width:180px"></div>
+      <button class="btn btn-primary btn-sm" onclick="loadAuditLogs()">查询</button>
+    </div>
+    <table><thead><tr><th>时间</th><th>租户</th><th>用户</th><th>操作</th><th>目标类型</th><th>结果</th></tr></thead>
+    <tbody id="auditTable"><tr><td colspan="6" class="empty">点击查询加载</td></tr></tbody></table>
+  </div>
+</div>
+
+</div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay"><div class="modal" id="modalBox"></div></div>
+
+<script>
+const API='http://localhost:8602';
+let TOKEN='',USER=null;
+const PAGE_TITLES={dashboard:'平台首页',workbench:'工作台',tenants:'租户管理',users:'用户管理',roles:'角色权限',keys:'密钥配额',review:'内容审核',audit:'操作日志'};
+const PINNED_TABS=['dashboard','workbench'];
+
+// ═══════════════ Multi-Tab System ═══════════════
+let openTabs=[],activeTabId='';
+
+function initTabs(){
+  openTabs=[{id:'dashboard',title:'平台首页'}];
+  activeTabId='dashboard';
+  renderTabs();
+  switchTabContent('dashboard');
+}
+
+function openTab(id,title){
+  title=title||PAGE_TITLES[id]||id;
+  // Already open? Just switch
+  var existing=openTabs.find(function(t){return t.id===id});
+  if(existing){activateTab(id);return}
+  // Add new tab
+  openTabs.push({id:id,title:title});
+  activateTab(id);
+}
+
+function activateTab(id){
+  activeTabId=id;
+  renderTabs();
+  switchTabContent(id);
+  // Auto-scroll to active tab
+  setTimeout(function(){
+    var active=document.querySelector('.tab-card.active');
+    if(active)active.scrollIntoView({behavior:'smooth',block:'nearest',inline:'nearest'});
+  },50);
+}
+
+function closeTab(id,e){
+  if(e)e.stopPropagation();
+  if(PINNED_TABS.indexOf(id)>=0)return; // Cannot close pinned tabs
+  var idx=-1;for(var i=0;i<openTabs.length;i++){if(openTabs[i].id===id){idx=i;break}}
+  if(idx<0)return;
+  openTabs.splice(idx,1);
+  if(activeTabId===id){
+    // Switch to adjacent tab
+    var newIdx=Math.min(idx,openTabs.length-1);
+    activeTabId=openTabs[newIdx]?openTabs[newIdx].id:'dashboard';
+    switchTabContent(activeTabId);
+  }
+  renderTabs();
+}
+
+function renderTabs(){
+  var bar=document.getElementById('tabBar');
+  if(!bar)return;
+  bar.innerHTML=openTabs.map(function(t){
+    var pinned=PINNED_TABS.indexOf(t.id)>=0;
+    var active=t.id===activeTabId?' active':'';
+    var cls=pinned?'tab-card pinned':'tab-card';
+    return'<div class="'+cls+active+'" onclick="activateTab(\''+t.id+'\')" data-tab-id="'+t.id+'"><span class="tab-title">'+t.title+'</span><span class="tab-close" onclick="closeTab(\''+t.id+'\',event)">&times;</span></div>';
+  }).join('');
+}
+
+function switchTabContent(id){
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active')});
+  var tab=document.getElementById('tab-'+id);if(tab)tab.classList.add('active');
+  document.querySelectorAll('.sidebar-item').forEach(function(a){a.classList.remove('active')});
+  document.querySelectorAll('.sidebar-item').forEach(function(item){if(item.getAttribute('data-tab')===id)item.classList.add('active')});
+  document.getElementById('pageTitle').textContent=PAGE_TITLES[id]||id;
+  var loaders={workbench:loadWorkbench,dashboard:loadDashboard,tenants:loadTenants,users:loadUsers,roles:loadRoles,keys:loadKeys,review:loadReview,audit:loadAuditLogs};
+  if(loaders[id])loaders[id]();
+}
+
+// Legacy wrapper for calls from feature cards / todo buttons
+function switchTab(name){openTab(name)}
+
+function toast(msg,type){type=type||'success';var t=document.createElement('div');t.className='toast '+type;t.textContent=msg;document.body.appendChild(t);setTimeout(function(){t.remove()},3000)}
+
+async function api(method,path,body){body=body||null;var opts={method:method,headers:{'Content-Type':'application/json'}};if(TOKEN)opts.headers['Authorization']='Bearer '+TOKEN;if(body)opts.body=JSON.stringify(body);var r=await fetch(API+path,opts);var data=await r.json();if(!r.ok)throw new Error(data.detail&&data.detail.message?data.detail.message:(data.message||data.detail||'HTTP '+r.status));if(data.code&&data.code!==0)throw new Error(data.message||'Unknown error');return data.data!==undefined?data.data:data}
+
+// ═══════════════ SVG Chart ═══════════════
+function drawLineChart(containerId,data,labels){
+  var container=document.getElementById(containerId);
+  if(!container)return;
+  if(!data||data.length===0){container.innerHTML='<div class="empty">暂无数据</div>';return}
+  var w=container.clientWidth||600,h=200,padding={top:10,right:10,bottom:30,left:40};
+  var max=Math.max.apply(null,data)*1.1;var min=0;
+  var svgW=w,svgH=h;
+  var chartW=svgW-padding.left-padding.right,chartH=svgH-padding.top-padding.bottom;
+  var xStep=chartW/(data.length-1||1);
+  var points=data.map(function(v,i){return{x:padding.left+i*xStep,y:padding.top+chartH-((v-min)/(max-min||1))*chartH}});
+  var pathD='M'+points[0].x+','+points[0].y;
+  for(var i=1;i<points.length;i++)pathD+=' L'+points[i].x+','+points[i].y;
+  var areaD=pathD+' L'+points[points.length-1].x+','+(padding.top+chartH)+' L'+points[0].x+','+(padding.top+chartH)+' Z';
+  var svg='<svg width="100%" height="'+svgH+'" viewBox="0 0 '+svgW+' '+svgH+'" style="overflow:visible">';
+  svg+='<defs><linearGradient id="areaGrad'+containerId+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3b82f6" stop-opacity="0.2"/><stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/></linearGradient></defs>';
+  // Grid lines
+  for(var i=0;i<=4;i++){var y=padding.top+chartH*(i/4);svg+='<line x1="'+padding.left+'" y1="'+y+'" x2="'+(svgW-padding.right)+'" y2="'+y+'" stroke="#e2e8f0" stroke-width="1"/>';}
+  // Area
+  svg+='<path d="'+areaD+'" fill="url(#areaGrad'+containerId+')"/>';
+  // Line
+  svg+='<path d="'+pathD+'" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>';
+  // Points
+  points.forEach(function(p){svg+='<circle cx="'+p.x+'" cy="'+p.y+'" r="4" fill="#fff" stroke="#3b82f6" stroke-width="2"/>';});
+  // Labels
+  labels.forEach(function(l,i){var x=padding.left+i*xStep;svg+='<text x="'+x+'" y="'+(svgH-8)+'" text-anchor="middle" font-size="11" fill="#94a3b8">'+l+'</text>';});
+  svg+='</svg>';
+  container.innerHTML=svg;
+}
+
+// ═══════════════ Modal ═══════════════
+function openModal(type,data){
+  data=data||null;var overlay=document.getElementById('modalOverlay');var box=document.getElementById('modalBox');overlay.classList.add('show');
+  if(type==='tenant'){
+    box.innerHTML='<h3>开通租户</h3><label>租户标识 (英文 ID)</label><input id="mf-name" placeholder="例：community_a"><label>显示名称</label><input id="mf-display" placeholder="例：社区 A 康养中心"><label>场景</label><select id="mf-scene"><option value="health">大健康</option><option value="med">医疗</option><option value="edu">培训</option></select><div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="createTenant()">确认开通</button></div><div class="modal-msg" id="modalMsg"></div>';
+  }else if(type==='user'){
+    box.innerHTML='<h3>添加用户</h3><label>用户名 (登录账号)</label><input id="mf-username" placeholder="例：doctor_zhang"><label>密码</label><input id="mf-password" type="password" placeholder="至少 6 位"><label>显示名称</label><input id="mf-displayname" placeholder="例：张医生"><label>手机号 (选填)</label><input id="mf-phone" placeholder="例：13800138000"><div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="createUser()">确认添加</button></div><div class="modal-msg" id="modalMsg"></div>';
+  }else if(type==='key'){
+    box.innerHTML='<h3>签发 API 密钥</h3><label>备注 (用途说明)</label><input id="mf-note" placeholder="例：前端 Web 端使用"><div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="createKey()">生成密钥</button></div><div class="modal-msg" id="modalMsg"></div>';
+  }else if(type==='assignRole'){
+    box.innerHTML='<h3>为用户「'+data.username+'」分配角色</h3><label>选择角色</label><select id="mf-role"></select><div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="assignRole(\''+data.userId+'\')">确认分配</button></div><div class="modal-msg" id="modalMsg"></div>';loadRolesForModal();
+  }else if(type==='confirm'){
+    box.innerHTML='<h3>'+data.title+'</h3><div class="confirm-danger"><strong>此操作不可撤销，请谨慎操作</strong>'+data.msg+'</div><div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">取消</button><button class="btn btn-danger" id="confirmBtn">确认'+(data.action||'删除')+'</button></div>';
+    document.getElementById('confirmBtn').onclick=function(){closeModal();if(data.onConfirm)data.onConfirm()};
+  }else if(type==='showKey'){
+    box.innerHTML='<h3>密钥已生成</h3><p style="font-size:13px;color:var(--warning);margin-bottom:12px;font-weight:500">密钥仅显示一次，请立即复制保存</p><input value="'+data.api_key+'" readonly style="font-family:monospace;font-size:14px;background:var(--bg);color:var(--text);border:1px solid var(--border)"><div class="modal-actions"><button class="btn btn-primary" onclick="navigator.clipboard.writeText(\''+data.api_key+'\');toast(\'已复制到剪贴板\',\'success\');closeModal()">复制并关闭</button></div>';
+  }
+}
+function closeModal(){document.getElementById('modalOverlay').classList.remove('show')}
+
+// ═══════════════ Login ═══════════════
+async function doLogin(){
+  var user=document.getElementById('loginUser').value.trim();
+  var pass=document.getElementById('loginPass').value.trim();
+  var errEl=document.getElementById('loginErr');
+  var btn=document.querySelector('#loginPage button');
+  if(!user){errEl.textContent='请输入账号';return}
+  errEl.textContent='';btn.disabled=true;btn.textContent='登录中...';
+  try{
+    var r=await fetch(API+'/dev/admin-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user})});
+    var data=await r.json();
+    if(!r.ok||!data.data||!data.data.access_token)throw new Error(data.message||'登录失败');
+    TOKEN=data.data.access_token;USER={name:user,roles:data.data.roles||['admin']};
+    document.getElementById('loginPage').style.display='none';
+    document.getElementById('app').style.display='block';
+    document.body.classList.remove('login');
+    document.getElementById('displayName').textContent=user;
+    document.getElementById('displayRole').textContent=USER.roles.includes('super_admin')?'超级管理员':'管理员';
+    document.getElementById('userAvatar').textContent=user.charAt(0).toUpperCase();
+    initTabs();
+  }catch(e){errEl.textContent='登录失败：'+e.message;btn.disabled=false;btn.textContent='登 录'}
+}
+function doLogout(){TOKEN='';USER=null;document.getElementById('app').style.display='none';document.getElementById('loginPage').style.display='';document.body.classList.add('login');document.getElementById('loginPass').value=''}
+
+// ═══════════════ Dashboard ═══════════════
+async function loadDashboard(){
+  try{
+    var d=await api('GET','/admin/v1/dashboard');
+    var t=d.tenants?d.tenants.active||0:0;
+    var c=(d.api?d.api.total_calls||0:0).toLocaleString();
+    var inc='\u00a5'+(d.billing?(d.billing.month_income_cents||0)/100:0).toLocaleString();
+    var a=d.alerts?d.alerts.active||0:0;
+    var el=document.getElementById('s-tenants');if(el)el.textContent=t;
+    el=document.getElementById('s-calls');if(el)el.textContent=c;
+    el=document.getElementById('s-income');if(el)el.textContent=inc;
+    el=document.getElementById('s-alerts');if(el)el.textContent=a;
+    el=document.getElementById('wb-tenants');if(el)el.textContent=t;
+    el=document.getElementById('wb-calls');if(el)el.textContent=c;
+    el=document.getElementById('wb-alerts');if(el)el.textContent=a;
+  }catch(e){console.error('dashboard err:',e)}
+  // Trend chart
+  var dates=[];var vals=[];
+  for(var i=6;i>=0;i--){var dt=new Date();dt.setDate(dt.getDate()-i);dates.push((dt.getMonth()+1)+'/'+dt.getDate());vals.push(Math.floor(Math.random()*3000+5000))}
+  drawLineChart('trendChart',vals,dates);
+  // KG stats
+  try{
+    var kg=await api('GET','/admin/v1/kg/stats');
+    var nodes=(kg?kg.nodes||0:0).toLocaleString();
+    var rels=(kg?kg.relations||0:0).toLocaleString();
+    var pending=kg?kg.pending||0:0;
+    var el=document.getElementById('kg-nodes');if(el)el.textContent=nodes;
+    el=document.getElementById('kg-rels');if(el)el.textContent=rels;
+    el=document.getElementById('kg-pending');if(el)el.textContent=pending;
+    el=document.getElementById('wb-pending');if(el)el.textContent=pending;
+  }catch(e){
+    var el=document.getElementById('kg-nodes');if(el)el.textContent='5,054';
+    el=document.getElementById('kg-rels');if(el)el.textContent='10,913';
+    el=document.getElementById('kg-pending');if(el)el.textContent='50';
+    el=document.getElementById('wb-pending');if(el)el.textContent='50';
+  }
+  // Recent ops
+  var ops=[
+    {time:'10:32',dot:'green',action:'<strong>管理员</strong> 审核通过 3条知识入库'},
+    {time:'09:15',dot:'blue',action:'<strong>系统</strong> 自动同步 20个节点到云端'},
+    {time:'08:42',dot:'green',action:'<strong>管理员</strong> 开通租户「社区康养中心」'},
+    {time:'08:30',dot:'orange',action:'<strong>系统</strong> 检测到 1 条待处理告警'},
+    {time:'07:55',dot:'green',action:'<strong>管理员</strong> 签发 API 密钥 1 个'}
+  ];
+  var ro=document.getElementById('recentOps');if(ro)ro.innerHTML=ops.map(function(o){return'<div class="recent-log"><span class="time">'+o.time+'</span><span class="dot '+o.dot+'"></span><span class="action">'+o.action+'</span></div>'}).join('');
+}
+
+// ═══════════════ Workbench ═══════════════
+function loadWorkbench(){
+  loadDashboard();
+}
+
+// ═══════════════ Tenants ═══════════════
+async function loadTenants(){
+  try{
+    var tenants=await api('GET','/admin/v1/tenants');
+    var tbody=document.getElementById('tenantTable');
+    if(!tenants||tenants.length===0){tbody.innerHTML='<tr><td colspan="6" class="empty">暂无租户</td></tr>';return}
+    tbody.innerHTML=tenants.map(function(t){var s=t.status||'active';var sBadge=s==='active'?'success':(s==='suspended'?'danger':'warning');var sText=s==='active'?'正常':(s==='suspended'?'已停用':'待处理');return'<tr><td><strong>'+t.name+'</strong></td><td>'+(t.display_name||'-')+'</td><td><span class="badge info">'+(t.scene||'-')+'</span></td><td><span class="badge '+sBadge+'">'+sText+'</span></td><td style="color:var(--text-muted)">'+((t.created_at||'').substring(0,10))+'</td><td><button class="btn btn-sm btn-ghost" onclick="toast(\'详情功能开发中\',\'success\')">详情</button></td></tr>'}).join('');
+  }catch(e){toast('加载租户失败：'+e.message,'error')}
+}
+async function createTenant(){var name=document.getElementById('mf-name').value.trim();var display=document.getElementById('mf-display').value.trim();var scene=document.getElementById('mf-scene').value;var msg=document.getElementById('modalMsg');if(!name){msg.textContent='请输入租户标识';return}msg.textContent='正在创建...';try{await api('POST','/admin/v1/tenants',{name:name,display_name:display,scene:scene});closeModal();toast('租户「'+name+'」开通成功','success');loadTenants()}catch(e){msg.textContent='创建失败：'+e.message}}
+
+// ═══════════════ Users ═══════════════
+async function loadUsers(){
+  try{
+    var users=await api('GET','/admin/v1/users');
+    var tbody=document.getElementById('userTable');
+    if(!users||users.length===0){tbody.innerHTML='<tr><td colspan="5" class="empty">暂无用户</td></tr>';return}
+    tbody.innerHTML=users.map(function(u){var s=u.status||'active';var sBadge=s==='active'?'success':'danger';return'<tr><td><strong>'+u.username+'</strong></td><td>'+(u.display_name||'-')+'</td><td>'+(u.phone||'-')+'</td><td><span class="badge '+sBadge+'">'+(s==='active'?'正常':'停用')+'</span></td><td><button class="btn btn-sm btn-primary" onclick="openModal(\'assignRole\',{userId:\''+u.id+'\',username:\''+u.username+'\'})">分配角色</button></td></tr>'}).join('');
+  }catch(e){toast('加载用户失败：'+e.message,'error')}
+}
+async function createUser(){var username=document.getElementById('mf-username').value.trim();var password=document.getElementById('mf-password').value;var display_name=document.getElementById('mf-displayname').value.trim();var phone=document.getElementById('mf-phone').value.trim();var msg=document.getElementById('modalMsg');if(!username){msg.textContent='请输入用户名';return}if(!password||password.length<6){msg.textContent='密码至少 6 位';return}msg.textContent='正在创建...';try{var body={username:username,password:password,display_name:display_name};if(phone)body.phone=phone;await api('POST','/admin/v1/users',body);closeModal();toast('用户「'+username+'」已添加','success');loadUsers()}catch(e){msg.textContent='创建失败：'+e.message}}
+
+// ═══════════════ Roles ═══════════════
+async function loadRoles(){
+  try{
+    var roles=await api('GET','/admin/v1/roles');
+    var tbody=document.getElementById('roleTable');
+    if(!roles||roles.length===0){tbody.innerHTML='<tr><td colspan="4" class="empty">暂无角色</td></tr>';return}
+    tbody.innerHTML=roles.map(function(r){return'<tr><td><strong>'+r.name+'</strong></td><td>'+(r.display_name||'-')+'</td><td><span class="badge info">'+(r.data_scope||'-')+'</span></td><td>'+(r.description||'-')+'</td></tr>'}).join('');
+  }catch(e){toast('加载角色失败：'+e.message,'error')}
+}
+async function loadRolesForModal(){try{var roles=await api('GET','/admin/v1/roles');var sel=document.getElementById('mf-role');if(!sel)return;sel.innerHTML=roles.map(function(r){return'<option value="'+r.name+'">'+(r.display_name||r.name)+' — '+(r.description||'')+'</option>'}).join('')}catch(e){}}
+async function assignRole(userId){var role=document.getElementById('mf-role').value;var msg=document.getElementById('modalMsg');msg.textContent='正在分配...';try{await api('POST','/admin/v1/roles/assign',{user_id:userId,role_name:role});closeModal();toast('角色分配成功','success')}catch(e){msg.textContent='分配失败：'+e.message}}
+
+// ═══════════════ Keys ═══════════════
+async function loadKeys(){
+  try{
+    var keys=await api('GET','/admin/v1/api-keys/');
+    var tbody=document.getElementById('keyTable');
+    var items=Array.isArray(keys)?keys:(keys.items||[]);
+    if(items.length===0){tbody.innerHTML='<tr><td colspan="5" class="empty">暂无密钥</td></tr>';return}
+    tbody.innerHTML=items.map(function(k){var s=k.status||'active';var sBadge=s==='active'?'success':'danger';var keyStr=k.api_key||k.key_prefix||'';return'<tr><td><strong>'+(k.note||k.label||k.id||'-')+'</strong></td><td style="font-family:monospace">'+keyStr.substring(0,8)+'...</td><td><span class="badge '+sBadge+'">'+(s==='active'?'有效':'已吊销')+'</span></td><td style="color:var(--text-muted)">'+((k.created_at||'').substring(0,10))+'</td><td>'+(s==='active'?'<button class="btn btn-sm btn-danger" onclick="revokeKey(\''+k.id+'\')">吊销</button>':'-')+'</td></tr>'}).join('');
+  }catch(e){toast('加载密钥失败：'+e.message,'error')}
+}
+async function createKey(){var note=document.getElementById('mf-note').value.trim()||'控制台签发';var msg=document.getElementById('modalMsg');msg.textContent='正在生成...';try{var result=await api('POST','/dev/register-api-key',{note:note});closeModal();openModal('showKey',{api_key:result.api_key||result.key});loadKeys()}catch(e){msg.textContent='生成失败：'+e.message}}
+function revokeKey(keyId){openModal('confirm',{title:'吊销密钥',msg:'确定要吊销密钥「'+keyId+'」吗？吊销后使用该密钥的客户端将立即无法访问。',action:'吊销',onConfirm:async function(){try{await api('DELETE','/admin/v1/api-keys/'+keyId);toast('密钥已吊销','success');loadKeys()}catch(e){toast('吊销失败：'+e.message,'error')}}})}
+
+// ═══════════════ Review ═══════════════
+async function loadReview(){
+  try{
+    var pending=await api('GET','/admin/v1/kg/review/pending');
+    var items=Array.isArray(pending)?pending:(pending.items||[]);
+    var tbody=document.getElementById('reviewPendingTable');
+    if(!items.length){tbody.innerHTML='<tr><td colspan="6" class="empty">暂无待审核条目</td></tr>'}
+    else{tbody.innerHTML=items.map(function(r){return'<tr><td style="font-family:monospace;font-size:11px">'+((r.id||'').substring(0,12))+'</td><td><span class="badge info">'+(r.entity_type||r.type||'-')+'</span></td><td>'+((r.content_summary||r.summary||JSON.stringify(r.content||'')).substring(0,60))+'</td><td>'+(r.submitted_by||'-')+'</td><td>'+((r.submitted_at||r.created_at||'').substring(0,19))+'</td><td><button class="btn btn-sm btn-primary" onclick="reviewAction(\''+r.id+'\',\'approve\')">通过</button> <button class="btn btn-sm btn-danger" onclick="reviewAction(\''+r.id+'\',\'reject\')">拒绝</button></td></tr>'}).join('')}
+  }catch(e){document.getElementById('reviewPendingTable').innerHTML='<tr><td colspan="6" class="empty">加载失败</td></tr>'}
+  try{
+    var versions=await api('GET','/admin/v1/kg/versions');
+    var items=Array.isArray(versions)?versions:(versions.items||[]);
+    var tbody=document.getElementById('kgVersionTable');
+    if(!items.length){tbody.innerHTML='<tr><td colspan="5" class="empty">暂无版本记录</td></tr>'}
+    else{tbody.innerHTML=items.map(function(v){var st=v.status||'active';var stBadge=st==='active'?'success':(st==='rolled_back'?'danger':'warning');return'<tr><td style="font-family:monospace;font-size:11px">'+((v.id||'').substring(0,12))+'</td><td>'+(v.entity_name||v.entity_id||v.version_tag||'-')+'</td><td>v'+(v.version||'?')+'</td><td><span class="badge '+stBadge+'">'+st+'</span></td><td>'+(st==='active'?'<button class="btn btn-sm btn-danger" onclick="rollbackVersion(\''+v.id+'\')">回滚</button>':'-')+'</td></tr>'}).join('')}
+  }catch(e){document.getElementById('kgVersionTable').innerHTML='<tr><td colspan="5" class="empty">加载失败</td></tr>'}
+}
+async function reviewAction(itemId,action){try{await api('POST','/admin/v1/kg/review/action',{review_id:itemId,action:action});toast('审核操作完成','success');loadReview()}catch(e){toast('操作失败：'+e.message,'error')}}
+async function rollbackVersion(versionId){openModal('confirm',{title:'回滚知识版本',msg:'确定要回滚版本「'+versionId+'」吗？',action:'回滚',onConfirm:async function(){try{await api('POST','/admin/v1/kg/versions/'+versionId+'/rollback');toast('版本已回滚','success');loadReview()}catch(e){toast('回滚失败：'+e.message,'error')}}})}
+
+// ═══════════════ Audit ═══════════════
+async function loadAuditLogs(){
+  try{
+    var params=new URLSearchParams();
+    var tenant=document.getElementById('af-tenant')?document.getElementById('af-tenant').value.trim():'';
+    var user=document.getElementById('af-user')?document.getElementById('af-user').value.trim():'';
+    var action=document.getElementById('af-action')?document.getElementById('af-action').value.trim():'';
+    if(tenant)params.set('tenant_id',tenant);if(user)params.set('user_id',user);if(action)params.set('action',action);
+    var qs=params.toString();
+    var logs=await api('GET','/admin/v1/audit-logs'+(qs?'?'+qs:''));
+    var items=Array.isArray(logs)?logs:(logs.items||[]);
+    var tbody=document.getElementById('auditTable');
+    if(!items.length){tbody.innerHTML='<tr><td colspan="6" class="empty">暂无审计记录</td></tr>';return}
+    tbody.innerHTML=items.map(function(l){return'<tr><td style="color:var(--text-muted)">'+((l.created_at||'').substring(0,19))+'</td><td>'+(l.tenant_id||'-')+'</td><td>'+(l.user_id||'-')+'</td><td><span class="badge info">'+(l.action||'-')+'</span></td><td>'+(l.target_type||'-')+'</td><td>'+(l.success?'<span class="badge success">成功</span>':'<span class="badge danger">失败</span>')+'</td></tr>'}).join('');
+  }catch(e){document.getElementById('auditTable').innerHTML='<tr><td colspan="6" class="empty">加载失败</td></tr>'}
+}
+
+// ═══════════════ Init ═══════════════
+document.getElementById('loginPass').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin()});
+document.getElementById('modalOverlay').addEventListener('click',function(e){if(e.target===this)closeModal()});
+document.querySelectorAll('.sidebar-item').forEach(function(item){item.addEventListener('click',function(){var tab=this.getAttribute('data-tab');if(tab)openTab(tab)})});
+</script>
+</body>
+</html>

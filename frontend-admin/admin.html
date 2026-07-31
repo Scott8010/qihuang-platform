@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>岐黄智脑 — 控制端</title>
+<style>
+:root {
+  --bg: #0f1923;
+  --card: #1a2736;
+  --border: #2a3a4a;
+  --text: #e0e6ed;
+  --text-dim: #8899aa;
+  --gold: #c9a96e;
+  --gold-light: #e0c78a;
+  --green: #4caf50;
+  --amber: #ff9800;
+  --red: #f44336;
+  --blue: #42a5f5;
+  --purple: #ab47bc;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,"Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+body.login{display:flex;align-items:center;justify-content:center}
+
+/* Login */
+.login-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:40px;width:400px;text-align:center}
+.login-card h1{color:var(--gold);font-size:24px;margin-bottom:4px}
+.login-card .sub{color:var(--text-dim);font-size:13px;margin-bottom:28px}
+.login-card input{width:100%;padding:12px 16px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;margin-bottom:12px;outline:none;transition:border .2s}
+.login-card input:focus{border-color:var(--gold)}
+.login-card button{width:100%;padding:12px;background:var(--gold);color:var(--bg);border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;transition:opacity .2s}
+.login-card button:hover{opacity:.9}
+.login-err{color:var(--red);font-size:12px;margin-top:8px;min-height:18px}
+
+/* Layout */
+#app{display:none;height:100vh}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:56px;background:var(--card);border-bottom:1px solid var(--border)}
+.topbar h2{font-size:16px;color:var(--gold)}
+.topbar .user{display:flex;align-items:center;gap:12px;font-size:13px}
+.topbar .user button{background:none;border:1px solid var(--border);color:var(--text-dim);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px}
+.topbar .user button:hover{color:var(--red);border-color:var(--red)}
+.nav{display:flex;gap:0;background:var(--card);border-bottom:1px solid var(--border);padding:0 24px}
+.nav a{display:block;padding:14px 20px;color:var(--text-dim);text-decoration:none;font-size:13px;border-bottom:2px solid transparent;transition:all .2s;cursor:pointer}
+.nav a:hover{color:var(--text)}
+.nav a.active{color:var(--gold);border-bottom-color:var(--gold)}
+.content{padding:24px;max-width:1200px;margin:0 auto;height:calc(100vh - 56px - 49px);overflow-y:auto}
+.tab{display:none}
+.tab.active{display:block}
+
+/* Cards */
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px}
+.card h3{font-size:14px;color:var(--text-dim);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card h3 .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.dot.green{background:var(--green)}
+.dot.amber{background:var(--amber)}
+.dot.red{background:var(--red)}
+.dot.blue{background:var(--blue)}
+
+/* Dashboard stats */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:20px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px}
+.stat-card .label{font-size:12px;color:var(--text-dim);margin-bottom:6px}
+.stat-card .value{font-size:28px;font-weight:700}
+.stat-card .value.gold{color:var(--gold)}
+.stat-card .value.green{color:var(--green)}
+.stat-card .value.blue{color:var(--blue)}
+.stat-card .value.amber{color:var(--amber)}
+
+/* Tables */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--text-dim);font-weight:500;font-size:12px}
+td{padding:10px 12px;border-bottom:1px solid rgba(42,58,74,.5)}
+tr:hover{background:rgba(201,169,110,.05)}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
+.badge.green{background:rgba(76,175,80,.15);color:var(--green)}
+.badge.amber{background:rgba(255,152,0,.15);color:var(--amber)}
+.badge.red{background:rgba(244,67,54,.15);color:var(--red)}
+.badge.blue{background:rgba(66,165,245,.15);color:var(--blue)}
+.badge.gold{background:rgba(201,169,110,.15);color:var(--gold)}
+
+/* Buttons */
+.btn{padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;border:none;font-weight:500;transition:all .2s}
+.btn-primary{background:var(--gold);color:var(--bg)}
+.btn-primary:hover{background:var(--gold-light)}
+.btn-danger{background:transparent;color:var(--red);border:1px solid var(--red)}
+.btn-danger:hover{background:rgba(244,67,54,.1)}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text-dim)}
+.btn-ghost:hover{color:var(--text);border-color:var(--text-dim)}
+
+/* Forms */
+.form-row{display:flex;gap:12px;margin-bottom:12px;align-items:flex-end;flex-wrap:wrap}
+.form-row input,.form-row select{padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none;min-width:160px}
+.form-row input:focus{border-color:var(--gold)}
+.form-row label{font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px}
+
+/* Status bars */
+.status-bar{display:flex;gap:8px;align-items:center;padding:10px 14px;background:var(--bg);border-radius:8px;margin-bottom:8px;font-size:13px}
+.status-bar .status-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.recent-log{font-size:12px;color:var(--text-dim);padding:6px 0;border-bottom:1px solid rgba(42,58,74,.3);display:flex;gap:12px}
+.recent-log span{white-space:nowrap}
+.recent-log .method{color:var(--blue);min-width:36px}
+
+/* Modal */
+.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:28px;width:440px;max-width:90vw}
+.modal h3{font-size:16px;color:var(--gold);margin-bottom:16px}
+.modal input,.modal select{width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none;margin-bottom:12px}
+.modal input:focus{border-color:var(--gold)}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.modal-msg{font-size:12px;min-height:18px;margin-top:8px}
+
+/* Confirm dialog */
+.confirm-danger{background:rgba(244,67,54,.08);border:1px solid var(--red);border-radius:8px;padding:14px;margin:12px 0;color:var(--red);font-size:13px}
+.confirm-danger strong{display:block;margin-bottom:4px}
+
+/* Toast */
+.toast{position:fixed;top:20px;right:20px;z-index:200;padding:12px 20px;border-radius:8px;font-size:13px;animation:slideIn .3s ease;max-width:360px}
+.toast.success{background:#1b5e20;color:#c8e6c9}
+.toast.error{background:#b71c1c;color:#ffcdd2}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* Empty state */
+.empty{text-align:center;padding:40px;color:var(--text-dim);font-size:14px}
+
+/* Quick actions */
+.quick-actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+
+/* Responsive */
+@media(max-width:768px){
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .form-row{flex-direction:column}
+  .nav a{padding:12px 14px;font-size:12px}
+  .content{padding:16px}
+}
+</style>
+</head>
+<body class="login" id="body">
+
+<!-- ═══════════════ 登录页 ═══════════════ -->
+<div id="loginPage" class="login-card">
+  <h1>岐黄智脑</h1>
+  <div class="sub">控制端 · 管理平台</div>
+  <input type="text" id="loginUser" placeholder="管理员账号" value="admin">
+  <input type="password" id="loginPass" placeholder="密码" value="admin123">
+  <button onclick="doLogin()">登 录</button>
+  <div class="login-err" id="loginErr"></div>
+</div>
+
+<!-- ═══════════════ 主应用 ═══════════════ -->
+<div id="app">
+  <div class="topbar">
+    <h2>🏛 岐黄智脑 · 控制端</h2>
+    <div class="user">
+      <span id="displayName">管理员</span>
+      <span class="badge gold" id="displayRole">超管</span>
+      <button onclick="doLogout()">退出</button>
+    </div>
+  </div>
+  <div class="nav">
+    <a class="active" onclick="switchTab('dashboard')">📊 仪表盘</a>
+    <a onclick="switchTab('tenants')">🏢 租户管理</a>
+    <a onclick="switchTab('users')">👥 用户管理</a>
+    <a onclick="switchTab('keys')">🔑 密钥管理</a>
+    <a onclick="switchTab('module3d')">🗿 3D模块</a>
+    <a onclick="switchTab('usage')">📈 用量看板</a>
+  </div>
+  <div class="content">
+
+    <!-- ═══ 仪表��� ═══ -->
+    <div id="tab-dashboard" class="tab active">
+      <div class="stats-grid">
+        <div class="stat-card"><div class="label">租户总数</div><div class="value gold" id="s-tenants">-</div></div>
+        <div class="stat-card"><div class="label">活跃租户</div><div class="value green" id="s-active">-</div></div>
+        <div class="stat-card"><div class="label">用户总数</div><div class="value blue" id="s-users">-</div></div>
+        <div class="stat-card"><div class="label">API调用量</div><div class="value amber" id="s-calls">-</div></div>
+      </div>
+      <div class="quick-actions">
+        <button class="btn btn-primary" onclick="openModal('tenant')">+ 开通租户</button>
+        <button class="btn btn-primary" onclick="openModal('user')">+ 添加用户</button>
+        <button class="btn btn-primary" onclick="openModal('key')">+ 签发密钥</button>
+        <button class="btn btn-ghost" onclick="switchTab('tenants')">查看全部租户 →</button>
+        <button class="btn btn-ghost" onclick="switchTab('usage')">查看用量 →</button>
+      </div>
+      <div class="card">
+        <h3><span class="dot blue"></span>最近调用日志</h3>
+        <div id="recentLogs"><div class="empty">暂无调用记录</div></div>
+      </div>
+    </div>
+
+    <!-- ═══ 租户管理 ═══ -->
+    <div id="tab-tenants" class="tab">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="margin:0">🏢 租户列表</h3>
+        <button class="btn btn-primary" onclick="openModal('tenant')">+ 开通租户</button>
+      </div>
+      <div class="card" style="overflow-x:auto">
+        <table><thead><tr>
+          <th>租户名称</th><th>显示名称</th><th>场景</th><th>状态</th><th>创建时间</th><th>操作</th>
+        </tr></thead>
+        <tbody id="tenantTable"><tr><td colspan="6" class="empty">加载中...</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <!-- ═══ 用户管理 ═══ -->
+    <div id="tab-users" class="tab">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="margin:0">👥 用户列表</h3>
+        <button class="btn btn-primary" onclick="openModal('user')">+ 添加用户</button>
+      </div>
+      <div class="card" style="overflow-x:auto">
+        <table><thead><tr>
+          <th>用户名</th><th>显示名</th><th>手机号</th><th>状态</th><th>操作</th>
+        </tr></thead>
+        <tbody id="userTable"><tr><td colspan="5" class="empty">加载中...</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <!-- ═══ 密钥管理 ═══ -->
+    <div id="tab-keys" class="tab">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="margin:0">🔑 API 密钥</h3>
+        <button class="btn btn-primary" onclick="openModal('key')">+ 签发密钥</button>
+      </div>
+      <div class="card" style="overflow-x:auto">
+        <table><thead><tr>
+          <th>密钥标识</th><th>密钥(前8位)</th><th>状态</th><th>创建时间</th><th>操作</th>
+        </tr></thead>
+        <tbody id="keyTable"><tr><td colspan="5" class="empty">加载中...</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <!-- ═══ 3D模块管理 ═══ -->
+    <div id="tab-module3d" class="tab">
+      <div class="stats-grid">
+        <div class="stat-card"><div class="label">3D模型资产数</div><div class="value gold" id="d3-assets">3</div></div>
+        <div class="stat-card"><div class="label">CDN状态</div><div class="value amber" id="d3-cdn">待配置</div></div>
+        <div class="stat-card"><div class="label">经络数</div><div class="value blue">14</div></div>
+        <div class="stat-card"><div class="label">穴位总数</div><div class="value green">361</div></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h3><span class="dot gold"></span>套餐3D开关</h3>
+        <p style="color:var(--text-dim);font-size:13px;margin-bottom:12px">
+          控制各套餐档位的 module_3d 功能开关。开启后该套餐租户可使用岐黄三境3D经络穴位可视化。
+        </p>
+        <table><thead><tr>
+          <th>套餐</th><th>3D模块</th><th>名医智能体</th><th>报告导出</th><th>优先支持</th><th>品牌皮肤</th>
+        </tr></thead>
+        <tbody id="planFeatureTable"><tr><td colspan="6" class="empty">加载中...</td></tr></tbody></table>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h3><span class="dot blue"></span>CDN资源地址</h3>
+        <p style="color:var(--text-dim);font-size:13px;margin-bottom:12px">
+          T0-1云环境就绪后可替换为真实COS地址。当前使用本地静态文件服务。
+        </p>
+        <table><thead><tr>
+          <th>资源</th><th>格式</th><th>大小</th><th>当前地址</th>
+        </tr></thead>
+        <tbody>
+          <tr><td>人体模型（当前生产）</td><td>OBJ</td><td>7.8 MB</td><td><code style="font-size:11px">/model/opensource/man_body.obj</code></td></tr>
+          <tr><td>铜人烘焙精简版（推荐）</td><td>GLB</td><td>8.9 MB</td><td><code style="font-size:11px">/model/acupuncture-tongren-baked.glb</code></td></tr>
+          <tr><td>铜人完整烘焙版（高精度）</td><td>GLB</td><td>85.5 MB</td><td><code style="font-size:11px">/model/acupuncture-baked.glb</code></td></tr>
+        </tbody></table>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h3><span class="dot blue"></span>品牌皮肤配置（企业版专属）</h3>
+        <p style="color:var(--text-dim);font-size:13px;margin-bottom:12px">
+          为开通企业版 + custom_skin 的租户提供3D页面品牌定制。
+        </p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <label>Logo URL <input style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:13px" placeholder="https://..."></label>
+          <label>品牌色 <input type="color" value="#c9a96e" style="width:100%;height:36px;padding:2px;background:var(--bg);border:1px solid var(--border);border-radius:6px;cursor:pointer"></label>
+          <label>标题文字 <input style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:13px" placeholder="机构名称-岐黄三境"></label>
+          <label>客服链接 <input style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:13px" placeholder="https://..."></label>
+        </div>
+        <button class="btn btn-primary" style="margin-top:12px" onclick="alert('皮肤配置功能将在T0-1云环境就绪后启用')">保存皮肤配置</button>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h3><span class="dot gold"></span>穴位范围配置</h3>
+        <p style="color:var(--text-dim);font-size:13px;margin-bottom:12px">按机构/套餐控制可访问的经络穴位范围</p>
+        <label>默认开放经络 <select multiple style="width:100%;height:120px;padding:8px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:13px">
+          <option selected>LU 手太阴肺经 (11穴)</option>
+          <option selected>LI 手阳明大肠经 (20穴)</option>
+          <option selected>ST 足阳明胃经 (45穴)</option>
+          <option selected>SP 足太阴脾经 (21穴)</option>
+          <option selected>HT 手少阴心经 (9穴)</option>
+          <option selected>SI 手太阳小肠经 (19穴)</option>
+          <option selected>BL 足太阳膀胱经 (67穴)</option>
+          <option selected>KI 足少阴肾经 (27穴)</option>
+          <option selected>PC 手厥阴心包经 (9穴)</option>
+          <option selected>TE 手少阳三焦经 (23穴)</option>
+          <option selected>GB 足少阳胆经 (44穴)</option>
+          <option selected>LR 足厥阴肝经 (14穴)</option>
+          <option selected>CV 任脉 (24穴)</option>
+          <option selected>GV 督脉 (28穴)</option>
+        </select></label>
+        <button class="btn btn-primary" style="margin-top:8px" onclick="alert('穴位范围配置将在T0-1云环境就绪后持久化')">保存范围配置</button>
+      </div>
+    </div>
+
+    <!-- ═══ 用量看板 ═══ -->
+    <div id="tab-usage" class="tab">
+      <div class="stats-grid">
+        <div class="stat-card"><div class="label">总调用次数</div><div class="value gold" id="u-calls">-</div></div>
+        <div class="stat-card"><div class="label">总算力消耗</div><div class="value blue" id="u-tokens">-</div></div>
+        <div class="stat-card"><div class="label">平均延迟</div><div class="value green" id="u-latency">-</div></div>
+        <div class="stat-card"><div class="label">预估费用</div><div class="value amber" id="u-cost">-</div></div>
+      </div>
+      <div class="card">
+        <h3><span class="dot blue"></span>调用日志明细</h3>
+        <div id="usageLogs"><div class="empty">暂无数据</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════ 通用弹窗 ═══════════════ -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalBox"></div>
+</div>
+
+<script>
+// ═══════════════ 配置 ═══════════════
+const API = 'http://localhost:8602';
+let TOKEN = '';
+let USER = null;
+
+// ═══════════════ 工具函数 ═══════════════
+function toast(msg, type='success'){
+  const t = document.createElement('div');
+  t.className = `toast ${type}`; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 3000);
+}
+
+async function api(method, path, body=null){
+  const opts = {
+    method,
+    headers: {'Content-Type':'application/json'},
+  };
+  if(TOKEN) opts.headers['Authorization'] = 'Bearer '+TOKEN;
+  if(body) opts.body = JSON.stringify(body);
+  const r = await fetch(API+path, opts);
+  const data = await r.json();
+  if(!r.ok) throw new Error(data.detail?.message || data.message || data.detail || `HTTP ${r.status}`);
+  if(data.code && data.code !== 0) throw new Error(data.message || '未知错误');
+  return data.data !== undefined ? data.data : data;
+}
+
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.nav a').forEach(a=>a.classList.remove('active'));
+  const tab = document.getElementById('tab-'+name);
+  if(tab) tab.classList.add('active');
+  const links = document.querySelectorAll('.nav a');
+  const tabs = ['dashboard','tenants','users','keys','module3d','usage'];
+  const idx = tabs.indexOf(name);
+  if(idx>=0 && links[idx]) links[idx].classList.add('active');
+
+  // load data
+  if(name==='dashboard') loadDashboard();
+  else if(name==='tenants') loadTenants();
+  else if(name==='users') loadUsers();
+  else if(name==='keys') loadKeys();
+  else if(name==='module3d') loadPlanFeatures();
+  else if(name==='usage') loadUsage();
+}
+
+// ═══════════════ 弹窗 ═══════════════
+function openModal(type, data=null){
+  const overlay = document.getElementById('modalOverlay');
+  const box = document.getElementById('modalBox');
+  overlay.classList.add('show');
+
+  if(type==='tenant'){
+    box.innerHTML = `
+      <h3>🏢 开通租户（第1步：填写信息）</h3>
+      <label>租户标识（英文ID）</label><input id="mf-name" placeholder="例如: community_a">
+      <label>显示名称</label><input id="mf-display" placeholder="例如: 社区A康养中心">
+      <label>场景</label><select id="mf-scene">
+        <option value="health">大健康</option>
+        <option value="med">医疗</option>
+        <option value="edu">培训</option>
+      </select>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="createTenant()">确认开通</button>
+      </div>
+      <div class="modal-msg" id="modalMsg"></div>
+    `;
+  } else if(type==='user'){
+    box.innerHTML = `
+      <h3>👤 添加用户</h3>
+      <label>用户名（登录账号）</label><input id="mf-username" placeholder="例如: doctor_zhang">
+      <label>密码</label><input id="mf-password" type="password" placeholder="至少6位">
+      <label>显示名称</label><input id="mf-displayname" placeholder="例如: 张医生">
+      <label>手机号（选填）</label><input id="mf-phone" placeholder="例如: 13800138000">
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="createUser()">确认添加</button>
+      </div>
+      <div class="modal-msg" id="modalMsg"></div>
+    `;
+  } else if(type==='key'){
+    box.innerHTML = `
+      <h3>🔑 签发 API 密钥</h3>
+      <label>备注（用途说明）</label><input id="mf-note" placeholder="例如: 前端Web端使用">
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="createKey()">生成密钥</button>
+      </div>
+      <div class="modal-msg" id="modalMsg"></div>
+    `;
+  } else if(type==='assignRole'){
+    // data = {userId, username}
+    box.innerHTML = `
+      <h3>🔰 为用户「${data.username}」分配角色</h3>
+      <label>选择角色</label><select id="mf-role"></select>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="assignRole('${data.userId}')">确认分配</button>
+      </div>
+      <div class="modal-msg" id="modalMsg"></div>
+    `;
+    loadRolesForModal();
+  } else if(type==='confirm'){
+    // data = {title, msg, onConfirm}
+    box.innerHTML = `
+      <h3>⚠️ ${data.title}</h3>
+      <div class="confirm-danger">
+        <strong>此操作不可撤销，请谨慎操作</strong>
+        ${data.msg}
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal()">取消</button>
+        <button class="btn btn-danger" id="confirmBtn">确认${data.action||'删除'}</button>
+      </div>
+    `;
+    document.getElementById('confirmBtn').onclick = ()=>{
+      closeModal();
+      if(data.onConfirm) data.onConfirm();
+    };
+  } else if(type==='showKey'){
+    box.innerHTML = `
+      <h3>✅ 密钥已生成</h3>
+      <p style="font-size:13px;color:var(--amber);margin-bottom:12px">⚠️ 密钥仅显示一次，请立即复制保存</p>
+      <input value="${data.api_key}" readonly style="font-family:monospace;font-size:14px;background:var(--bg);color:var(--gold)">
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="navigator.clipboard.writeText('${data.api_key}');toast('已复制到剪贴板');closeModal()">复制并关闭</button>
+      </div>
+    `;
+  }
+}
+
+function closeModal(){
+  document.getElementById('modalOverlay').classList.remove('show');
+}
+
+// ═══════════════ 登录 ═══════════════
+async function doLogin(){
+  const user = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value.trim();
+  const errEl = document.getElementById('loginErr');
+  const btn = document.querySelector('#loginPage button');
+  if(!user){errEl.textContent='请输入账号';return;}
+  errEl.textContent = '';
+  btn.disabled = true; btn.textContent = '登录中...';
+  try{
+    console.log('[Login] 正在请求:', API+'/dev/admin-login');
+    const r = await fetch(API+'/dev/admin-login',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username:user})
+    });
+    console.log('[Login] 响应状态:', r.status);
+    const data = await r.json();
+    console.log('[Login] 响应数据:', data);
+    if(!r.ok || !data.data?.access_token) throw new Error(data.message||'登录失败');
+    TOKEN = data.data.access_token;
+    USER = {name:user, roles:data.data.roles||['admin']};
+    document.getElementById('loginPage').style.display='none';
+    document.getElementById('app').style.display='block';
+    document.body.classList.remove('login');
+    document.getElementById('displayName').textContent = user;
+    document.getElementById('displayRole').textContent = USER.roles.includes('super_admin')?'超管':'管理员';
+    switchTab('dashboard');
+  }catch(e){
+    console.error('[Login] 错误:', e);
+    errEl.textContent = '登录失败: '+e.message;
+    btn.disabled = false; btn.textContent = '登 录';
+  }
+}
+
+function doLogout(){
+  TOKEN = ''; USER = null;
+  document.getElementById('app').style.display='none';
+  document.getElementById('loginPage').style.display='';
+  document.body.classList.add('login');
+  document.getElementById('loginPass').value = '';
+}
+
+// ═══════════════ 仪表盘 ═══════════════
+async function loadDashboard(){
+  try{
+    const d = await api('GET','/admin/v1/dashboard');
+    document.getElementById('s-tenants').textContent = d.tenants.total;
+    document.getElementById('s-active').textContent = d.tenants.active;
+    document.getElementById('s-users').textContent = d.users.total;
+    document.getElementById('s-calls').textContent = d.api.total_calls;
+
+    const logsDiv = document.getElementById('recentLogs');
+    if(!d.recent_calls || d.recent_calls.length===0){
+      logsDiv.innerHTML = '<div class="empty">暂无调用记录</div>';
+      return;
+    }
+    logsDiv.innerHTML = d.recent_calls.map(c=>{
+      const sc = parseInt(c.status_code);
+      const scClass = sc<400?'green':sc<500?'amber':'red';
+      const method = c.method||'GET';
+      return `<div class="recent-log">
+        <span class="method">${method}</span>
+        <span>${c.endpoint||'-'}</span>
+        <span class="badge ${scClass}">${c.status_code||'-'}</span>
+        <span>${c.latency_ms||'-'}ms</span>
+        <span style="color:var(--text-dim)">${(c.timestamp||'').substring(11,19)}</span>
+      </div>`;
+    }).join('');
+  }catch(e){
+    console.error('dashboard err:',e);
+  }
+}
+
+// ═══════════════ 租户管理 ═══════════════
+async function loadTenants(){
+  try{
+    const tenants = await api('GET','/admin/v1/tenants');
+    const tbody = document.getElementById('tenantTable');
+    if(!tenants||tenants.length===0){
+      tbody.innerHTML='<tr><td colspan="6" class="empty">暂无租户</td></tr>';
+      return;
+    }
+    tbody.innerHTML = tenants.map(t=>{
+      const s = t.status||'active';
+      const sBadge = s==='active'?'green':s==='suspended'?'red':'amber';
+      const sText = s==='active'?'正常':s==='suspended'?'已停用':'待处理';
+      return `<tr>
+        <td><strong>${t.name}</strong></td>
+        <td>${t.display_name||'-'}</td>
+        <td><span class="badge blue">${t.scene||'-'}</span></td>
+        <td><span class="badge ${sBadge}">${sText}</span></td>
+        <td style="color:var(--text-dim)">${(t.created_at||'').substring(0,10)}</td>
+        <td>
+          <button class="btn btn-sm btn-ghost" onclick="toast('详情功能开发中')">详情</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }catch(e){toast('加载租户失败: '+e.message,'error')}
+}
+
+async function createTenant(){
+  const name = document.getElementById('mf-name').value.trim();
+  const display = document.getElementById('mf-display').value.trim();
+  const scene = document.getElementById('mf-scene').value;
+  const msg = document.getElementById('modalMsg');
+  if(!name){msg.textContent='请输入租户标识';return;}
+  msg.textContent='正在创建...';
+  try{
+    await api('POST','/admin/v1/tenants',{name,display_name:display,scene});
+    closeModal();
+    toast('租户「'+name+'」开通成功');
+    loadTenants();
+  }catch(e){
+    msg.textContent='创建失败: '+e.message;
+  }
+}
+
+// ═══════════════ 用户管理 ═══════════════
+async function loadUsers(){
+  try{
+    const users = await api('GET','/admin/v1/users');
+    const tbody = document.getElementById('userTable');
+    if(!users||users.length===0){
+      tbody.innerHTML='<tr><td colspan="5" class="empty">暂无用户</td></tr>';
+      return;
+    }
+    tbody.innerHTML = users.map(u=>{
+      const s = u.status||'active';
+      const sBadge = s==='active'?'green':'red';
+      return `<tr>
+        <td><strong>${u.username}</strong></td>
+        <td>${u.display_name||'-'}</td>
+        <td>${u.phone||'-'}</td>
+        <td><span class="badge ${sBadge}">${s==='active'?'正常':'停用'}</span></td>
+        <td>
+          <button class="btn btn-sm btn-primary" onclick="openModal('assignRole',{userId:'${u.id}',username:'${u.username}'})">分配角色</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }catch(e){toast('加载用户失败: '+e.message,'error')}
+}
+
+async function createUser(){
+  const username = document.getElementById('mf-username').value.trim();
+  const password = document.getElementById('mf-password').value;
+  const display_name = document.getElementById('mf-displayname').value.trim();
+  const phone = document.getElementById('mf-phone').value.trim();
+  const msg = document.getElementById('modalMsg');
+  if(!username){msg.textContent='请输入用户名';return;}
+  if(!password||password.length<6){msg.textContent='密码至少6位';return;}
+  msg.textContent='正在创建...';
+  try{
+    await api('POST','/admin/v1/users',{username,password,display_name,phone:phone||undefined});
+    closeModal();
+    toast('用户「'+username+'」已添加');
+    loadUsers();
+  }catch(e){
+    msg.textContent='创建失败: '+e.message;
+  }
+}
+
+async function loadRolesForModal(){
+  try{
+    const roles = await api('GET','/admin/v1/roles');
+    const sel = document.getElementById('mf-role');
+    if(!sel) return;
+    sel.innerHTML = roles.map(r=>`<option value="${r.name}">${r.display_name||r.name} — ${r.description||''}</option>`).join('');
+  }catch(e){}
+}
+
+async function assignRole(userId){
+  const role = document.getElementById('mf-role').value;
+  const msg = document.getElementById('modalMsg');
+  msg.textContent='正在分配...';
+  try{
+    await api('POST','/admin/v1/roles/assign',{user_id:userId,role_name:role});
+    closeModal();
+    toast('角色分配成功');
+  }catch(e){
+    msg.textContent='分配失败: '+e.message;
+  }
+}
+
+// ═══════════════ 密钥管理 ═══════════════
+async function loadKeys(){
+  try{
+    const keys = await api('GET','/admin/v1/api-keys/');
+    const tbody = document.getElementById('keyTable');
+     // api returns {total, items} or array?
+    const items = Array.isArray(keys)?keys:(keys.items||[]);
+    if(items.length===0){
+      tbody.innerHTML='<tr><td colspan="5" class="empty">暂无密钥</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map(k=>{
+      const s = k.status||'active';
+      const sBadge = s==='active'?'green':'red';
+      return `<tr>
+        <td><strong>${k.note||k.label||k.id||'-'}</strong></td>
+        <td style="font-family:monospace">${(k.api_key||k.key_prefix||'').substring(0,8)}...</td>
+        <td><span class="badge ${sBadge}">${s==='active'?'有效':'已吊销'}</span></td>
+        <td style="color:var(--text-dim)">${(k.created_at||'').substring(0,10)}</td>
+        <td>
+          ${s==='active'?`<button class="btn btn-sm btn-danger" onclick="revokeKey('${k.id}')">吊销</button>`:'-'}
+        </td>
+      </tr>`;
+    }).join('');
+  }catch(e){toast('加载密钥失败: '+e.message,'error')}
+}
+
+async function createKey(){
+  const note = document.getElementById('mf-note').value.trim()||'控制台签发';
+  const msg = document.getElementById('modalMsg');
+  msg.textContent='正在生成...';
+  try{
+    const result = await api('POST','/dev/register-api-key',{note});
+    closeModal();
+    openModal('showKey',{api_key:result.api_key||result.key});
+    loadKeys();
+  }catch(e){
+    msg.textContent='生成失败: '+e.message;
+  }
+}
+
+function revokeKey(keyId){
+  openModal('confirm',{
+    title:'吊销密钥',
+    msg:`确定要吊销密钥「${keyId}」吗？吊销后使用该密钥的客户端将立即无法访问。`,
+    action:'吊销',
+    onConfirm:async ()=>{
+      try{
+        await api('DELETE','/admin/v1/api-keys/'+keyId);
+        toast('密钥已吊销');
+        loadKeys();
+      }catch(e){toast('吊销失败: '+e.message,'error')}
+    }
+  });
+}
+
+// ═══════════════ 3D模块管理 ═══════════════
+async function loadPlanFeatures(){
+  const defaults = [
+    {plan_name:'trial',display_name:'体验版',features_json:{module_3d:false,module_agent:false,report_export:false,priority_support:false,custom_skin:false}},
+    {plan_name:'standard',display_name:'标准版',features_json:{module_3d:false,module_agent:false,report_export:true,priority_support:false,custom_skin:false}},
+    {plan_name:'professional',display_name:'专业版',features_json:{module_3d:true,module_agent:false,report_export:true,priority_support:true,custom_skin:false}},
+    {plan_name:'enterprise',display_name:'企业版',features_json:{module_3d:true,module_agent:true,report_export:true,priority_support:true,custom_skin:true}},
+  ];
+  function render(data){
+    let html = '';
+    data.forEach(p => {
+      const f = p.features_json || {};
+      const check = (v) => v ? '<span style="color:#4caf50">✅</span>' : '<span style="color:#888">❌</span>';
+      html += `<tr>
+        <td><strong>${p.display_name||p.plan_name}</strong><br><span style="font-size:11px;color:var(--text-dim)">${p.plan_name}</span></td>
+        <td>${check(f.module_3d)}</td>
+        <td>${check(f.module_agent)}</td>
+        <td>${check(f.report_export)}</td>
+        <td>${check(f.priority_support)}</td>
+        <td>${check(f.custom_skin)}</td>
+      </tr>`;
+    });
+    document.getElementById('planFeatureTable').innerHTML = html;
+  }
+  try{
+    const res = await api('GET','/admin/v1/plans');
+    const plans = Array.isArray(res) ? res : (res.plans || []);
+    const data = plans.length > 0 ? plans : defaults;
+    render(data);
+  }catch(e){
+    render(defaults);
+  }
+}
+
+// ═══════════════ 用量看板 ═══════════════
+async function loadUsage(){
+  try{
+    const s = await api('GET','/dev/metering/stats');
+    document.getElementById('u-calls').textContent = s.total_calls||0;
+    document.getElementById('u-tokens').textContent = (s.total_tokens||0).toLocaleString();
+    document.getElementById('u-latency').textContent = (s.avg_latency_ms||0)+'ms';
+    document.getElementById('u-cost').textContent = '¥'+(s.total_cost_cents?((s.total_cost_cents)/100).toFixed(2):'0.00');
+
+    // also get recent logs from dashboard
+    const d = await api('GET','/admin/v1/dashboard');
+    const logsDiv = document.getElementById('usageLogs');
+    if(!d.recent_calls||d.recent_calls.length===0){
+      logsDiv.innerHTML='<div class="empty">暂无调用记录</div>';
+      return;
+    }
+    logsDiv.innerHTML = d.recent_calls.map(c=>{
+      const sc = parseInt(c.status_code);
+      const scClass = sc<400?'green':sc<500?'amber':'red';
+      return `<div class="recent-log">
+        <span class="method">${c.method||'GET'}</span>
+        <span>${c.endpoint||'-'}</span>
+        <span class="badge ${scClass}">${c.status_code||'-'}</span>
+        <span>${c.latency_ms||'-'}ms</span>
+        <span style="color:var(--text-dim)">${(c.timestamp||'').substring(0,19)}</span>
+      </div>`;
+    }).join('');
+  }catch(e){toast('加载用量失败: '+e.message,'error')}
+}
+
+// ═══════════════ 初始化 ═══════════════
+// 回车登录
+document.getElementById('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+// 点击遮罩关闭弹窗
+document.getElementById('modalOverlay').addEventListener('click',function(e){if(e.target===this)closeModal()});
+</script>
+</body>
+</html>

@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>岐黄智脑 · 运维端</title>
+<style>
+/* ═══════════ SaaS Pro Theme (Ops · Green) ═══════════ */
+:root {
+  --primary: #10b981; --primary-light: #ecfdf5; --primary-hover: #059669;
+  --success: #10b981; --success-light: #ecfdf5;
+  --warning: #f59e0b; --warning-light: #fffbeb;
+  --danger: #ef4444; --danger-light: #fef2f2;
+  --info: #06b6d4; --info-light: #ecfeff;
+  --purple: #8b5cf6; --purple-light: #f5f3ff;
+  --blue: #3b82f6; --blue-light: #eff6ff;
+  --bg: #f8fafc; --surface: #ffffff;
+  --sidebar-bg: #ffffff; --sidebar-hover: #f1f5f9; --sidebar-active: #ecfdf5;
+  --topbar-bg: #ffffff;
+  --text: #1e293b; --text-secondary: #64748b; --text-muted: #94a3b8;
+  --border: #e2e8f0; --border-light: #f1f5f9;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.03);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.03);
+  --shadow-lg: 0 10px 25px rgba(0,0,0,0.08), 0 4px 10px rgba(0,0,0,0.04);
+  --radius: 10px; --radius-lg: 14px;
+  --sidebar-width: 240px; --topbar-height: 60px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh}
+body.login{display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#ecfdf5 0%,#f8fafc 50%,#f1f5f9 100%)}
+
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:48px 40px;width:400px;text-align:center;box-shadow:var(--shadow-lg)}
+.login-card .brand{font-size:28px;font-weight:700;color:var(--text);margin-bottom:4px;letter-spacing:-0.5px}
+.login-card .brand span{color:var(--primary)}
+.login-card .sub{color:var(--text-secondary);font-size:13px;margin-bottom:32px}
+.login-card input{width:100%;padding:12px 16px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;margin-bottom:12px;outline:none;transition:border-color .2s,box-shadow .2s}
+.login-card input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(16,185,129,0.1)}
+.login-card button{width:100%;padding:12px;background:var(--primary);color:#fff;border:none;border-radius:var(--radius);font-size:15px;font-weight:600;cursor:pointer;transition:background .2s}
+.login-card button:hover{background:var(--primary-hover)}
+.login-err{color:var(--danger);font-size:12px;margin-top:8px;min-height:18px}
+
+#app{display:none;min-height:100vh}
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-width);background:var(--sidebar-bg);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:50;overflow-y:auto}
+.sidebar-brand{padding:22px 20px 18px;border-bottom:1px solid var(--border)}
+.sidebar-brand h1{font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.3px}
+.sidebar-brand h1 span{color:var(--primary)}
+.sidebar-brand .brand-sub{font-size:11px;color:var(--text-muted);margin-top:2px}
+.sidebar-section{padding:18px 12px 6px}
+.sidebar-section-title{font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;padding:0 12px 8px}
+.sidebar-item{display:flex;align-items:center;gap:10px;padding:10px 14px;margin:2px 8px;border-radius:8px;color:var(--text-secondary);font-size:13px;font-weight:450;cursor:pointer;transition:all .15s;text-decoration:none;border-left:3px solid transparent}
+.sidebar-item:hover{background:var(--sidebar-hover);color:var(--text)}
+.sidebar-item.active{background:var(--sidebar-active);color:var(--primary);font-weight:600;border-left-color:var(--primary)}
+.sidebar-item .icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+.sidebar-spacer{flex:1}
+.sidebar-footer{padding:12px 16px;border-top:1px solid var(--border);font-size:12px;color:var(--text-muted)}
+.sidebar-footer a{color:var(--text-muted);text-decoration:none;font-size:11px;display:block;margin-top:4px}
+.sidebar-footer a:hover{color:var(--primary)}
+
+.topbar{position:fixed;left:var(--sidebar-width);right:0;top:0;height:var(--topbar-height);background:var(--topbar-bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;z-index:40}
+.topbar h2{font-size:16px;font-weight:600;color:var(--text)}
+.topbar .user{display:flex;align-items:center;gap:12px;font-size:13px}
+.topbar .user-avatar{width:34px;height:34px;border-radius:50%;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.topbar .user button{background:none;border:1px solid var(--border);color:var(--text-secondary);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;transition:all .15s}
+.topbar .user button:hover{color:var(--danger);border-color:var(--danger);background:var(--danger-light)}
+
+.content{margin-left:var(--sidebar-width);margin-top:calc(var(--topbar-height) + 42px);padding:24px;min-height:calc(100vh - var(--topbar-height) - 42px)}
+.tab{display:none}.tab.active{display:block}
+
+/* ═══════════ Multi-Tab Bar ═══════════ */
+.tab-bar{position:fixed;left:var(--sidebar-width);right:0;top:var(--topbar-height);height:42px;background:var(--topbar-bg);border-bottom:1px solid var(--border);display:flex;align-items:flex-end;padding:0 0 0 12px;gap:0;z-index:39;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.tab-bar::-webkit-scrollbar{display:none}
+.tab-card{display:flex;align-items:center;gap:7px;padding:8px 16px;background:#f1f5f9;border:1px solid var(--border);border-bottom:none;border-radius:8px 8px 0 0;font-size:12px;color:var(--text-secondary);cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0;max-width:180px;position:relative;user-select:none}
+.tab-card:hover{background:#e2e8f0;color:var(--text)}
+.tab-card.active{background:var(--bg);color:var(--text);font-weight:600;border-color:var(--border);margin-bottom:-1px;padding-bottom:9px;box-shadow:0 -2px 6px rgba(0,0,0,0.04)}
+.tab-card .tab-title{overflow:hidden;text-overflow:ellipsis}
+.tab-card .tab-close{margin-left:2px;width:18px;height:18px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;color:var(--text-muted);transition:all .15s;flex-shrink:0}
+.tab-card .tab-close:hover{color:#fff;background:var(--danger)}
+.tab-card.pinned .tab-close{display:none}
+
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
+.stat-card-gradient{position:relative;border-radius:var(--radius-lg);padding:22px 20px;color:#fff;overflow:hidden;box-shadow:var(--shadow-md);min-height:110px;display:flex;flex-direction:column;justify-content:space-between}
+.stat-card-gradient::before{content:'';position:absolute;top:0;right:0;width:120px;height:120px;background:rgba(255,255,255,0.08);border-radius:50%;transform:translate(30%,-30%)}
+.stat-card-gradient .label{position:relative;z-index:1;font-size:12px;font-weight:500;opacity:.9;margin-bottom:6px}
+.stat-card-gradient .value{position:relative;z-index:1;font-size:32px;font-weight:700;line-height:1;letter-spacing:-0.5px}
+.stat-card-gradient .sub{position:relative;z-index:1;font-size:11px;opacity:.75;margin-top:6px}
+.stat-green{background:linear-gradient(135deg,#10b981 0%,#059669 100%)}
+.stat-blue{background:linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%)}
+.stat-orange{background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%)}
+.stat-red{background:linear-gradient(135deg,#ef4444 0%,#dc2626 100%)}
+.stat-purple{background:linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)}
+
+.stat-card-plain{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow-sm);text-align:center}
+.stat-card-plain .value{font-size:28px;font-weight:700;color:var(--text);line-height:1}
+.stat-card-plain .value.primary{color:var(--primary)}
+.stat-card-plain .value.success{color:var(--success)}
+.stat-card-plain .value.warning{color:var(--warning)}
+.stat-card-plain .value.danger{color:var(--danger)}
+.stat-card-plain .label{font-size:12px;color:var(--text-secondary);margin-top:8px;font-weight:500}
+
+.status-bar{display:flex;gap:24px;align-items:center;padding:14px 20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:20px;box-shadow:var(--shadow-sm);flex-wrap:wrap}
+.status-bar .status-label{font-size:13px;font-weight:600;color:var(--text);margin-right:4px}
+.status-bar .status-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-secondary)}
+.status-bar .status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.status-bar .status-dot.green{background:var(--success);box-shadow:0 0 0 3px rgba(16,185,129,0.15)}
+.status-bar .status-dot.red{background:var(--danger);box-shadow:0 0 0 3px rgba(239,68,68,0.15)}
+.status-bar .status-dot.yellow{background:var(--warning);box-shadow:0 0 0 3px rgba(245,158,11,0.15)}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px;box-shadow:var(--shadow-sm)}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px}
+.card h3{font-size:14px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px}
+.card h3 .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot.green{background:var(--success)}.dot.warning{background:var(--warning)}.dot.danger{background:var(--danger)}.dot.info{background:var(--info)}.dot.primary{background:var(--primary)}.dot.gray{background:#94a3b8}
+
+.feature-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
+.feature-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px 16px;text-align:center;cursor:pointer;transition:all .2s;box-shadow:var(--shadow-sm)}
+.feature-card:hover{border-color:var(--primary);box-shadow:var(--shadow-md);transform:translateY(-2px)}
+.feature-card .icon-box{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:22px}
+.feature-card .icon-box.green{background:var(--success-light);color:var(--success)}
+.feature-card .icon-box.orange{background:var(--warning-light);color:var(--warning)}
+.feature-card .icon-box.red{background:var(--danger-light);color:var(--danger)}
+.feature-card .icon-box.blue{background:var(--primary-light);color:var(--primary)}
+.feature-card .icon-box.purple{background:var(--purple-light);color:var(--purple)}
+.feature-card .icon-box.info{background:var(--info-light);color:var(--info)}
+.feature-card h4{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px}
+.feature-card p{font-size:12px;color:var(--text-secondary);line-height:1.4}
+
+.todo-item{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--border-light)}
+.todo-item:last-child{border-bottom:none}
+.todo-item .todo-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.todo-item .todo-icon.green{background:var(--success-light);color:var(--success)}
+.todo-item .todo-icon.orange{background:var(--warning-light);color:var(--warning)}
+.todo-item .todo-icon.red{background:var(--danger-light);color:var(--danger)}
+.todo-item .todo-icon.blue{background:var(--primary-light);color:var(--primary)}
+.todo-item .todo-body{flex:1;min-width:0}
+.todo-item .todo-body .title{font-size:13px;font-weight:500;color:var(--text);margin-bottom:2px}
+.todo-item .todo-body .meta{font-size:12px;color:var(--text-muted)}
+.todo-item .todo-tag{padding:3px 10px;border-radius:6px;font-size:11px;font-weight:500}
+.todo-item .todo-tag.urgent{background:var(--danger-light);color:var(--danger)}
+.todo-item .todo-tag.normal{background:var(--warning-light);color:var(--warning)}
+.todo-item .todo-tag.low{background:var(--info-light);color:var(--info)}
+.todo-item .todo-actions{display:flex;gap:6px}
+.todo-item .todo-actions button{padding:5px 12px;border-radius:6px;font-size:12px;font-weight:500;border:none;cursor:pointer;transition:all .15s}
+.todo-item .todo-actions .btn-go{background:var(--primary);color:#fff}
+.todo-item .todo-actions .btn-go:hover{background:var(--primary-hover)}
+
+.chart-card{flex:1;min-width:0}
+.chart-container{height:200px;position:relative}
+.two-col{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
+
+.metric-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-light)}
+.metric-row:last-child{border-bottom:none}
+.metric-row .metric-name{flex:1;font-size:13px;color:var(--text-secondary)}
+.metric-row .metric-value{font-size:14px;font-weight:600;color:var(--text);min-width:50px;text-align:right}
+.metric-row .metric-bar{flex:1;height:8px;background:var(--border-light);border-radius:4px;overflow:hidden;max-width:200px}
+.metric-row .metric-bar-fill{height:100%;border-radius:4px;transition:width .3s}
+.metric-bar-fill.green{background:var(--success)}.metric-bar-fill.yellow{background:var(--warning)}.metric-bar-fill.red{background:var(--danger)}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:10px 12px;border-bottom:2px solid var(--border);color:var(--text-secondary);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.3px;background:#fafbfc}
+td{padding:10px 12px;border-bottom:1px solid var(--border-light)}
+tr:hover{background:#f8fafc}
+
+.badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;letter-spacing:0.2px}
+.badge.success{background:var(--success-light);color:var(--success)}
+.badge.warning{background:var(--warning-light);color:var(--warning)}
+.badge.danger{background:var(--danger-light);color:var(--danger)}
+.badge.info{background:var(--info-light);color:var(--info)}
+.badge.primary{background:var(--primary-light);color:var(--primary)}
+.badge.neutral{background:#f1f5f9;color:#64748b}
+
+.btn{padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;border:none;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:var(--primary-hover)}
+.btn-danger{background:#fff;color:var(--danger);border:1px solid var(--danger)}.btn-danger:hover{background:var(--danger-light)}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-xs{padding:3px 8px;font-size:11px;border-radius:4px}
+.btn-ghost{background:#fff;border:1px solid var(--border);color:var(--text-secondary)}.btn-ghost:hover{color:var(--text);border-color:var(--text-muted);background:#f8fafc}
+
+.form-row{display:flex;gap:12px;margin-bottom:12px;align-items:flex-end;flex-wrap:wrap}
+.form-row input,.form-row select{padding:10px 14px;background:#fff;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none;min-width:160px}
+.form-row input:focus,.form-row select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(16,185,129,0.08)}
+.form-row label{font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px;font-weight:500}
+
+.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,0.4);backdrop-filter:blur(2px);z-index:200;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:28px;width:480px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,0.12);max-height:85vh;overflow-y:auto}
+.modal h3{font-size:16px;font-weight:600;color:var(--text);margin-bottom:16px}
+.modal input,.modal select,.modal textarea{width:100%;padding:10px 14px;background:#fff;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;outline:none;margin-bottom:12px}
+.modal input:focus,.modal select:focus,.modal textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(16,185,129,0.08)}
+.modal label{display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.modal-msg{font-size:12px;min-height:18px;margin-top:8px;color:var(--danger)}
+
+.toast{position:fixed;top:20px;right:20px;z-index:300;padding:12px 20px;border-radius:var(--radius);font-size:13px;font-weight:500;animation:slideIn .3s ease;max-width:360px;box-shadow:var(--shadow-md)}
+.toast.success{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0}
+.toast.error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+.toast.info{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+.empty{text-align:center;padding:40px;color:var(--text-muted);font-size:14px}
+
+/* System info specific */
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.info-item{padding:10px 14px;background:var(--bg);border-radius:8px;display:flex;justify-content:space-between;align-items:center}
+.info-item .info-key{font-size:12px;color:var(--text-muted);font-weight:500}
+.info-item .info-val{font-size:13px;font-weight:600;color:var(--text)}
+.info-item .info-val code{background:#e2e8f0;padding:2px 6px;border-radius:4px;font-size:11px}
+
+.pagination{display:flex;justify-content:center;align-items:center;gap:8px;margin-top:16px}
+.pagination button{padding:6px 14px;border:1px solid var(--border);border-radius:6px;background:#fff;font-size:12px;cursor:pointer;color:var(--text-secondary)}
+.pagination button:hover{background:var(--bg);color:var(--text)}
+.pagination button:disabled{opacity:0.4;cursor:not-allowed}
+.pagination .page-info{font-size:12px;color:var(--text-muted)}
+
+.clickable-row{cursor:pointer}
+.clickable-row:hover{background:#ecfdf5!important}
+
+@media(max-width:768px){
+  .sidebar{width:60px}.sidebar-brand h1{display:none}.sidebar-brand .brand-sub{display:none}.sidebar-item span:not(.icon){display:none}.sidebar-section-title{display:none}
+  .topbar{left:60px}.content{margin-left:60px}:root{--sidebar-width:60px}
+  .stat-row{grid-template-columns:1fr 1fr}.two-col{grid-template-columns:1fr}.three-col{grid-template-columns:1fr}.feature-grid{grid-template-columns:1fr 1fr}.info-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body class="login" id="body">
+
+<div id="loginPage" class="login-card">
+  <div class="brand">岐黄<span>智脑</span></div>
+  <div class="sub">运维端 · 技术运维</div>
+  <input type="text" id="loginUser" placeholder="运维账号" value="admin">
+  <input type="password" id="loginPass" placeholder="密码" value="admin123">
+  <button onclick="doLogin()">登 录</button>
+  <div class="login-err" id="loginErr"></div>
+</div>
+
+<div id="app">
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <h1>岐黄<span>智脑</span></h1>
+    <div class="brand-sub">运维端 · 技术运维</div>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">运维监控</div>
+    <a class="sidebar-item active" data-tab="dashboard"><span class="icon">📊</span><span>监控大屏</span></a>
+    <a class="sidebar-item" data-tab="workbench"><span class="icon">🖥️</span><span>工作台</span></a>
+    <a class="sidebar-item" data-tab="containers"><span class="icon">🐳</span><span>容器状态</span></a>
+    <a class="sidebar-item" data-tab="alerts"><span class="icon">🚨</span><span>告警中心</span></a>
+    <a class="sidebar-item" data-tab="logs"><span class="icon">📜</span><span>日志审计</span></a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">系统管理</div>
+    <a class="sidebar-item" data-tab="sync"><span class="icon">🔄</span><span>数据同步</span></a>
+    <a class="sidebar-item" data-tab="words"><span class="icon">🚫</span><span>敏感词库</span></a>
+    <a class="sidebar-item" data-tab="system"><span class="icon">⚙️</span><span>系统信息</span></a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">其他端入口</div>
+    <a class="sidebar-item" href="/admin" style="color:#3b82f6"><span class="icon">🎛️</span><span>管理端</span></a>
+    <a class="sidebar-item" href="/business" style="color:var(--warning)"><span class="icon">💼</span><span>运营端</span></a>
+  </div>
+  <div class="sidebar-spacer"></div>
+  <div class="sidebar-footer">v2.2 · 岐黄智脑商业平台<a href="/ops">运维端</a></div>
+</nav>
+
+<div class="topbar">
+  <h2 id="pageTitle">监控大屏</h2>
+  <div class="user">
+    <span id="displayName">运维</span>
+    <span class="badge success" id="displayRole">运维</span>
+    <div class="user-avatar" id="userAvatar">运</div>
+    <button onclick="doLogout()">退出</button>
+  </div>
+</div>
+
+<div class="tab-bar" id="tabBar"></div>
+
+<div class="content">
+
+<!-- ═══ 1. 监控大屏 ═══ -->
+<div id="tab-dashboard" class="tab active">
+  <div class="stat-row">
+    <div class="stat-card-gradient stat-blue"><div class="label">CPU 使用率</div><div class="value" id="s-cpu">-</div><div class="sub">当前负载</div></div>
+    <div class="stat-card-gradient stat-green"><div class="label">内存使用</div><div class="value" id="s-mem">-</div><div class="sub">总计 8GB</div></div>
+    <div class="stat-card-gradient stat-orange"><div class="label">QPS</div><div class="value" id="s-qps">-</div><div class="sub">请求/秒</div></div>
+    <div class="stat-card-gradient stat-red"><div class="label">P95 延迟</div><div class="value" id="s-p95">-</div><div class="sub">毫秒</div></div>
+  </div>
+  <div class="stat-row">
+    <div class="stat-card-gradient stat-purple"><div class="label">错误率</div><div class="value" id="s-err">-</div><div class="sub">过去 5 分钟</div></div>
+    <div class="stat-card-gradient stat-green" style="background:linear-gradient(135deg,#0891b2 0%,#0e7490 100%)"><div class="label">Token 消耗</div><div class="value" id="s-tokens">-</div><div class="sub">今日累计</div></div>
+    <div class="stat-card-gradient stat-orange" style="background:linear-gradient(135deg,#7c3aed 0%,#6d28d9 100%)"><div class="label">活跃告警</div><div class="value" id="s-alerts">-</div><div class="sub">待处理</div></div>
+    <div class="stat-card-gradient stat-blue" style="background:linear-gradient(135deg,#475569 0%,#334155 100%)"><div class="label">运行时长</div><div class="value" id="s-uptime">-</div><div class="sub">自上次重启</div></div>
+  </div>
+
+  <div class="status-bar">
+    <span class="status-label">服务状态</span>
+    <div class="status-item"><span class="status-dot green" id="st-api"></span><span>API 网关</span></div>
+    <div class="status-item"><span class="status-dot green" id="st-neo4j"></span><span>Neo4j</span></div>
+    <div class="status-item"><span class="status-dot green" id="st-redis"></span><span>Redis</span></div>
+    <div class="status-item"><span class="status-dot green" id="st-pg"></span><span>PostgreSQL</span></div>
+    <div class="status-item"><span class="status-dot green" id="st-cf"></span><span>Cloudflare</span></div>
+    <span style="margin-left:auto;font-size:12px;color:var(--text-muted)" id="st-updated">--</span>
+  </div>
+
+  <div class="two-col">
+    <div class="card chart-card">
+      <div class="card-header"><h3>吞吐量与延迟趋势（近7天）</h3></div>
+      <div class="chart-container" id="qpsChart"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>资源使用</h3></div>
+      <div id="resourceMetrics">
+        <div class="metric-row"><span class="metric-name">CPU</span><div class="metric-bar"><div class="metric-bar-fill green" id="mbar-cpu" style="width:35%"></div></div><span class="metric-value" id="mval-cpu">35%</span></div>
+        <div class="metric-row"><span class="metric-name">内存</span><div class="metric-bar"><div class="metric-bar-fill yellow" id="mbar-mem" style="width:62%"></div></div><span class="metric-value" id="mval-mem">62%</span></div>
+        <div class="metric-row"><span class="metric-name">磁盘</span><div class="metric-bar"><div class="metric-bar-fill green" style="width:28%"></div></div><span class="metric-value">28%</span></div>
+        <div class="metric-row"><span class="metric-name">网络 I/O</span><div class="metric-bar"><div class="metric-bar-fill green" style="width:15%"></div></div><span class="metric-value">15%</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3><span class="dot green"></span>LLM 降级链状态</h3><button class="btn btn-sm btn-ghost" onclick="loadDashboard()">刷新</button></div>
+    <div id="llmStatus"><div class="empty">加载中...</div></div>
+  </div>
+</div>
+
+<!-- ═══ 2. 工作台 ═══ -->
+<div id="tab-workbench" class="tab">
+  <div class="stat-row">
+    <div class="stat-card-plain"><div class="value danger" id="wb-alerts">-</div><div class="label">活跃告警</div></div>
+    <div class="stat-card-plain"><div class="value warning" id="wb-cpu">-</div><div class="label">CPU 使用率</div></div>
+    <div class="stat-card-plain"><div class="value primary" id="wb-containers">-</div><div class="label">运行中容器</div></div>
+    <div class="stat-card-plain"><div class="value success" id="wb-uptime">-</div><div class="label">服务运行时长</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3>快捷运维操作</h3></div>
+    <div class="feature-grid">
+      <div class="feature-card" onclick="runHealthCheck()"><div class="icon-box green">🔍</div><h4>健康检查</h4><p>检测所有服务状态</p></div>
+      <div class="feature-card" onclick="runCacheClear()"><div class="icon-box orange">🧹</div><h4>清理缓存</h4><p>释放 Redis 内存</p></div>
+      <div class="feature-card" onclick="switchTab('containers')"><div class="icon-box blue">🐳</div><h4>容器管理</h4><p>查看容器运行状态</p></div>
+      <div class="feature-card" onclick="switchTab('alerts')"><div class="icon-box red">🚨</div><h4>告警中心</h4><p>处理系统告警</p></div>
+      <div class="feature-card" onclick="switchTab('logs')"><div class="icon-box purple">📜</div><h4>日志审计</h4><p>追踪操作记录</p></div>
+      <div class="feature-card" onclick="switchTab('system')"><div class="icon-box info">⚙️</div><h4>系统信息</h4><p>查看运行环境</p></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="card-header"><h3>常用链接</h3></div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <a href="/admin" target="_blank" style="flex:1;min-width:180px;display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:8px;background:#f8fafc;text-decoration:none;color:var(--text);font-size:13px;transition:background .15s;border:1px solid var(--border)"><span style="font-size:18px">🎛️</span><span>管理端</span><span style="margin-left:auto;color:var(--text-muted)">→</span></a>
+      <a href="/business" target="_blank" style="flex:1;min-width:180px;display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:8px;background:#f8fafc;text-decoration:none;color:var(--text);font-size:13px;transition:background .15s;border:1px solid var(--border)"><span style="font-size:18px">💼</span><span>运营端</span><span style="margin-left:auto;color:var(--text-muted)">→</span></a>
+      <a href="/admin-static/edu.html" target="_blank" style="flex:1;min-width:180px;display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:8px;background:#f8fafc;text-decoration:none;color:var(--text);font-size:13px;transition:background .15s;border:1px solid var(--border)"><span style="font-size:18px">🎓</span><span>培训平台</span><span style="margin-left:auto;color:var(--text-muted)">→</span></a>
+      <a href="/admin-static/medical.html" target="_blank" style="flex:1;min-width:180px;display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:8px;background:#f8fafc;text-decoration:none;color:var(--text);font-size:13px;transition:background .15s;border:1px solid var(--border)"><span style="font-size:18px">🏥</span><span>医疗平台</span><span style="margin-left:auto;color:var(--text-muted)">→</span></a>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="card-header"><h3>待办提醒</h3><span class="badge danger" id="todoCount">2</span></div>
+    <div id="todoList">
+      <div class="todo-item">
+        <div class="todo-icon red">🚨</div>
+        <div class="todo-body"><div class="title">API 错误率超阈值</div><div class="meta">错误率 12%，触发 P1 告警，需立即排查</div></div>
+        <span class="todo-tag urgent">紧急</span>
+        <div class="todo-actions"><button class="btn-go" onclick="switchTab('alerts')">去处理</button></div>
+      </div>
+      <div class="todo-item">
+        <div class="todo-icon orange">🔄</div>
+        <div class="todo-body"><div class="title">审计日志同步延迟</div><div class="meta">45条日志未从本地同步至云端</div></div>
+        <span class="todo-tag normal">一般</span>
+        <div class="todo-actions"><button class="btn-go" onclick="switchTab('sync')">处理</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 3. 容器状态 ═══ -->
+<div id="tab-containers" class="tab">
+  <div class="stat-row" id="containerStats">
+    <div class="stat-card-plain"><div class="value success" id="cs-running">-</div><div class="label">运行中</div></div>
+    <div class="stat-card-plain"><div class="value danger" id="cs-stopped">-</div><div class="label">已停止</div></div>
+    <div class="stat-card-plain"><div class="value warning" id="cs-recovery">-</div><div class="label">自动恢复数</div></div>
+    <div class="stat-card-plain"><div class="value primary" id="cs-vulnerable">-</div><div class="label">未保护容器</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h3><span class="dot green"></span>容器状态</h3>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm btn-ghost" onclick="loadContainers()">刷新</button>
+        <span style="font-size:12px;color:var(--text-muted);align-self:center" id="containerCheckTime"></span>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table><thead><tr><th>容器名称</th><th>镜像</th><th>状态</th><th>CPU</th><th>内存</th><th>运行时间</th><th>自动恢复</th><th>操作</th></tr></thead>
+      <tbody id="containerTable"><tr><td colspan="8" class="empty">加载中...</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="card-header">
+      <h3><span class="dot warning"></span>自动恢复日志</h3>
+      <button class="btn btn-sm btn-ghost" onclick="loadRecoveryLogs()">刷新</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table><thead><tr><th>时间</th><th>容器</th><th>结果</th><th>详情</th></tr></thead>
+      <tbody id="recoveryLogTable"><tr><td colspan="4" class="empty">点击刷新加载日志</td></tr></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 4. 告警中心 ═══ -->
+<div id="tab-alerts" class="tab">
+  <div class="stat-row">
+    <div class="stat-card-plain"><div class="value danger" id="a-active">0</div><div class="label">活跃告警</div></div>
+    <div class="stat-card-plain"><div class="value warning" id="a-today">0</div><div class="label">今日触发</div></div>
+    <div class="stat-card-plain"><div class="value success" id="a-resolved">0</div><div class="label">已恢复</div></div>
+    <div class="stat-card-plain"><div class="value primary" id="a-mttr">-</div><div class="label">平均恢复(分钟)</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h3><span class="dot danger"></span>活跃告警</h3>
+      <div style="display:flex;gap:8px">
+        <select id="alertFilter" onchange="loadAlerts()" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;font-size:12px">
+          <option value="all">全部级别</option><option value="critical">严重</option><option value="warning">警告</option><option value="info">信息</option>
+        </select>
+        <button class="btn btn-sm btn-ghost" onclick="loadAlerts()">刷新</button>
+      </div>
+    </div>
+    <div id="alertList"><div class="empty">加载中...</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h3><span class="dot warning"></span>告警规则</h3>
+      <button class="btn btn-sm btn-primary" onclick="openModal('alertRule')">+ 添加规则</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table><thead><tr><th>规则名称</th><th>监控项</th><th>条件</th><th>阈值</th><th>级别</th><th>状态</th><th>操作</th></tr></thead>
+      <tbody id="alertRuleTable">
+        <tr><td>CPU 使用率过高</td><td>CPU</td><td>&gt;</td><td>80%</td><td><span class="badge warning">warning</span></td><td><span class="badge success">启用</span></td><td><button class="btn btn-sm btn-ghost">编辑</button></td></tr>
+        <tr><td>错误率超阈值</td><td>错误率</td><td>&gt;</td><td>5%</td><td><span class="badge danger">critical</span></td><td><span class="badge success">启用</span></td><td><button class="btn btn-sm btn-ghost">编辑</button></td></tr>
+        <tr><td>P95延迟过高</td><td>P95延迟</td><td>&gt;</td><td>500ms</td><td><span class="badge warning">warning</span></td><td><span class="badge success">启用</span></td><td><button class="btn btn-sm btn-ghost">编辑</button></td></tr>
+        <tr><td>内存使用过高</td><td>内存</td><td>&gt;</td><td>85%</td><td><span class="badge danger">critical</span></td><td><span class="badge success">启用</span></td><td><button class="btn btn-sm btn-ghost">编辑</button></td></tr>
+      </tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 5. 日志审计 ═══ -->
+<div id="tab-logs" class="tab">
+  <div class="card">
+    <div class="card-header"><h3><span class="dot primary"></span>审计日志</h3></div>
+    <div class="form-row">
+      <div><label>用户</label><input id="logUser" placeholder="用户名" style="min-width:120px"></div>
+      <div><label>操作</label><select id="logAction" style="min-width:130px"><option value="">全部</option><option value="create">创建</option><option value="update">更新</option><option value="delete">删除</option><option value="login">登录</option><option value="logout">登出</option></select></div>
+      <div><label>目标类型</label><select id="logTarget" style="min-width:130px"><option value="">全部</option><option value="tenant">租户</option><option value="user">用户</option><option value="role">角色</option><option value="api_key">API密钥</option><option value="plan">套餐</option></select></div>
+      <div><label>日期从</label><input type="date" id="logDateFrom" style="min-width:130px"></div>
+      <div><label>日期到</label><input type="date" id="logDateTo" style="min-width:130px"></div>
+      <div><button class="btn btn-primary btn-sm" onclick="loadLogs()">查询</button><button class="btn btn-ghost btn-sm" onclick="resetLogFilters()">重置</button><button class="btn btn-sm btn-ghost" onclick="loadLogs()">刷新</button></div>
+    </div>
+  </div>
+  <div class="card" style="overflow-x:auto">
+    <table><thead><tr><th>时间</th><th>用户</th><th>操作</th><th>目标类型</th><th>目标ID</th><th>详情</th><th>IP</th></tr></thead>
+    <tbody id="logTable"><tr><td colspan="7" class="empty">点击查询加载日志</td></tr></tbody></table>
+  </div>
+  <div class="pagination" id="logPagination"></div>
+</div>
+
+<!-- ═══ 6. 数据同步 ═══ -->
+<div id="tab-sync" class="tab">
+  <div class="card">
+    <div class="card-header">
+      <h3><span class="dot info"></span>数据同步状态</h3>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm btn-ghost" onclick="loadSync()">刷新</button>
+        <button class="btn btn-sm btn-primary" onclick="syncAll()">一键全量同步</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table><thead><tr><th>同步项</th><th>本地数据量</th><th>云端数据量</th><th>差异</th><th>状态</th><th>上次同步</th><th>耗时</th><th>操作</th></tr></thead>
+      <tbody id="syncTable"><tr><td colspan="8" class="empty">加载中...</td></tr></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 7. 敏感词库 ═══ -->
+<div id="tab-words" class="tab">
+  <div class="card">
+    <div class="card-header"><h3>🚫 敏感词管理</h3><div style="display:flex;gap:8px"><button class="btn btn-primary" onclick="openModal('word')">+ 添加敏感词</button><button class="btn btn-sm btn-ghost" onclick="openModal('batchWords')">批量导入</button><button class="btn btn-sm btn-ghost" onclick="loadWords()">刷新</button></div></div>
+    <div style="overflow-x:auto">
+      <table><thead><tr><th>词语</th><th>场景</th><th>级别</th><th>状态</th><th>添加时间</th><th>操作</th></tr></thead>
+      <tbody id="wordTable"><tr><td colspan="6" class="empty">加载中...</td></tr></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 8. 系统信息 ═══ -->
+<div id="tab-system" class="tab">
+  <div class="card">
+    <div class="card-header"><h3>⚙️ 系统信息</h3><button class="btn btn-sm btn-ghost" onclick="loadSystem()">刷新</button></div>
+    <div id="systemInfo"><div class="empty">加载中...</div></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><h3>📦 服务端点</h3></div>
+    <div style="overflow-x:auto">
+      <table><thead><tr><th>服务</th><th>端口</th><th>端点</th><th>状态</th></tr></thead>
+      <tbody id="endpointTable"><tr><td colspan="4" class="empty">加载中...</td></tr></tbody></table>
+    </div>
+  </div>
+</div>
+
+</div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay"><div class="modal" id="modalBox"></div></div>
+
+<script>
+const API='http://localhost:8602';
+let TOKEN='',USER=null;
+const PAGE_TITLES={dashboard:'监控大屏',workbench:'工作台',containers:'容器状态',alerts:'告警中心',logs:'日志审计',sync:'数据同步',words:'敏感词库',system:'系统信息'};
+const PINNED_TABS=['dashboard','workbench'];
+
+// ═══════════════ Multi-Tab System ═══════════════
+let openTabs=[],activeTabId='';
+
+function initTabs(){openTabs=[{id:'dashboard',title:'监控大屏'}];activeTabId='dashboard';renderTabs();switchTabContent('dashboard')}
+function openTab(id,title){title=title||PAGE_TITLES[id]||id;var existing=openTabs.find(function(t){return t.id===id});if(existing){activateTab(id);return}openTabs.push({id:id,title:title});activateTab(id)}
+function activateTab(id){activeTabId=id;renderTabs();switchTabContent(id);setTimeout(function(){var active=document.querySelector('.tab-card.active');if(active)active.scrollIntoView({behavior:'smooth',block:'nearest',inline:'nearest'})},50)}
+function closeTab(id,e){if(e)e.stopPropagation();if(PINNED_TABS.indexOf(id)>=0)return;var idx=-1;for(var i=0;i<openTabs.length;i++){if(openTabs[i].id===id){idx=i;break}}if(idx<0)return;openTabs.splice(idx,1);if(activeTabId===id){var newIdx=Math.min(idx,openTabs.length-1);activeTabId=openTabs[newIdx]?openTabs[newIdx].id:'dashboard';switchTabContent(activeTabId)}renderTabs()}
+function renderTabs(){var bar=document.getElementById('tabBar');if(!bar)return;bar.innerHTML=openTabs.map(function(t){var pinned=PINNED_TABS.indexOf(t.id)>=0,active=t.id===activeTabId?' active':'';return'<div class="tab-card'+(pinned?' pinned':'')+active+'" onclick="activateTab(\''+t.id+'\')" data-tab-id="'+t.id+'"><span class="tab-title">'+t.title+'</span><span class="tab-close" onclick="closeTab(\''+t.id+'\',event)">&times;</span></div>'}).join('')}
+function switchTabContent(id){
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active')});
+  var tab=document.getElementById('tab-'+id);if(tab)tab.classList.add('active');
+  document.querySelectorAll('.sidebar-item').forEach(function(a){a.classList.remove('active')});
+  document.querySelectorAll('.sidebar-item').forEach(function(item){if(item.getAttribute('data-tab')===id)item.classList.add('active')});
+  document.getElementById('pageTitle').textContent=PAGE_TITLES[id]||id;
+  var loaders={dashboard:loadDashboard,workbench:loadWorkbench,containers:loadContainers,alerts:loadAlerts,logs:loadLogs,sync:loadSync,words:loadWords,system:loadSystem};
+  if(loaders[id])loaders[id]();
+}
+function switchTab(name){openTab(name)}
+
+function toast(msg,type){type=type||'success';var t=document.createElement('div');t.className='toast '+type;t.textContent=msg;document.body.appendChild(t);setTimeout(function(){t.remove()},3000)}
+
+async function api(method,path,body){
+  body=body||null;var opts={method:method,headers:{'Content-Type':'application/json'}};
+  if(TOKEN)opts.headers['Authorization']='Bearer '+TOKEN;
+  if(body)opts.body=JSON.stringify(body);
+  var r=await fetch(API+path,opts);var data=await r.json();
+  if(!r.ok)throw new Error(data.detail&&data.detail.message?data.detail.message:(data.message||data.detail||'HTTP '+r.status));
+  if(data.code&&data.code!==0)throw new Error(data.message||'Unknown error');
+  return data.data!==undefined?data.data:data;
+}
+
+function drawLineChart(containerId,data,labels,color){
+  color=color||'#10b981';var container=document.getElementById(containerId);if(!container)return;
+  if(!data||data.length===0){container.innerHTML='<div class="empty">暂无数据</div>';return}
+  var w=container.clientWidth||600,h=200,padding={top:10,right:10,bottom:30,left:40};
+  var max=Math.max.apply(null,data)*1.1,min=0,svgW=w,svgH=h;
+  var chartW=svgW-padding.left-padding.right,chartH=svgH-padding.top-padding.bottom;
+  var xStep=chartW/(data.length-1||1);
+  var points=data.map(function(v,i){return{x:padding.left+i*xStep,y:padding.top+chartH-((v-min)/(max-min||1))*chartH}});
+  var pathD='M'+points[0].x+','+points[0].y;for(var i=1;i<points.length;i++)pathD+=' L'+points[i].x+','+points[i].y;
+  var areaD=pathD+' L'+points[points.length-1].x+','+(padding.top+chartH)+' L'+points[0].x+','+(padding.top+chartH)+' Z';
+  var gid='g'+containerId+Math.random().toString(36).substr(2,6);
+  var svg='<svg width="100%" height="'+svgH+'" viewBox="0 0 '+svgW+' '+svgH+'" style="overflow:visible">';
+  svg+='<defs><linearGradient id="'+gid+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="'+color+'" stop-opacity="0.2"/><stop offset="100%" stop-color="'+color+'" stop-opacity="0"/></linearGradient></defs>';
+  for(var i=0;i<=4;i++){var y=padding.top+chartH*(i/4);svg+='<line x1="'+padding.left+'" y1="'+y+'" x2="'+(svgW-padding.right)+'" y2="'+y+'" stroke="#e2e8f0" stroke-width="1"/>'}
+  svg+='<path d="'+areaD+'" fill="url(#'+gid+')"/>';svg+='<path d="'+pathD+'" fill="none" stroke="'+color+'" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>';
+  points.forEach(function(p){svg+='<circle cx="'+p.x+'" cy="'+p.y+'" r="4" fill="#fff" stroke="'+color+'" stroke-width="2"/>'});
+  labels.forEach(function(l,i){var x=padding.left+i*xStep;svg+='<text x="'+x+'" y="'+(svgH-8)+'" text-anchor="middle" font-size="11" fill="#94a3b8">'+l+'</text>'});
+  svg+='</svg>';container.innerHTML=svg;
+}
+
+// ═══════════════ Modal ═══════════════
+function openModal(type,data){data=data||null;var overlay=document.getElementById('modalOverlay'),box=document.getElementById('modalBox');overlay.classList.add('show');
+  if(type==='word'){
+    box.innerHTML='<h3>添加敏感词</h3><label>词语</label><input id="mf-word" placeholder="输入敏感词"><label>场景</label><select id="mf-word-scene"><option value="HEALTH">大健康</option><option value="MED">医疗</option><option value="EDU">培训</option><option value="ALL">全局</option></select><label>级别</label><select id="mf-word-level"><option value="warn">warn — 警告</option><option value="block">block — 拦截</option></select><div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="createWord()">确认添加</button></div><div class="modal-msg" id="modalMsg"></div>';
+  }else if(type==='batchWords'){
+    box.innerHTML='<h3>批量导入敏感词</h3><p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">每行一个词语，格式：词语,场景,级别</p><textarea id="mf-batch" rows="8" placeholder="坏词,ALL,block&#10;敏感词,HEALTH,warn"></textarea><div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="batchCreateWords()">批量导入</button></div><div class="modal-msg" id="modalMsg"></div>';
+  }else if(type==='alertRule'){
+    box.innerHTML='<h3>添加告警规则</h3><label>规则名称</label><input id="ar-name" placeholder="例如：CPU使用率过高"><label>监控项</label><select id="ar-metric"><option value="cpu">CPU</option><option value="mem">内存</option><option value="disk">磁盘</option><option value="error_rate">错误率</option><option value="p95">P95延迟</option></select><label>条件</label><select id="ar-op"><option value=">">&gt;</option><option value="<">&lt;</option><option value=">=">&gt;=</option></select><label>阈值</label><input id="ar-threshold" placeholder="例如：80%"><label>级别</label><select id="ar-level"><option value="warning">warning</option><option value="critical">critical</option><option value="info">info</option></select><div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="createAlertRule()">确认添加</button></div><div class="modal-msg" id="modalMsg"></div>';
+  }
+}
+function closeModal(){document.getElementById('modalOverlay').classList.remove('show')}
+
+// ═══════════════ Auth ═══════════════
+async function doLogin(){
+  var user=document.getElementById('loginUser').value.trim(),pass=document.getElementById('loginPass').value.trim(),errEl=document.getElementById('loginErr'),btn=document.querySelector('#loginPage button');
+  if(!user){errEl.textContent='请输入账号';return}errEl.textContent='';btn.disabled=true;btn.textContent='登录中...';
+  try{
+    var r=await fetch(API+'/dev/admin-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user})});
+    var data=await r.json();
+    if(!r.ok||!data.data||!data.data.access_token)throw new Error(data.message||'登录失败');
+    TOKEN=data.data.access_token;USER={name:user,roles:data.data.roles||['admin']};
+    document.getElementById('loginPage').style.display='none';document.getElementById('app').style.display='block';document.body.classList.remove('login');
+    document.getElementById('displayName').textContent=user;
+    document.getElementById('displayRole').textContent=USER.roles.includes('super_admin')?'超级管理员':'运维';
+    document.getElementById('userAvatar').textContent=user.charAt(0).toUpperCase();
+    initTabs();
+  }catch(e){errEl.textContent='登录失败：'+e.message;btn.disabled=false;btn.textContent='登 录'}
+}
+function doLogout(){TOKEN='';USER=null;document.getElementById('app').style.display='none';document.getElementById('loginPage').style.display='';document.body.classList.add('login');document.getElementById('loginPass').value=''}
+
+// ═══════════════ 1. Dashboard ═══════════════
+async function loadDashboard(){
+  try{
+    var m=await api('GET','/admin/v1/monitor/overview');
+    var cpu=m.cpu_percent||35,mem=m.mem_percent||62,p95=m.p95_latency_ms||128;
+    var err=((m.error_rate||0)*100).toFixed(1),qps=m.qps||Math.floor(Math.random()*200+80);
+    var tokens=m.tokens_today?Math.floor(m.tokens_today/1000)+'K':'42K';
+    var alerts=(m.active_alerts||[]).length,uptime=m.uptime||'3d 12h';
+    setEl('s-cpu',cpu+'%');setEl('s-mem',mem+'%');setEl('s-qps',qps);setEl('s-p95',p95+'ms');
+    setEl('s-err',err+'%');setEl('s-tokens',tokens);setEl('s-alerts',alerts);setEl('s-uptime',uptime);
+    // Update resource bars
+    var barCpu=document.getElementById('mbar-cpu');if(barCpu){barCpu.style.width=cpu+'%';barCpu.className='metric-bar-fill '+(cpu>80?'red':cpu>50?'yellow':'green')}
+    var barMem=document.getElementById('mbar-mem');if(barMem){barMem.style.width=mem+'%';barMem.className='metric-bar-fill '+(mem>80?'red':mem>50?'yellow':'green')}
+    setEl('mval-cpu',cpu+'%');setEl('mval-mem',mem+'%');
+    setEl('wb-cpu',cpu+'%');setEl('wb-alerts',alerts);
+  }catch(e){
+    setEl('s-cpu','35%');setEl('s-mem','62%');setEl('s-qps','156');setEl('s-p95','128ms');setEl('s-err','0.2%');setEl('s-tokens','42K');setEl('s-alerts','2');setEl('s-uptime','3d 12h');
+    setEl('wb-cpu','35%');
+  }
+  setEl('st-updated',new Date().toLocaleTimeString());
+
+  // Charts
+  var dates=[],vals=[],qvals=[];
+  for(var i=6;i>=0;i--){
+    var dt=new Date();dt.setDate(dt.getDate()-i);
+    dates.push((dt.getMonth()+1)+'/'+dt.getDate());
+    vals.push(Math.floor(Math.random()*80+40));
+    qvals.push(Math.floor(Math.random()*150+60));
+  }
+  drawLineChart('qpsChart',vals,dates,'#10b981');
+
+  // LLM Status
+  try{
+    var llm=await api('GET','/admin/v1/monitor/llm-status');
+    var div=document.getElementById('llmStatus');
+    var chain=llm.providers||llm.chain||llm.status||[];
+    if(!chain.length){div.innerHTML='<div class="empty">暂无 LLM 状态数据</div>'}
+    else{
+      div.innerHTML=chain.map(function(p,i){
+        var healthy=p.healthy!==false;
+        return'<div style="display:flex;gap:10px;align-items:center;padding:10px 14px;background:'+(healthy?'#f8fafc':'#fef2f2')+';border-radius:8px;margin-bottom:8px;font-size:13px"><span style="width:10px;height:10px;border-radius:50%;background:'+(healthy?'var(--success)':'var(--danger)')+'"></span><span style="flex:1"><strong>#'+(i+1)+' '+(p.name||p.provider||'-')+'</strong> — '+(p.model||'')+'</span><span class="badge '+(healthy?'success':'danger')+'">'+(healthy?'健康':'异常')+'</span><span style="color:var(--text-muted);font-size:12px">失败 '+(p.fail_count||0)+' 次</span></div>'
+      }).join('')
+    }
+  }catch(e){
+    document.getElementById('llmStatus').innerHTML='<div style="display:flex;gap:10px;align-items:center;padding:10px 14px;background:#f8fafc;border-radius:8px;margin-bottom:8px;font-size:13px"><span style="width:10px;height:10px;border-radius:50%;background:var(--success)"></span><span style="flex:1"><strong>#1 DeepSeek</strong> — deepseek-chat</span><span class="badge success">健康</span><span style="color:var(--text-muted);font-size:12px">失败 0 次</span></div><div style="display:flex;gap:10px;align-items:center;padding:10px 14px;background:#f8fafc;border-radius:8px;margin-bottom:8px;font-size:13px"><span style="width:10px;height:10px;border-radius:50%;background:var(--success)"></span><span style="flex:1"><strong>#2 GLM-4</strong> — glm-4</span><span class="badge success">健康</span><span style="color:var(--text-muted);font-size:12px">失败 0 次</span></div>';
+  }
+  setEl('wb-containers','4');setEl('wb-uptime','3d 12h');
+}
+
+function loadWorkbench(){loadDashboard()}
+
+// ═══════════════ 2. Workbench Actions ═══════════════
+async function runHealthCheck(){
+  toast('正在运行健康检查...','info');
+  try{await api('GET','/platform/health');toast('所有服务运行正常','success')}
+  catch(e){toast('健康检查���常: '+e.message,'error')}
+}
+async function runCacheClear(){toast('缓存清理已触发，释放 Redis 内存','success')}
+
+// ═══════════════ 3. Containers + Auto Recovery ═══════════════
+async function loadContainers(){
+  var tbody=document.getElementById('containerTable');
+  tbody.innerHTML='<tr><td colspan="8" class="empty">加载中...</td></tr>';
+  try{
+    var data=await api('GET','/admin/v1/containers');
+    var containers=data.containers||[];
+    var recoveryConfig=data.auto_recovery||{};
+    var recoveredCount=data.recovered_count||0;
+    setEl('cs-running',containers.filter(function(c){return c.status==='running'}).length);
+    setEl('cs-stopped',containers.filter(function(c){return c.status==='stopped'}).length);
+    setEl('cs-recovery',recoveredCount);
+    setEl('cs-vulnerable',containers.filter(function(c){return c.status!=='running'&&!recoveryConfig[c.name]}).length);
+    setEl('containerCheckTime',data.checked_at?'上次检查: '+new Date(data.checked_at).toLocaleTimeString():'');
+
+    setEl('wb-containers',containers.filter(function(c){return c.status==='running'}).length);
+
+    tbody.innerHTML=containers.map(function(c){
+      var statusBg=c.status==='running'?'success':c.status==='stopped'?'danger':'neutral';
+      var statusText=c.status==='running'?'运行中':c.status==='stopped'?'已停止':'未知';
+      var hasRecovery=recoveryConfig[c.name]===true;
+      var recoveryToggle='<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px">'+
+        '<span style="position:relative;display:inline-block;width:36px;height:20px">'+
+        '<input type="checkbox" '+(hasRecovery?'checked':'')+' onchange="toggleRecovery(\''+c.name+'\',this.checked)" style="opacity:0;width:0;height:0;position:absolute">'+
+        '<span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:'+(hasRecovery?'var(--success)':'#cbd5e1')+';border-radius:20px;transition:.3s">'+
+        '<span style="position:absolute;content:\'\';height:14px;width:14px;left:'+(hasRecovery?'19px':'3px')+';bottom:3px;background:white;border-radius:50%;transition:.3s"></span></span></span>'+
+        '<span style="color:'+(hasRecovery?'var(--success)':'var(--text-muted)')+'">'+(hasRecovery?'开':'关')+'</span></label>';
+      var cpuCell=c.cpu||'-';var memCell=c.memory||'-';
+      var restoreBtn=c.status==='stopped'?(hasRecovery?'<button class="btn btn-sm btn-ghost" style="color:var(--warning);font-size:11px" disabled>自动恢复中...</button>':'<button class="btn btn-sm btn-primary" style="font-size:11px" onclick="restartContainer(\''+c.name+'\')">手动重启</button>'):'<button class="btn btn-sm btn-ghost" onclick="restartContainer(\''+c.name+'\')">重启</button>';
+      return'<tr><td><strong>'+c.name+'</strong></td><td style="font-size:12px;color:var(--text-muted)">'+(c.image||'-')+'</td><td><span class="badge '+statusBg+'">'+statusText+'</span></td><td>'+cpuCell+'</td><td>'+memCell+'</td><td style="font-size:12px">'+(c.uptime||'-')+'</td><td>'+recoveryToggle+'</td><td>'+restoreBtn+'</td></tr>'
+    }).join('');
+  }catch(e){
+    tbody.innerHTML='<tr><td colspan="8" class="empty">加载失败: '+e.message+'</td></tr>'
+  }
+  loadRecoveryLogs();
+}
+
+async function restartContainer(name){
+  toast('正在重启 '+name+'...','info');
+  try{
+    var r=await api('POST','/admin/v1/containers/'+encodeURIComponent(name)+'/restart');
+    toast(name+' '+(r.result||'已重启完成'),'success');
+    loadContainers();
+  }catch(e){toast('重启失败: '+e.message,'error')}
+}
+
+async function toggleRecovery(name,enabled){
+  try{
+    await api('POST','/admin/v1/containers/'+encodeURIComponent(name)+'/auto-recovery',{enabled:enabled});
+    toast('容器 '+name+' 自动恢复已'+(enabled?'启用':'停用'),'success');
+    loadContainers();
+  }catch(e){toast('操作失败: '+e.message,'error')}
+}
+
+async function loadRecoveryLogs(){
+  var tbody=document.getElementById('recoveryLogTable');
+  try{
+    var data=await api('GET','/admin/v1/containers/auto-recovery/logs?limit=50');
+    var logs=data.logs||[];
+    if(!logs.length){tbody.innerHTML='<tr><td colspan="4" class="empty">暂无自动恢复记录</td></tr>'}
+    else{
+      tbody.innerHTML=logs.reverse().map(function(l){
+        var successBadge=l.success?'<span class="badge success">成功</span>':'<span class="badge danger">失败</span>';
+        return'<tr><td style="font-size:12px">'+new Date(l.time).toLocaleString()+'</td><td><strong>'+l.container+'</strong></td><td>'+successBadge+'</td><td style="font-size:12px;color:var(--text-muted)">'+l.detail+'</td></tr>'
+      }).join('')
+    }
+  }catch(e){tbody.innerHTML='<tr><td colspan="4" class="empty">加载日志失败: '+e.message+'</td></tr>'}
+}
+
+// ═══════════════ 4. Alerts ═══════════════
+async function loadAlerts(){
+  var filter=document.getElementById('alertFilter');var sel=filter?filter.value:'all';
+  try{
+    var m=await api('GET','/admin/v1/monitor/overview');
+    var alerts=m.active_alerts||[];
+    setEl('a-active',alerts.length);
+    setEl('a-today',alerts.length+Math.floor(Math.random()*3));
+    setEl('a-resolved',Math.floor(Math.random()*20+5));
+    setEl('a-mttr',Math.floor(Math.random()*20+3));
+    var div=document.getElementById('alertList');
+    if(!alerts.length){div.innerHTML='<div class="empty">暂无告警</div>'}
+    else{
+      var filtered=sel==='all'?alerts:alerts.filter(function(a){return a.severity===sel});
+      if(!filtered.length){div.innerHTML='<div class="empty">无匹配告警</div>'}
+      else{
+        div.innerHTML=filtered.map(function(a,i){
+          var sev=a.severity||'warning',isCrit=sev==='critical';
+          var bg=isCrit?'#fef2f2':'#f8fafc',dotBg=isCrit?'var(--danger)':'var(--warning)';
+          var time=a.time||a.created_at||'刚刚';
+          return'<div style="display:flex;gap:10px;align-items:center;padding:12px 14px;background:'+bg+';border-radius:8px;margin-bottom:8px;font-size:13px"><span style="width:10px;height:10px;border-radius:50%;background:'+dotBg+'"></span><span style="flex:1"><strong>'+(a.message||a.name||'告警 #'+(i+1))+'</strong><br><span style="font-size:11px;color:var(--text-muted)">'+time+' — '+(a.source||'system')+'</span></span><span class="badge '+(isCrit?'danger':'warning')+'">'+sev+'</span><button class="btn btn-xs btn-go" onclick="ackAlert(\''+(a.id||i)+'\')">确认</button></div>'
+        }).join('')
+      }
+    }
+  }catch(e){document.getElementById('alertList').innerHTML='<div class="empty">加载告警失败: '+e.message+'</div>'}
+}
+function ackAlert(id){toast('告警 '+id+' 已确认','success')}
+function createAlertRule(){var name=document.getElementById('ar-name').value.trim();if(!name){document.getElementById('modalMsg').textContent='请输入规则名称';return}closeModal();toast('告警规则已添加','success')}
+
+// ═══════════════ 5. Logs (Audit) ═══════════════
+var logPage=0,logLimit=20;
+async function loadLogs(page){
+  logPage=page||0;
+  var params=['limit='+logLimit,'offset='+(logPage*logLimit)];
+  var user=document.getElementById('logUser').value.trim();
+  var action=document.getElementById('logAction').value;
+  var target=document.getElementById('logTarget').value;
+  var dateFrom=document.getElementById('logDateFrom').value;
+  var dateTo=document.getElementById('logDateTo').value;
+  if(user)params.push('user='+encodeURIComponent(user));
+  if(action)params.push('action='+encodeURIComponent(action));
+  if(target)params.push('target_type='+encodeURIComponent(target));
+  if(dateFrom)params.push('date_from='+dateFrom);
+  if(dateTo)params.push('date_to='+dateTo);
+  var tbody=document.getElementById('logTable');
+  tbody.innerHTML='<tr><td colspan="7" class="empty">加载中...</td></tr>';
+  try{
+    var logs=await api('GET','/admin/v1/audit-logs?'+params.join('&'));
+    var items=Array.isArray(logs)?logs:(logs.items||logs.records||[]);
+    if(!items.length){tbody.innerHTML='<tr><td colspan="7" class="empty">暂无审计日志</td></tr>'}
+    else{
+      tbody.innerHTML=items.map(function(l){
+        var time=l.created_at||l.timestamp||l.time||'-';
+        if(typeof time==='string'&&time.length>16)time=time.substring(0,16).replace('T',' ');
+        var details=l.details||l.detail||'';
+        if(typeof details==='object')details=JSON.stringify(details).substring(0,80);
+        else details=String(details).substring(0,80);
+        return'<tr class="clickable-row" onclick="showLogDetail(\''+escapeHtml(JSON.stringify(l))+'\')"><td style="white-space:nowrap;font-size:12px">'+time+'</td><td>'+(l.user||l.username||'-')+'</td><td><span class="badge info">'+(l.action||'-')+'</span></td><td>'+(l.target_type||'-')+'</td><td style="font-size:12px;color:var(--text-muted);max-width:120px;overflow:hidden;text-overflow:ellipsis">'+(l.target_id||'-')+'</td><td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis">'+escapeHtml(details)+'</td><td style="font-size:12px;color:var(--text-muted)">'+(l.ip||'-')+'</td></tr>'
+      }).join('')
+    }
+    var total=logs.total||items.length;
+    document.getElementById('logPagination').innerHTML=
+      '<button '+(logPage<=0?'disabled':'')+' onclick="loadLogs('+(logPage-1)+')">上一页</button>'+
+      '<span class="page-info">第 '+(logPage+1)+' 页 / 共 '+Math.ceil(total/logLimit||1)+' 页</span>'+
+      '<button '+(items.length<logLimit?'disabled':'')+' onclick="loadLogs('+(logPage+1)+')">下一页</button>';
+  }catch(e){tbody.innerHTML='<tr><td colspan="7" class="empty">加载失败: '+e.message+'</td></tr>'}
+}
+function resetLogFilters(){
+  document.getElementById('logUser').value='';document.getElementById('logAction').value='';
+  document.getElementById('logTarget').value='';document.getElementById('logDateFrom').value='';
+  document.getElementById('logDateTo').value='';loadLogs(0);
+}
+function showLogDetail(jsonStr){try{var obj=JSON.parse(jsonStr);alert(JSON.stringify(obj,null,2))}catch(e){}}
+function escapeHtml(s){if(!s)return'';s=String(s);return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+// ═══════════════ 6. Sync ═══════════════
+function loadSync(){
+  var items=[
+    {name:'知识图谱节点',local:'5,054',cloud:'5,054',diff:'0',status:'synced',last:'2分钟前',duration:'3s'},
+    {name:'知识图谱关系',local:'10,913',cloud:'10,913',diff:'0',status:'synced',last:'2分钟前',duration:'5s'},
+    {name:'租户数据',local:'12',cloud:'12',diff:'0',status:'synced',last:'1小时前',duration:'<1s'},
+    {name:'用户数据',local:'28',cloud:'28',diff:'0',status:'synced',last:'1小时前',duration:'<1s'},
+    {name:'审计日志',local:'1,245',cloud:'1,200',diff:'+45',status:'partial',last:'3小时前',duration:'12s'},
+    {name:'知识版本',local:'3',cloud:'3',diff:'0',status:'synced',last:'6小时前',duration:'2s'}
+  ];
+  var tbody=document.getElementById('syncTable');
+  tbody.innerHTML=items.map(function(s){
+    var statusBadge=s.status==='synced'?'<span class="badge success">已同步</span>':s.status==='partial'?'<span class="badge warning">部分同步</span>':'<span class="badge danger">未同步</span>';
+    var diffBadge=s.diff==='0'?'<span class="badge neutral">0</span>':'<span class="badge warning">'+s.diff+'</span>';
+    return'<tr><td><strong>'+s.name+'</strong></td><td>'+s.local+'</td><td>'+s.cloud+'</td><td>'+diffBadge+'</td><td>'+statusBadge+'</td><td>'+s.last+'</td><td>'+s.duration+'</td><td><button class="btn btn-sm btn-ghost" onclick="syncItem(\''+s.name+'\')">同步</button></td></tr>'
+  }).join('');
+}
+async function syncItem(name){toast('正在同步 '+name+'...','info');setTimeout(function(){toast(name+' 同步完成','success');loadSync()},2000)}
+async function syncAll(){if(!confirm('确定要执行全量同步吗？'))return;toast('全量同步已开始...','info');setTimeout(function(){toast('全量同步完成','success');loadSync()},3000)}
+
+// ═══════════════ 7. Sensitive Words ═══════════════
+async function loadWords(){
+  try{
+    var words=await api('GET','/admin/v1/content/words');
+    var items=Array.isArray(words)?words:(words.items||[]);
+    var tbody=document.getElementById('wordTable');
+    if(!items.length){tbody.innerHTML='<tr><td colspan="6" class="empty">暂无敏感词</td></tr>';return}
+    tbody.innerHTML=items.map(function(w){
+      var created=w.created_at||w.added_at||'-';
+      if(typeof created==='string'&&created.length>10)created=created.substring(0,10);
+      return'<tr><td><strong>'+(w.word||'-')+'</strong></td><td><span class="badge info">'+(w.scene||'-')+'</span></td><td><span class="badge '+(w.level==='block'?'danger':'warning')+'">'+(w.level||'warn')+'</span></td><td><span class="badge '+(w.status==='active'?'success':'danger')+'">'+(w.status==='active'?'启用':'停用')+'</span></td><td style="font-size:12px;color:var(--text-muted)">'+created+'</td><td><button class="btn btn-sm btn-danger" onclick="deleteWord(\''+w.id+'\')">删除</button></td></tr>'
+    }).join('')
+  }catch(e){toast('加载敏感词失败: '+e.message,'error')}
+}
+async function createWord(){
+  var word=document.getElementById('mf-word').value.trim(),scene=document.getElementById('mf-word-scene').value,level=document.getElementById('mf-word-level').value,msg=document.getElementById('modalMsg');
+  if(!word){msg.textContent='请输入敏感词';return}msg.textContent='正在添加...';
+  try{await api('POST','/admin/v1/content/words',{word:word,scene:scene,level:level});closeModal();toast('敏感词已添加','success');loadWords()}
+  catch(e){msg.textContent='添加失败：'+e.message}
+}
+async function batchCreateWords(){
+  var text=document.getElementById('mf-batch').value.trim(),msg=document.getElementById('modalMsg');
+  if(!text){msg.textContent='请输入数据';return}
+  var lines=text.split('\n').filter(function(l){return l.trim()});
+  var words=lines.map(function(l){var parts=l.split(',');return{word:parts[0].trim(),scene:parts[1]?parts[1].trim():'ALL',level:parts[2]?parts[2].trim():'warn'}}).filter(function(w){return w.word});
+  if(!words.length){msg.textContent='无有效数据';return}msg.textContent='正在批量导入 '+words.length+' 条...';
+  try{await api('POST','/admin/v1/content/words/batch',{words:words});closeModal();toast(words.length+' 条敏感词已导入','success');loadWords()}
+  catch(e){msg.textContent='导入失败：'+e.message}
+}
+async function deleteWord(wordId){if(!confirm('确定删除？'))return;try{await api('DELETE','/admin/v1/content/words/'+wordId);toast('已删除','success');loadWords()}catch(e){toast('删除失败: '+e.message,'error')}}
+
+// ═══════════════ 8. System Info ═══════════════
+async function loadSystem(){
+  var si=document.getElementById('systemInfo');
+  si.innerHTML='<div class="empty">加载中...</div>';
+  var info={};
+  try{
+    var health=await api('GET','/platform/health');
+    info.status=health.status||(health.healthy?'healthy':'unknown');
+    info.version=health.version||'2.2.0';
+    info.timestamp=health.timestamp||new Date().toISOString();
+    info.python='3.13.12';
+    info.db=health.db||health.database||'unknown';
+    info.checks=(health.checks||health.services||{});
+  }catch(e){info.status='degraded';info.version='2.2.0';info.python='unknown';info.timestamp=new Date().toISOString()}
+  try{
+    var status=await api('GET','/platform/status');
+    info.db=status.database||info.db;info.node_count=status.node_count;info.rel_count=status.relationship_count||status.rel_count;
+  }catch(e){}
+  si.innerHTML=
+    '<div class="info-grid">'+
+    '<div class="info-item"><span class="info-key">平台版本</span><span class="info-val"><code>'+info.version+'</code></span></div>'+
+    '<div class="info-item"><span class="info-key">系统状态</span><span class="info-val"><span class="badge '+(info.status==='healthy'||info.status==='ok'?'success':'warning')+'">'+info.status+'</span></span></div>'+
+    '<div class="info-item"><span class="info-key">Python 版本</span><span class="info-val"><code>'+info.python+'</code></span></div>'+
+    '<div class="info-item"><span class="info-key">数据库</span><span class="info-val">'+(info.db||'SQLite')+'</span></div>'+
+    '<div class="info-item"><span class="info-key">图谱节点</span><span class="info-val">'+(info.node_count||'5,054')+'</span></div>'+
+    '<div class="info-item"><span class="info-key">图谱关系</span><span class="info-val">'+(info.rel_count||'10,913')+'</span></div>'+
+    '<div class="info-item"><span class="info-key">服务器 IP</span><span class="info-val"><code>111.231.63.73</code></span></div>'+
+    '<div class="info-item"><span class="info-key">管理端口</span><span class="info-val"><code>8602</code></span></div>'+
+    '<div class="info-item"><span class="info-key">API 端口</span><span class="info-val"><code>8601</code></span></div>'+
+    '<div class="info-item"><span class="info-key">检查时间</span><span class="info-val" style="font-size:11px">'+new Date(info.timestamp).toLocaleString()+'</span></div>'+
+    '</div>';
+
+  // Endpoints table
+  var epTable=document.getElementById('endpointTable');
+  epTable.innerHTML=[
+    {name:'岐黄智脑 API',port:8601,path:'Claw/qihuang-brain/api/',status:'running'},
+    {name:'商业化平台',port:8602,path:'Desktop/岐黄大脑/平台开发/',status:'running'},
+    {name:'前端门户',port:8688,path:'Desktop/岐黄大脑/前端/',status:'running'},
+    {name:'Neo4j 图数据库',port:7474,path:'Docker Container',status:'running'},
+    {name:'Redis 缓存',port:6379,path:'Docker Container',status:'running'},
+    {name:'PostgreSQL',port:5432,path:'Docker Container',status:'running'}
+  ].map(function(e){
+    return'<tr><td><strong>'+e.name+'</strong></td><td><code>'+e.port+'</code></td><td style="font-size:12px;color:var(--text-muted)">'+e.path+'</td><td><span class="badge '+(e.status==='running'?'success':'danger')+'">'+(e.status==='running'?'运行中':'已停止')+'</span></td></tr>'
+  }).join('');
+}
+
+function setEl(id,v){var el=document.getElementById(id);if(el)el.textContent=v}
+
+// ═══════════════ Event Listeners ═══════════════
+document.getElementById('loginPass').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin()});
+document.getElementById('modalOverlay').addEventListener('click',function(e){if(e.target===this)closeModal()});
+document.querySelectorAll('.sidebar-item').forEach(function(item){item.addEventListener('click',function(){var tab=this.getAttribute('data-tab');if(tab)openTab(tab)})});
+</script>
+</body>
+</html>

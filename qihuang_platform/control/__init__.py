@@ -1,0 +1,25 @@
+"""
+管理端API — Phase 1 MVP (#11) + Phase 3 全功能 (#15)
+
+三端设计铁律（写入验收标准）：
+  1. 不超过3步完成任何操作
+  2. 所有状态可视化（绿灯正常/红灯异常/黄灯待处理）
+  3. 首页仪表盘3秒内看到所有关键指标
+  4. 快捷操作不超过5个按钮
+  5. 全中文零技术术语
+  6. 危险操作二次确认+红色高亮
+  7. 所有操作自动留痕可查可导出
+  8. 报表一键导出Excel/PDF可发微信
+
+六功能域：
+  - admin/       — 管理端：租户开户 / 机构用户管理 / 角色模板
+  - ops/         — 运维端：监控大盘 / 日志审计 / 部署管理
+  - ops-business/ — 运营端：数据报表 / 客户管理 / 内容审核
+
+#15 全功能路由在 router.py 中实现
+"""
+
+try:
+    from qihuang_platform.control.router import router as control_router
+except ImportError:
+    control_router = None

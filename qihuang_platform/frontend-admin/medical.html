@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>岐黄智脑 · 医疗辅助平台</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#2563eb;--primary-hover:#1d4ed8;--primary-light:#eff6ff;
+  --bg:#f8fafc;--surface:#fff;--border:#e2e8f0;--text:#1e293b;--text-secondary:#64748b;
+  --success:#16a34a;--warning:#d97706;--danger:#dc2626;--info:#0ea5e9;
+  --radius:8px;--shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --sidebar-w:238px;--topbar-h:56px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh}
+a{color:var(--primary);text-decoration:none}
+button{cursor:pointer;font-family:inherit}
+.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#eff6ff 0%,#f0f9ff 50%,#ecfdf5 100%)}
+.login-card{background:var(--surface);border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.08);padding:40px;width:400px;max-width:90vw}
+.login-card h1{font-size:22px;color:var(--text);margin-bottom:4px;text-align:center}
+.login-card .sub{font-size:13px;color:var(--text-secondary);text-align:center;margin-bottom:28px}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px}
+.form-group input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;transition:border-color .2s;background:var(--bg)}
+.form-group input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.login-card .btn{width:100%;padding:11px;border:none;border-radius:var(--radius);font-size:15px;font-weight:600;background:var(--primary);color:#fff;transition:background .2s}
+.login-card .btn:hover{background:var(--primary-hover)}
+.login-card .btn:disabled{opacity:.6;cursor:not-allowed}
+.login-err{color:var(--danger);font-size:13px;text-align:center;margin-top:12px;display:none}
+
+.app{display:none;min-height:100vh}
+.app.active{display:flex}
+.sidebar{width:var(--sidebar-w);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100}
+.sidebar-brand{padding:20px 24px;border-bottom:1px solid var(--border)}
+.sidebar-brand h2{font-size:16px;color:var(--text);font-weight:700}
+.sidebar-brand .ver{font-size:11px;color:var(--text-secondary);margin-top:2px}
+.sidebar-nav{flex:1;overflow-y:auto;padding:12px 0}
+.nav-group{padding:0 12px;margin-bottom:4px}
+.nav-group-title{font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;padding:8px 12px 4px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:6px;font-size:14px;color:var(--text-secondary);cursor:pointer;transition:all .15s;margin-bottom:2px;border:none;background:none;width:100%;text-align:left}
+.nav-item:hover{background:var(--bg);color:var(--text)}
+.nav-item.active{background:var(--primary-light);color:var(--primary);font-weight:600}
+.nav-item .icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+.sidebar-footer{padding:12px 24px;border-top:1px solid var(--border);font-size:13px}
+.sidebar-footer .user-info{color:var(--text);font-weight:500;margin-bottom:4px}
+.sidebar-footer .user-role{font-size:11px;color:var(--text-secondary)}
+.sidebar-footer .logout-btn{font-size:12px;color:var(--danger);background:none;border:none;padding:4px 0;margin-top:8px;cursor:pointer}
+
+.main{flex:1;margin-left:var(--sidebar-w);display:flex;flex-direction:column}
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;position:sticky;top:0;z-index:50}
+.topbar h3{font-size:16px;font-weight:600;color:var(--text)}
+.content{padding:24px;flex:1}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.card-header h4{font-size:15px;font-weight:600}
+.card-body{padding:20px}
+.card-footer{padding:12px 20px;border-top:1px solid var(--border);background:var(--bg)}
+
+table{width:100%;border-collapse:collapse;font-size:14px}
+thead th{padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.3px;border-bottom:2px solid var(--border);background:var(--bg)}
+tbody td{padding:10px 14px;border-bottom:1px solid var(--border);color:var(--text)}
+tbody tr:hover{background:var(--bg)}
+
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600}
+.badge-blue{background:var(--primary-light);color:var(--primary)}
+.badge-green{background:#dcfce7;color:var(--success)}
+.badge-yellow{background:#fef3c7;color:var(--warning)}
+.badge-red{background:#fee2e2;color:var(--danger)}
+.badge-gray{background:#f1f5f9;color:var(--text-secondary)}
+
+.btn{padding:8px 16px;border-radius:6px;font-size:13px;font-weight:500;border:1px solid var(--border);background:var(--surface);color:var(--text);transition:all .15s}
+.btn:hover{background:var(--bg)}
+.btn-primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+.btn-primary:hover{background:var(--primary-hover)}
+.btn-danger{background:var(--danger);color:#fff;border-color:var(--danger)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+input,select,textarea{font-family:inherit;font-size:14px;padding:9px 12px;border:1px solid var(--border);border-radius:6px;width:100%;transition:border-color .2s;background:var(--surface)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2364748b'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+textarea{resize:vertical;min-height:80px}
+.form-row{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.form-row>*{flex:1;min-width:120px}
+.form-col{margin-bottom:14px}
+.form-col label{display:block;font-size:13px;font-weight:600;color:var(--text);margin-bottom:5px}
+.form-col .hint{font-size:11px;color:var(--text-secondary);margin-top:2px}
+.form-inline{display:flex;gap:8px;align-items:end;margin-bottom:16px}
+
+.empty-state{padding:48px 20px;text-align:center;color:var(--text-secondary)}
+.empty-state .empty-icon{font-size:40px;margin-bottom:12px}
+.empty-state p{font-size:14px}
+
+.spinner{display:inline-block;width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-size:14px;color:#fff;z-index:9999;animation:toastIn .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.toast-success{background:var(--success)}
+.toast-error{background:var(--danger)}
+.toast-info{background:var(--info)}
+@keyframes toastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+/* Safety review - level cards */
+.level-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px}
+.level-card{padding:16px;border-radius:var(--radius);border:2px solid var(--border);text-align:center}
+.level-card.high{border-color:var(--danger);background:#fff5f5}
+.level-card.medium{border-color:var(--warning);background:#fffbeb}
+.level-card.low{border-color:var(--info);background:#f0f9ff}
+.level-card.warn{border-color:var(--text-secondary);background:var(--bg)}
+.level-card .level-name{font-size:12px;font-weight:700;text-transform:uppercase;margin-bottom:4px}
+.level-card .level-count{font-size:28px;font-weight:700}
+.level-card.high .level-name,.level-card.high .level-count{color:var(--danger)}
+.level-card.medium .level-name,.level-card.medium .level-count{color:var(--warning)}
+.level-card.low .level-name,.level-card.low .level-count{color:var(--info)}
+.level-card.warn .level-name,.level-card.warn .level-count{color:var(--text-secondary)}
+
+.issue-item{padding:12px 16px;border:1px solid var(--border);border-radius:6px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.issue-item.high{border-left:4px solid var(--danger)}
+.issue-item.medium{border-left:4px solid var(--warning)}
+.issue-item.low{border-left:4px solid var(--info)}
+.issue-item.warn{border-left:4px solid var(--text-secondary)}
+
+.disclaimer-bar{background:#fffbeb;border:1px solid var(--warning);border-radius:6px;padding:10px 16px;font-size:12px;color:var(--warning);margin-bottom:16px;display:flex;align-items:center;gap:8px}
+
+/* Herb tag input */
+.herb-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;min-height:36px}
+.herb-tag{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:var(--primary-light);color:var(--primary);border-radius:16px;font-size:13px}
+.herb-tag .remove{cursor:pointer;font-size:14px;line-height:1;opacity:.6}
+.herb-tag .remove:hover{opacity:1}
+.herb-add{display:flex;gap:8px}
+.herb-add input{flex:1;max-width:150px}
+
+@media(max-width:768px){
+  .sidebar{width:60px}
+  .sidebar-brand h2,.sidebar-brand .ver,.nav-group-title,.nav-item span:not(.icon),.sidebar-footer{display:none}
+  .nav-item{justify-content:center;padding:10px 0}
+  .nav-item .icon{margin:0}
+  .main{margin-left:60px}
+  :root{--sidebar-w:60px}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ Login Page ═══════════════ -->
+<div id="loginPage" class="login-wrap">
+  <div class="login-card">
+    <h1>岐黄智脑</h1>
+    <div class="sub">医疗辅助平台</div>
+    <div class="form-group"><label>账号</label><input id="loginUser" placeholder="输入账号" autocomplete="username"></div>
+    <div class="form-group"><label>密码</label><input id="loginPass" type="password" placeholder="输入密码" autocomplete="current-password"></div>
+    <button class="btn" id="loginBtn" onclick="doLogin()">登 录</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ═══════════════ App Layout ═══════════════ -->
+<div class="app" id="app">
+  <aside class="sidebar">
+    <div class="sidebar-brand"><h2>岐黄智脑</h2><div class="ver">医疗辅助平台 v1.0</div></div>
+    <nav class="sidebar-nav">
+      <div class="nav-group">
+        <div class="nav-group-title">诊疗辅助</div>
+        <button class="nav-item active" data-tab="diagnose"><span class="icon">🔍</span><span>辅助辨证</span></button>
+        <button class="nav-item" data-tab="review"><span class="icon">🛡️</span><span>处方审查</span></button>
+        <button class="nav-item" data-tab="formula"><span class="icon">💊</span><span>方剂推荐</span></button>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-title">医案与报告</div>
+        <button class="nav-item" data-tab="cases"><span class="icon">📋</span><span>医案管理</span></button>
+        <button class="nav-item" data-tab="reports"><span class="icon">📄</span><span>报告中心</span></button>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-title">知识库</div>
+        <button class="nav-item" data-tab="evidence"><span class="icon">📚</span><span>文献佐证</span></button>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info" id="sidebarUser">—</div>
+      <div class="user-role">医师</div>
+      <button class="logout-btn" onclick="doLogout()">退出登录</button>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="topbar"><h3 id="pageTitle">辅助辨证</h3></div>
+    <div class="content" id="contentArea"></div>
+  </main>
+</div>
+
+<script>
+const API='http://localhost:8602';
+let TOKEN='',USER={};
+
+/* ═══════════════ Auth ═══════════════ */
+async function doLogin(){
+  const u=document.getElementById('loginUser').value.trim();
+  const btn=document.getElementById('loginBtn'),err=document.getElementById('loginErr');
+  if(!u){err.textContent='请输入账号';err.style.display='block';return}
+  btn.disabled=true;btn.textContent='登录中...';err.style.display='none';
+  try{
+    const r=await fetch(API+'/dev/admin-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:'x'})});
+    const d=await r.json();
+    if(d.code===0&&d.data&&d.data.access_token){
+      TOKEN=d.data.access_token;USER=d.data.user||{};
+      localStorage.setItem('med_token',TOKEN);localStorage.setItem('med_user',JSON.stringify(USER));
+      showApp();
+    }else{err.textContent=d.message||'登录失败';err.style.display='block'}
+  }catch(e){err.textContent='无法连接服务器';err.style.display='block'}
+  btn.disabled=false;btn.textContent='登 录';
+}
+
+function doLogout(){localStorage.removeItem('med_token');localStorage.removeItem('med_user');location.reload()}
+
+function api(path,opts={}){
+  const h={Authorization:'Bearer '+TOKEN,'Content-Type':'application/json',...opts.headers};
+  return fetch(API+path,{...opts,headers:h}).then(r=>r.json());
+}
+
+/* ═══════════════ Navigation ═══════════════ */
+const titles={diagnose:'辅助辨证',review:'处方安全审查',formula:'方剂推荐',cases:'医案管理',reports:'报告中心',evidence:'文献佐证'};
+
+function switchTab(name){
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active',el.dataset.tab===name));
+  document.getElementById('pageTitle').textContent=titles[name]||name;
+  const c=document.getElementById('contentArea');
+  switch(name){
+    case 'diagnose':loadDiagnose();break;
+    case 'review':loadReview();break;
+    case 'formula':loadFormula();break;
+    case 'cases':loadCases();break;
+    case 'reports':loadReports();break;
+    case 'evidence':loadEvidence();break;
+  }
+}
+
+document.querySelectorAll('.nav-item').forEach(el=>el.addEventListener('click',()=>switchTab(el.dataset.tab)));
+
+function showApp(){
+  document.getElementById('loginPage').style.display='none';
+  document.getElementById('app').classList.add('active');
+  document.getElementById('sidebarUser').textContent=USER.username||USER.sub||'医师';
+  switchTab('diagnose');
+}
+
+function toast(msg,type='info'){
+  const t=document.createElement('div');t.className='toast toast-'+type;t.textContent=msg;document.body.appendChild(t);
+  setTimeout(()=>t.remove(),3000);
+}
+
+(function(){
+  TOKEN=localStorage.getItem('med_token');
+  const u=localStorage.getItem('med_user');
+  if(TOKEN&&u){try{USER=JSON.parse(u);showApp()}catch(e){localStorage.removeItem('med_token')}}
+  document.getElementById('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+})();
+
+function esc(s){if(!s)return'';const d=document.createElement('div');d.textContent=String(s);return d.innerHTML}
+
+/* ═══════════════ 1. Diagnose ═══════════════ */
+function loadDiagnose(){
+  document.getElementById('contentArea').innerHTML=`
+    <div class="card">
+      <div class="card-header"><h4>四诊信息录入</h4></div>
+      <div class="card-body">
+        <div class="form-row">
+          <div class="form-col" style="flex:1"><label>舌象</label><input id="dxTongue" placeholder="如：舌红苔黄腻"></div>
+          <div class="form-col" style="flex:1"><label>面象</label><input id="dxFace" placeholder="如：面色潮红"></div>
+          <div class="form-col" style="flex:1"><label>脉象</label><input id="dxPulse" placeholder="如：脉弦数"></div>
+        </div>
+        <div class="form-col"><label>症状描述</label><textarea id="dxSymptoms" placeholder="详细描述患者症状..."></textarea></div>
+        <div class="form-row">
+          <div class="form-col" style="flex:1"><label>患者代号</label><input id="dxAlias" placeholder="可选"></div>
+          <div class="form-col" style="flex:1"><label>病历ID</label><input id="dxRecord" placeholder="可选"></div>
+        </div>
+        <button class="btn btn-primary" onclick="doDiagnose()">开始辨证</button>
+      </div>
+    </div>
+    <div id="dxResult"></div>`;
+}
+
+async function doDiagnose(){
+  const body={};
+  const t=document.getElementById('dxTongue').value.trim();if(t)body.tongue=t;
+  const f=document.getElementById('dxFace').value.trim();if(f)body.face=f;
+  const p=document.getElementById('dxPulse').value.trim();if(p)body.pulse=p;
+  const s=document.getElementById('dxSymptoms').value.trim();if(s)body.symptoms=s;
+  const a=document.getElementById('dxAlias').value.trim();if(a)body.patient_alias=a;
+  const r=document.getElementById('dxRecord').value.trim();if(r)body.medical_record_id=r;
+  if(!body.tongue&&!body.face&&!body.pulse&&!body.symptoms){toast('请至少填写一项四诊信息','error');return}
+  try{
+    const d=await api('/api/v1/med/diagnose/assist',{method:'POST',body:JSON.stringify(body)});
+    if(d.code!==0){renderDxError(d.message||'辨证服务不可用');return}
+    renderDxResult(d.data);
+  }catch(e){renderDxError('请求失败: '+e.message)}
+}
+
+function renderDxResult(data){
+  let html='<div class="card" style="margin-top:20px"><div class="card-body">';
+  html+='<div class="disclaimer-bar">⚠️ '+esc(data.disclaimer||'本系统为辅助工具，最终诊疗决策由执业医师作出')+'</div>';
+
+  // Syndromes
+  const syndromes=data.syndromes;
+  if(syndromes){
+    html+='<h4 style="margin-bottom:12px">辨证结果</h4>';
+    if(typeof syndromes==='object'&&!Array.isArray(syndromes)){
+      html+='<div style="background:var(--bg);padding:14px 18px;border-radius:6px;margin-bottom:16px;white-space:pre-wrap;font-size:14px;line-height:1.8">'+esc(JSON.stringify(syndromes,null,2))+'</div>';
+    }else if(Array.isArray(syndromes)){
+      html+='<div style="margin-bottom:16px">'+syndromes.map(s=>`<div class="issue-item" style="background:var(--bg)"><span style="font-weight:600">${esc(typeof s==='string'?s:s.name||s.syndrome||JSON.stringify(s))}</span></div>`).join('')+'</div>';
+    }else{
+      html+='<div style="background:var(--bg);padding:14px 18px;border-radius:6px;margin-bottom:16px">'+esc(String(syndromes))+'</div>';
+    }
+  }
+
+  // Reasoning chain
+  const chain=data.reasoning_chain;
+  if(chain&&chain.length){
+    html+='<h4 style="margin-bottom:8px;margin-top:20px">推理链</h4>';
+    html+='<div style="background:var(--bg);padding:14px 18px;border-radius:6px;margin-bottom:16px;font-size:13px;color:var(--text-secondary);line-height:1.8">';
+    chain.forEach((step,i)=>html+=`<div style="margin-bottom:4px"><b style="color:var(--text)">${i+1}.</b> ${esc(typeof step==='string'?step:JSON.stringify(step))}</div>`);
+    html+='</div>';
+  }
+
+  // Consensus
+  if(data.consensus){
+    html+='<h4 style="margin-bottom:8px;margin-top:20px">多体系共识</h4>';
+    html+='<div style="background:var(--bg);padding:14px 18px;border-radius:6px;font-size:13px;color:var(--text-secondary);white-space:pre-wrap">'+esc(typeof data.consensus==='string'?data.consensus:JSON.stringify(data.consensus,null,2))+'</div>';
+  }
+  html+='</div></div>';
+  document.getElementById('dxResult').innerHTML=html;
+}
+
+function renderDxError(msg){
+  document.getElementById('dxResult').innerHTML='<div class="card" style="margin-top:20px"><div class="card-body"><div class="empty-state"><div class="empty-icon">⚠️</div><p>'+esc(msg)+'</p><p style="font-size:12px;color:var(--text-secondary)">请确认8601后端服务已启动</p></div></div></div>';
+}
+
+/* ═══════════════ 2. Prescription Review ═══════════════ */
+let reviewHerbs=[];
+
+function loadReview(){
+  reviewHerbs=[];
+  document.getElementById('contentArea').innerHTML=`
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header"><h4>处方信息</h4></div>
+      <div class="card-body">
+        <div class="herb-list" id="herbList"></div>
+        <div class="herb-add">
+          <input id="herbName" placeholder="中药名（如：附子）">
+          <input id="herbDose" placeholder="剂量（如：9g）" style="max-width:120px">
+          <button class="btn" onclick="addHerb()">添加</button>
+        </div>
+        <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">按Enter快速添加</div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header"><h4>患者信息（选填）</h4></div>
+      <div class="card-body">
+        <div class="form-row">
+          <div class="form-col"><label>年龄</label><input type="number" id="rvAge" placeholder="岁"></div>
+          <div class="form-col"><label>性别</label><select id="rvGender"><option value="">未知</option><option value="男">男</option><option value="女">女</option></select></div>
+        </div>
+        <div class="form-row">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="rvPregnant"> 妊娠期</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="rvChild"> 儿童</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="rvElderly"> 老年</label>
+        </div>
+        <div class="form-col"><label>证候</label><input id="rvSyndrome" placeholder="如：寒凝气滞"></div>
+      </div>
+    </div>
+    <button class="btn btn-primary" style="width:100%;padding:12px;font-size:15px" onclick="doReview()">开始安全审查</button>
+    <div id="rvResult"></div>`;
+
+  document.getElementById('herbName').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addHerb()}});
+  document.getElementById('herbDose').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addHerb()}});
+}
+
+function addHerb(){
+  const n=document.getElementById('herbName').value.trim();
+  const dose=document.getElementById('herbDose').value.trim();
+  if(!n)return;
+  reviewHerbs.push({herb:n,dose:dose||''});
+  document.getElementById('herbName').value='';document.getElementById('herbDose').value='';
+  document.getElementById('herbName').focus();
+  renderHerbTags();
+}
+
+function removeHerb(i){reviewHerbs.splice(i,1);renderHerbTags()}
+
+function renderHerbTags(){
+  document.getElementById('herbList').innerHTML=reviewHerbs.map((h,i)=>`<span class="herb-tag">${esc(h.herb)}${h.dose?' '+esc(h.dose):''}<span class="remove" onclick="removeHerb(${i})">&times;</span></span>`).join('');
+}
+
+async function doReview(){
+  if(reviewHerbs.length===0){toast('请先添加处方中药','error');return}
+  const body={prescription:reviewHerbs};
+  const pi={};
+  const age=document.getElementById('rvAge').value;if(age)pi.age=parseInt(age);
+  const gender=document.getElementById('rvGender').value;if(gender)pi.gender=gender;
+  pi.pregnant=document.getElementById('rvPregnant').checked;
+  pi.child=document.getElementById('rvChild').checked;
+  pi.elderly=document.getElementById('rvElderly').checked;
+  if(Object.values(pi).some(v=>v))body.patient_info=pi;
+  const syn=document.getElementById('rvSyndrome').value.trim();if(syn)body.syndrome=syn;
+
+  try{
+    const d=await api('/api/v1/med/prescription/review',{method:'POST',body:JSON.stringify(body)});
+    if(d.code!==0){document.getElementById('rvResult').innerHTML=`<div class="card" style="margin-top:20px"><div class="card-body"><div class="empty-state"><div class="empty-icon">⚠️</div><p>${esc(d.message||'审查服务不可用')}</p></div></div></div>`;return}
+    renderReviewResult(d.data);
+  }catch(e){toast('审查失败: '+e.message,'error')}
+}
+
+function renderReviewResult(data){
+  const issues=data.issues||[];
+  const byLevel={HIGH:[],MEDIUM:[],LOW:[],WARN:[]};
+  issues.forEach(i=>byLevel[i.level||'LOW'].push(i));
+
+  let html='<div class="card" style="margin-top:20px"><div class="card-body">';
+  html+='<div class="disclaimer-bar">⚠️ '+esc(data.disclaimer||'')+'</div>';
+
+  // Level summary
+  html+='<div class="level-grid">';
+  html+=`<div class="level-card high"><div class="level-name">高危</div><div class="level-count">${byLevel.HIGH.length}</div><div style="font-size:12px;color:var(--danger)">十八反/十九畏</div></div>`;
+  html+=`<div class="level-card medium"><div class="level-name">中危</div><div class="level-count">${byLevel.MEDIUM.length}</div><div style="font-size:12px;color:var(--warning)">相恶配伍</div></div>`;
+  html+=`<div class="level-card low"><div class="level-name">低危</div><div class="level-count">${byLevel.LOW.length}</div><div style="font-size:12px;color:var(--info)">证候禁忌</div></div>`;
+  html+=`<div class="level-card warn"><div class="level-name">警示</div><div class="level-count">${byLevel.WARN.length}</div><div style="font-size:12px;color:var(--text-secondary)">特殊人群</div></div>`;
+  html+='</div>';
+
+  html+=`<h4 style="margin-bottom:12px">审查结论: <span class="badge badge-${data.level==='HIGH'?'red':data.level==='MEDIUM'?'yellow':'green'}" style="font-size:13px">${data.level}</span>${data.has_high_risk?' <span class="badge badge-red">含高风险</span>':''}${data.overridden?' <span class="badge badge-blue">已覆盖</span>':''}</h4>`;
+
+  if(issues.length===0){
+    html+='<div class="empty-state"><div class="empty-icon">✅</div><p>未发现配伍禁忌</p></div>';
+  }else{
+    html+='<div style="margin-top:12px">';
+    issues.forEach(i=>{
+      html+=`<div class="issue-item ${i.level.toLowerCase()}"><div><b>${esc(i.type||'')}</b> · ${esc(i.herb||'')}</div><div style="color:var(--text-secondary);font-size:13px">${esc(i.description||'')}</div><span class="badge badge-${i.level==='HIGH'?'red':i.level==='MEDIUM'?'yellow':i.level==='LOW'?'blue':'gray'}">${i.level}</span></div>`;
+    });
+    html+='</div>';
+  }
+  html+='</div></div>';
+  document.getElementById('rvResult').innerHTML=html;
+}
+
+/* ═══════════════ 3. Formula Recommend ═══════════════ */
+function loadFormula(){
+  document.getElementById('contentArea').innerHTML=`
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-body">
+        <div class="form-row">
+          <input id="fmSyndrome" placeholder="输入证候，如'风寒表实证'" style="flex:2" onkeydown="if(event.key==='Enter')doFormula()">
+          <input id="fmCategory" placeholder="方剂类别（可选）" style="flex:1">
+          <button class="btn btn-primary" onclick="doFormula()">推荐方剂</button>
+        </div>
+      </div>
+    </div>
+    <div id="fmResult"><div class="empty-state"><div class="empty-icon">💊</div><p>输入证候获取方剂推荐</p></div></div>`;
+}
+
+async function doFormula(){
+  const syn=document.getElementById('fmSyndrome').value.trim();
+  if(!syn){toast('请输入证候','error');return}
+  const cat=document.getElementById('fmCategory').value.trim();
+  const params=new URLSearchParams({syndrome:syn});
+  if(cat)params.set('category',cat);
+  try{
+    const d=await api('/api/v1/med/formula/recommend?'+params);
+    if(d.code!==0){document.getElementById('fmResult').innerHTML=`<div class="empty-state"><div class="empty-icon">⚠️</div><p>${esc(d.message||'推荐服务不可用')}</p></div>`;return}
+    const data=d.data;
+    let html='<div class="card"><div class="card-header"><h4>方剂推荐 · '+esc(syn)+'</h4></div><div class="card-body">';
+    if(Array.isArray(data)){
+      html+=`<table><thead><tr><th>方剂</th><th>详情</th></tr></thead><tbody>`+data.map(f=>`<tr><td style="font-weight:600">${esc(f.name||f.formula||'—')}</td><td style="font-size:13px;color:var(--text-secondary)">${esc(f.description||f.detail||f.content||JSON.stringify(f))}</td></tr>`).join('')+'</tbody></table>';
+    }else if(typeof data==='object'){
+      html+='<pre style="background:var(--bg);padding:16px;border-radius:6px;font-size:13px;line-height:1.8;white-space:pre-wrap">'+esc(JSON.stringify(data,null,2))+'</pre>';
+    }else{
+      html+=`<p>${esc(String(data))}</p>`;
+    }
+    html+='</div></div>';
+    document.getElementById('fmResult').innerHTML=html;
+  }catch(e){toast('推荐失败: '+e.message,'error')}
+}
+
+/* ═══════════════ 4. Cases Management ═══════════════ */
+let casesTab='list';
+
+function loadCases(){
+  document.getElementById('contentArea').innerHTML=`
+    <div style="display:flex;gap:12px;margin-bottom:20px">
+      <button class="btn${casesTab==='list'?' btn-primary':''}" onclick="switchCaseTab('list')">医案列表</button>
+      <button class="btn${casesTab==='create'?' btn-primary':''}" onclick="switchCaseTab('create')">新建医案</button>
+    </div>
+    <div id="casesContent"></div>`;
+  switchCaseTab(casesTab);
+}
+
+function switchCaseTab(tab){
+  casesTab=tab;
+  const btns=document.querySelectorAll('#contentArea .btn');
+  btns[0].classList.toggle('btn-primary',tab==='list');
+  btns[1].classList.toggle('btn-primary',tab==='create');
+  if(tab==='list')renderCaseList();
+  else renderCaseCreate();
+}
+
+function renderCaseList(){
+  document.getElementById('casesContent').innerHTML=`
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-body">
+        <div class="form-row">
+          <input id="caseSearchKw" placeholder="搜索关键词（患者/诊断/备注）" onkeydown="if(event.key==='Enter')searchCaseList()" style="flex:2">
+          <button class="btn btn-primary" onclick="searchCaseList()">搜索</button>
+        </div>
+      </div>
+    </div>
+    <div class="card"><div class="card-header"><h4>医案列表</h4><span class="badge badge-gray" id="caseListTotal">—</span></div>
+    <div id="caseListBody"><div class="empty-state"><div class="empty-icon">📋</div><p>暂无医案记录</p></div></div></div>
+    <div id="caseListPager" style="margin-top:16px;text-align:center"></div>`;
+  searchCaseList();
+}
+
+async function searchCaseList(page=1){
+  const kw=document.getElementById('caseSearchKw')?document.getElementById('caseSearchKw').value.trim():'';
+  const params=new URLSearchParams({page:String(page),page_size:'20'});
+  if(kw)params.set('keyword',kw);
+  try{
+    const d=await api('/api/v1/edu/cases/library?'+params);
+    if(d.code!==0){toast(d.message||'查询失败','error');return}
+    const data=d.data;
+    document.getElementById('caseListTotal').textContent='共 '+(data.total||0)+' 条';
+    if(!data.items||data.items.length===0){
+      document.getElementById('caseListBody').innerHTML='<div class="empty-state"><p>暂无医案记录</p></div>';
+    }else{
+      document.getElementById('caseListBody').innerHTML=`<table><thead><tr><th>患者代号</th><th>诊断信息</th><th>处方</th><th style="width:100px">操作</th></tr></thead><tbody>`+
+        data.items.map(c=>`<tr><td><b>${esc(c.patient_alias||'—')}</b></td><td style="max-width:300px;font-size:13px;white-space:pre-wrap">${esc(typeof c.diagnoses==='string'?c.diagnoses:JSON.stringify(c.diagnoses||{}))}</td><td style="max-width:250px;font-size:13px">${esc(typeof c.prescriptions==='string'?c.prescriptions:JSON.stringify(c.prescriptions||[]))}</td><td><button class="btn btn-sm" onclick="loadReportsTab('${c.id}')">生成报告</button></td></tr>`).join('')+'</tbody></table>';
+    }
+    const totalPages=Math.ceil((data.total||0)/20);
+    document.getElementById('caseListPager').innerHTML=totalPages>1?pagerHtml(page,totalPages,'searchCaseList'):'';
+  }catch(e){toast('查询失败: '+e.message,'error')}
+}
+
+function loadReportsTab(caseId){switchTab('reports');setTimeout(()=>{const el=document.getElementById('rpCaseId');if(el)el.value=caseId},200)}
+
+function renderCaseCreate(){
+  document.getElementById('casesContent').innerHTML=`
+    <div class="card">
+      <div class="card-header"><h4>新建医案</h4></div>
+      <div class="card-body">
+        <div class="form-row">
+          <div class="form-col" style="flex:1"><label>患者代号 *</label><input id="caseAlias" placeholder="如：P001"></div>
+        </div>
+        <div class="form-col"><label>诊断信息</label><textarea id="caseDiagnoses" placeholder='JSON格式，如：{"syndrome":"风寒表实证","tongue":"舌淡红苔薄白"}'>{"syndrome":"","tongue":"","pulse":""}</textarea></div>
+        <div class="form-col"><label>处方信息</label><textarea id="casePrescriptions" placeholder='JSON格式，如：[{"herb":"麻黄","dose":"9g"}]'>[]</textarea></div>
+        <div class="form-col"><label>备注</label><textarea id="caseNotes" placeholder="选填"></textarea></div>
+        <button class="btn btn-primary" onclick="createCase()">归档医案</button>
+      </div>
+      <div id="caseCreateResult"></div>
+    </div>`;
+}
+
+async function createCase(){
+  const alias=document.getElementById('caseAlias').value.trim();
+  if(!alias){toast('请输入患者代号','error');return}
+  let diagnoses,prescriptions;
+  try{diagnoses=JSON.parse(document.getElementById('caseDiagnoses').value)}catch(e){toast('诊断信息JSON格式错误','error');return}
+  try{prescriptions=JSON.parse(document.getElementById('casePrescriptions').value)}catch(e){toast('处方信息JSON格式错误','error');return}
+  const notes=document.getElementById('caseNotes').value.trim();
+  const h={};h['Idempotency-Key']='med-case-'+Date.now();
+  try{
+    const d=await api('/api/v1/med/cases',{method:'POST',body:JSON.stringify({patient_alias:alias,diagnoses:diagnoses,prescriptions:prescriptions,notes:notes||null}),headers:{'Content-Type':'application/json','Idempotency-Key':h['Idempotency-Key']}});
+    if(d.code!==0){toast(d.message||'归档失败','error');return}
+    const r=d.data;
+    document.getElementById('caseCreateResult').innerHTML=`<div class="card-footer" style="background:${r.created?'#dcfce7':'#f0f9ff'}"><b>${r.created?'✅ 医案已归档':'ℹ️ 重复提交，返回已有记录'}</b> · case_id: ${esc(r.case_id)}</div>`;
+    if(r.created){document.getElementById('caseAlias').value='';document.getElementById('caseDiagnoses').value='{"syndrome":"","tongue":"","pulse":""}';document.getElementById('casePrescriptions').value='[]';document.getElementById('caseNotes').value=''}
+  }catch(e){toast('归档失败: '+e.message,'error')}
+}
+
+/* ═══════════════ 5. Reports ═══════════════ */
+function loadReports(){
+  document.getElementById('contentArea').innerHTML=`
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header"><h4>生成报告</h4></div>
+      <div class="card-body">
+        <div class="form-row">
+          <div class="form-col" style="flex:1.5"><label>医案ID *</label><input id="rpCaseId" placeholder="从医案列表获取"></div>
+          <div class="form-col" style="flex:1"><label>报告类型 *</label><select id="rpType"><option value="diagnosed">辨证报告</option><option value="prescription_review">处方审查报告</option><option value="synthesis">综合报告</option></select></div>
+        </div>
+        <button class="btn btn-primary" onclick="createReport()">生成报告</button>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header"><h4>查询报告</h4></div>
+      <div class="card-body">
+        <div class="form-inline">
+          <input id="rpQueryId" placeholder="输入报告ID" style="flex:2">
+          <button class="btn btn-primary" onclick="queryReport()">查询</button>
+        </div>
+      </div>
+    </div>
+    <div id="rpResult"></div>`;
+}
+
+async function createReport(){
+  const caseId=document.getElementById('rpCaseId').value.trim();
+  const rpType=document.getElementById('rpType').value;
+  if(!caseId){toast('请输入医案ID','error');return}
+  try{
+    const d=await api('/api/v1/med/reports',{method:'POST',body:JSON.stringify({case_id:caseId,report_type:rpType})});
+    if(d.code!==0){toast(d.message||'创建失败','error');return}
+    document.getElementById('rpResult').innerHTML=`<div class="card" style="margin-top:16px"><div class="card-body">
+      <div class="empty-state"><div class="empty-icon">📄</div><p style="color:var(--success)">报告已创建，正在生成中...</p>
+      <p style="font-size:13px;color:var(--text-secondary)">报告ID: <b>${esc(d.data.report_id)}</b></p>
+      <button class="btn btn-sm" style="margin-top:12px" onclick="document.getElementById('rpQueryId').value='${d.data.report_id}';queryReport()">立即查询</button></div></div></div>`;
+  }catch(e){toast('创建失败: '+e.message,'error')}
+}
+
+async function queryReport(){
+  const id=document.getElementById('rpQueryId').value.trim();
+  if(!id){toast('请输入报告ID','error');return}
+  try{
+    const d=await api('/api/v1/med/reports/'+id);
+    if(d.code!==0){document.getElementById('rpResult').innerHTML=`<div class="card" style="margin-top:16px"><div class="card-body"><div class="empty-state"><p>${esc(d.message||'报告不存在')}</p></div></div></div>`;return}
+    const r=d.data;
+    let html=`<div class="card" style="margin-top:16px"><div class="card-header"><h4>报告详情</h4><span class="badge badge-${r.status==='completed'?'green':'yellow'}">${r.status==='completed'?'已完成':'生成中'}</span></div><div class="card-body">`;
+    html+=`<div class="form-row"><div class="form-col"><label>报告ID</label><div style="font-size:14px">${esc(r.report_id)}</div></div><div class="form-col"><label>关联医案</label><div style="font-size:14px">${esc(r.case_id)}</div></div><div class="form-col"><label>类型</label><div style="font-size:14px">${esc(r.report_type)}</div></div></div>`;
+    if(r.status==='completed'&&r.content){
+      html+='<div class="form-col"><label>报告内容</label><pre style="background:var(--bg);padding:16px;border-radius:6px;font-size:13px;line-height:1.8;white-space:pre-wrap">'+esc(typeof r.content==='string'?r.content:JSON.stringify(r.content,null,2))+'</pre></div>';
+      if(r.pdf_url)html+=`<div style="margin-top:12px"><span class="badge badge-blue">PDF: ${esc(r.pdf_url)}</span></div>`;
+    }else{
+      html+='<div style="text-align:center;padding:24px"><span class="spinner"></span><p style="font-size:14px;color:var(--text-secondary);margin-top:8px">报告生成中，请稍后刷新查询...</p></div>';
+    }
+    html+='<div class="disclaimer-bar" style="margin-top:12px">'+esc(r.disclaimer||'')+'</div>';
+    html+='</div></div>';
+    document.getElementById('rpResult').innerHTML=html;
+  }catch(e){toast('查询失败: '+e.message,'error')}
+}
+
+/* ═══════════════ 6. Evidence ═══════════════ */
+function loadEvidence(){
+  document.getElementById('contentArea').innerHTML=`
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-body">
+        <div class="form-row">
+          <input id="evSyndromeId" placeholder="输入证候ID，如'wind-cold'或'风寒'" style="flex:2" onkeydown="if(event.key==='Enter')doEvidence()">
+          <button class="btn btn-primary" onclick="doEvidence()">检索文献</button>
+        </div>
+      </div>
+    </div>
+    <div id="evResult"><div class="empty-state"><div class="empty-icon">📚</div><p>输入证候ID检索相关文献佐证</p></div></div>`;
+}
+
+async function doEvidence(){
+  const id=document.getElementById('evSyndromeId').value.trim();
+  if(!id){toast('请输入证候ID','error');return}
+  try{
+    const d=await api('/api/v1/med/evidence/'+encodeURIComponent(id));
+    if(d.code!==0){document.getElementById('evResult').innerHTML=`<div class="empty-state"><div class="empty-icon">⚠️</div><p>${esc(d.message||'文献检索服务不可用')}</p></div>`;return}
+    const data=d.data;
+    let html='<div class="card"><div class="card-header"><h4>文献佐证 · '+esc(id)+'</h4></div><div class="card-body">';
+    if(Array.isArray(data)){
+      html+=`<table><thead><tr><th>文献</th><th>内容</th></tr></thead><tbody>`+data.map(e=>`<tr><td style="font-weight:600;white-space:nowrap">${esc(e.title||e.name||e.source||'—')}</td><td style="font-size:13px;color:var(--text-secondary);white-space:pre-wrap">${esc(e.content||e.text||e.description||JSON.stringify(e))}</td></tr>`).join('')+'</tbody></table>';
+    }else if(typeof data==='object'){
+      html+='<pre style="background:var(--bg);padding:16px;border-radius:6px;font-size:13px;line-height:1.8;white-space:pre-wrap">'+esc(JSON.stringify(data,null,2))+'</pre>';
+    }else{
+      html+=`<p>${esc(String(data))}</p>`;
+    }
+    html+='</div></div>';
+    document.getElementById('evResult').innerHTML=html;
+  }catch(e){toast('检索失败: '+e.message,'error')}
+}
+
+/* ═══════════════ Helpers ═══════════════ */
+function pagerHtml(page,total,fn){
+  let h='<div style="display:inline-flex;gap:4px">';
+  if(page>1)h+=`<button class="btn btn-sm" onclick="${fn}(${page-1})">上一页</button>`;
+  for(let i=1;i<=total;i++)h+=`<button class="btn btn-sm${i===page?' btn-primary':''}" onclick="${fn}(${i})">${i}</button>`;
+  if(page<total)h+=`<button class="btn btn-sm" onclick="${fn}(${page+1})">下一页</button>`;
+  return h+`<span style="font-size:13px;color:var(--text-secondary);padding:0 8px;line-height:30px">${page}/${total}</span></div>`;
+}
+</script>
+</body>
+</html>

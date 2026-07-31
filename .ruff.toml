@@ -1,0 +1,16 @@
+# Ruff 配置 — 岐黄智脑商业化平台
+# 运行: ruff check qihuang_platform/ tests/
+
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
+ignore = ["E501", "F841"]
+
+[lint.per-file-ignores]
+"tests/*" = ["S101"]
+"scripts/*" = ["S101"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
