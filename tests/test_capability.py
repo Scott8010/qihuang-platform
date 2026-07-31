@@ -1,4 +1,4 @@
-﻿"""
+"""
 tests/test_capability.py — 中台能力端点测试
 覆盖: /api/v1/core/*, /api/v1/health/*, /api/v1/med/*, /api/v1/edu/*, /api/v1/core/acupoint/*
 总计: 44 端点
