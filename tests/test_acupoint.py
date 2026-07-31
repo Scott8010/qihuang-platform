@@ -13,6 +13,12 @@ from qihuang_platform.main import app
 BASE = "http://test"
 PLATFORM_KEY = "qihuang-platform-internal-key-dev"
 
+# CI调试: 打印acupoint路由
+from qihuang_platform.main import app as _app
+_routes = [r.path for r in _app.routes if hasattr(r, 'path')]
+_acupoint_routes = [p for p in _routes if 'acupoint' in p]
+print(f"[DEBUG] acupoint routes: {_acupoint_routes}")
+
 
 async def login(client, user_id="wx_user_00001"):
     resp = await client.post("/api/v1/auth/login", json={

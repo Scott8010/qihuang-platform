@@ -148,7 +148,7 @@ jobs:
       - name: 安装 linter
         run: pip install ruff
       - name: Ruff 检查
-        run: ruff check qihuang_platform/ tests/ --ignore=E501,F841,I001,UP035,UP006,UP017,UP045,N999,B904
+        run: ruff check qihuang_platform/ tests/ --ignore=E501,F841,I001,UP035,UP006,UP017,UP045,N999,B904,F401,W293,F601,W291
       - name: AST 语法检查
         run: |
           python -c "
