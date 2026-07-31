@@ -199,38 +199,35 @@ jobs:
           TARGET: "/root/qihuang_platform/qihuang_platform/"
 
       - name: 安装依赖 & 重启服务
-        uses: appleboy/ssh-action@v1.2.2
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
             cd /root/qihuang_platform
             python3 -m pip install -r requirements.txt -q 2>&1 | tail -3
-            # 重启 uvicorn
-            pkill -f "uvicorn qihuang_platform.main:app" || true
-            # 等待端口释放
-            for i in $(seq 1 15); do
-              if ! ss -tlnp | grep -q ":8602 "; then break; fi
-              echo "等待端口 8602 释放... $i/15"
+            pkill -f 'uvicorn qihuang_platform.main:app' || true
+            for i in \$(seq 1 15); do
+              if ! ss -tlnp | grep -q ':8602 '; then break; fi
+              echo \"等待端口 8602 释放... \$i/15\"
               sleep 2
             done
             nohup python3 -m uvicorn qihuang_platform.main:app --host 0.0.0.0 --port 8602 > /var/log/qihuang_8602.log 2>&1 &
             sleep 5
-            # 健康检查（最长 60 秒）
             DEPLOY_OK=false
-            for i in $(seq 1 20); do
-              code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8602/platform/health)
-              echo "健康检查 $i/20: $code"
-              if [ "$code" = "200" ]; then
-                echo "部署成功: http://localhost:8602/platform/health -> $code"
+            for i in \$(seq 1 20); do
+              code=\$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8602/platform/health)
+              echo \"健康检查 \$i/20: \$code\"
+              if [ \"\$code\" = \"200\" ]; then
+                echo \"部署成功: http://localhost:8602/platform/health -> \$code\"
                 DEPLOY_OK=true
                 break
               fi
               sleep 3
             done
-            if [ "$DEPLOY_OK" = "false" ]; then
-              echo "健康检查超时，查看日志:"
+            if [ \"\$DEPLOY_OK\" = \"false\" ]; then
+              echo \"健康检查超时，查看日志:\"
               tail -20 /var/log/qihuang_8602.log
               exit 1
             fi
+          "
