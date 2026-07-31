@@ -206,11 +206,11 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /root/qihuang_platform
-            pip install -r requirements.txt -q 2>&1 | tail -3
+            python3 -m pip install -r requirements.txt -q 2>&1 | tail -3
             # 重启 uvicorn
             pkill -f "uvicorn qihuang_platform.main:app" || true
             sleep 2
-            nohup python -m uvicorn qihuang_platform.main:app --host 0.0.0.0 --port 8602 > /var/log/qihuang_8602.log 2>&1 &
+            nohup python3 -m uvicorn qihuang_platform.main:app --host 0.0.0.0 --port 8602 > /var/log/qihuang_8602.log 2>&1 &
             sleep 3
             # 健康检查
             for i in $(seq 1 10); do
