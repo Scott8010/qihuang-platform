@@ -5,18 +5,6 @@ target-version = "py312"
 line-length = 120
 
 [lint]
-select = [
-    "E",   # pycodestyle errors
-    "F",   # pyflakes
-    "W",   # pycodestyle warnings
-    "I",   # isort
-    "N",   # pep8-naming
-    "UP",  # pyupgrade
-    "B",   # flake8-bugbear
-    "SIM", # flake8-simplify
-    "C4",  # flake8-comprehensions
-]
-
 # 项目级忽略（兼容现有代码风格）
 ignore = [
     "E501",   # line too long
