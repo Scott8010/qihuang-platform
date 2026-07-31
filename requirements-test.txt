@@ -22,3 +22,6 @@ coverage>=7.6.0
 # 数据库驱动（CI 环境 PostgreSQL + Redis）
 psycopg2-binary>=2.9.0
 redis>=5.0.0
+
+# FastAPI 表单解析（testclient 需要）
+python-multipart>=0.0.9
