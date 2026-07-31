@@ -203,4 +203,30 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'cd /root/qihuang_platform && python3 -m pip install -r requirements.txt -q && pkill -f "uvicorn qihuang_platform.main:app" || true && sleep 3 && nohup python3 -m uvicorn qihuang_platform.main:app --host 0.0.0.0 --port 8602 > /var/log/qihuang_8602.log 2>&1 & sleep 8 && curl -s -o /dev/null -w "%{http_code}" http://localhost:8602/platform/health'
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'DEPLOY_SCRIPT'
+            set -e
+            cd /root/qihuang_platform
+
+            echo "[1/4] 安装依赖..."
+            python3 -m pip install -r requirements.txt -q
+
+            echo "[2/4] 停止旧服务..."
+            pkill -f "uvicorn qihuang_platform.main:app" 2>/dev/null || true
+
+            echo "[3/4] 等待端口释放..."
+            for i in $(seq 1 15); do
+              if ! ss -tlnp 2>/dev/null | grep -q ':8602 '; then
+                echo "  8602端口已释放"
+                break
+              fi
+              echo "  等待... $i/15"
+              sleep 1
+            done
+            sleep 1
+
+            echo "[4/4] 启动新服务 & 健康检查..."
+            nohup python3 -m uvicorn qihuang_platform.main:app --host 0.0.0.0 --port 8602 > /var/log/qihuang_8602.log 2>&1 &
+            curl --retry 15 --retry-delay 2 --retry-max-time 40 -sf http://localhost:8602/platform/health
+            echo ""
+            echo "部署完成"
+          DEPLOY_SCRIPT
