@@ -149,11 +149,21 @@ jobs:
         run: pip install ruff==0.9.10
       - name: Ruff 检查
         run: |
-          ruff check qihuang_platform/ tests/ \
+          echo "## Ruff 版本" >> $GITHUB_STEP_SUMMARY
+          ruff --version >> $GITHUB_STEP_SUMMARY
+          if ! ruff check qihuang_platform/ tests/ \
             --ignore=E501,E712,E741,F401,F541,F601,F821,F841,I001,N999,W291,W293 \
             --ignore=B008,B904,SIM105,SIM108,C401,C416 \
             --ignore=UP006,UP015,UP017,UP035,UP045 \
-            --ignore=E401,E402,E701,E702
+            --ignore=E401,E402,E701,E702 > /tmp/ruff_out.txt 2>&1; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "## Ruff 错误" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            head -80 /tmp/ruff_out.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat /tmp/ruff_out.txt
+            exit 1
+          fi
       - name: AST 语法检查
         run: |
           python -c "
