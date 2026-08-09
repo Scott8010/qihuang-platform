@@ -11,7 +11,7 @@ from qihuang_platform.db.config import get_db, init_db
 from qihuang_platform.rbac.service import RBACService
 from qihuang_platform.gateway.deps import get_current_user, get_current_admin
 from qihuang_platform.gateway.response import success, error
-from qihuang_platform.db.models import seed_preset_data, Plan, UserRole
+from qihuang_platform.db.models import seed_preset_data, Plan, UserRole, Role
 
 rbac_router = APIRouter(prefix="/admin/v1", tags=["RBAC管理"])
 
@@ -40,11 +40,30 @@ class AssignRoleRequest(BaseModel):
     user_id: str
     role_name: str
 
+class UpdateUserRequest(BaseModel):
+    display_name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    org_id: Optional[str] = None
+    status: Optional[str] = None  # active / disabled
+
+class ResetPasswordRequest(BaseModel):
+    password: Optional[str] = None  # 空则后台随机生成
+
 class CheckPermissionRequest(BaseModel):
     user_id: str
     perm_codes: List[str]
     org_id: Optional[str] = None
     scene: Optional[str] = None
+
+class SetRolePermissionsRequest(BaseModel):
+    perm_codes: List[str] = []  # 该角色最终拥有的权限 code 列表（整体替换）
+
+class CreateRoleRequest(BaseModel):
+    name: str  # 角色标识（英文/下划线，租户内唯一）
+    display_name: Optional[str] = None
+    description: Optional[str] = None
+    perm_codes: List[str] = []
 
 
 # ========== 初始化 ==========
@@ -139,13 +158,106 @@ async def create_user(
 async def list_users(
     user: dict = Depends(get_current_admin),
     rbac: RBACService = Depends(get_rbac),
+    db: Session = Depends(get_db),
 ):
     tenant_id = user.get("tenant_id", "tenant_default")
     users = rbac.list_users(tenant_id)
+    user_ids = [u.id for u in users]
+    # 批量拉取用户角色（避免 N+1）
+    role_map = {}
+    if user_ids:
+        urs = db.query(UserRole, Role).join(Role, UserRole.role_id == Role.id).filter(
+            UserRole.user_id.in_(user_ids)
+        ).all()
+        for ur, r in urs:
+            role_map.setdefault(ur.user_id, []).append({
+                "id": r.id, "name": r.name, "display_name": r.display_name,
+            })
     return success([{
         "id": u.id, "username": u.username, "display_name": u.display_name,
         "phone": u.phone, "status": u.status,
+        "roles": role_map.get(u.id, []),
     } for u in users])
+
+
+@rbac_router.get("/users/{user_id}")
+async def get_user(
+    user_id: str,
+    user: dict = Depends(get_current_admin),
+    rbac: RBACService = Depends(get_rbac),
+):
+    """用户详情（含角色）"""
+    target = rbac.get_user(user_id)
+    if not target:
+        raise HTTPException(404, detail=error("NOT_FOUND", "用户不存在"))
+    roles = rbac.get_user_roles(user_id)
+    return success({
+        "id": target.id, "username": target.username, "display_name": target.display_name,
+        "phone": target.phone, "email": target.email, "status": target.status,
+        "tenant_id": target.tenant_id, "org_id": target.org_id,
+        "created_at": target.created_at.isoformat() if target.created_at else None,
+        "roles": [{"id": r.id, "name": r.name, "display_name": r.display_name} for r in roles],
+    })
+
+
+@rbac_router.patch("/users/{user_id}")
+async def update_user(
+    user_id: str,
+    req: UpdateUserRequest,
+    user: dict = Depends(get_current_admin),
+    rbac: RBACService = Depends(get_rbac),
+):
+    """更新用户基本信息/状态"""
+    target = rbac.get_user(user_id)
+    if not target:
+        raise HTTPException(404, detail=error("NOT_FOUND", "用户不存在"))
+    updated = rbac.update_user(
+        user_id,
+        display_name=req.display_name,
+        phone=req.phone,
+        email=req.email,
+        org_id=req.org_id,
+        status=req.status,
+    )
+    if not updated:
+        raise HTTPException(400, detail=error("UPDATE_FAILED", "更新失败"))
+    return success({
+        "id": updated.id, "username": updated.username, "display_name": updated.display_name,
+        "phone": updated.phone, "email": updated.email, "status": updated.status,
+    })
+
+
+@rbac_router.post("/users/{user_id}/reset-password")
+async def reset_password(
+    user_id: str,
+    req: ResetPasswordRequest,
+    user: dict = Depends(get_current_admin),
+    rbac: RBACService = Depends(get_rbac),
+):
+    """重置用户密码（空则随机生成）"""
+    target = rbac.get_user(user_id)
+    if not target:
+        raise HTTPException(404, detail=error("NOT_FOUND", "用户不存在"))
+    new_pwd = rbac.reset_password(user_id, req.password)
+    if new_pwd is None:
+        raise HTTPException(400, detail=error("RESET_FAILED", "密码重置失败"))
+    return success({"user_id": user_id, "new_password": new_pwd})
+
+
+@rbac_router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    user: dict = Depends(get_current_admin),
+    rbac: RBACService = Depends(get_rbac),
+):
+    """删除用户（同时清理角色关联）"""
+    target = rbac.get_user(user_id)
+    if not target:
+        raise HTTPException(404, detail=error("NOT_FOUND", "用户不存在"))
+    ok = rbac.delete_user(user_id)
+    if not ok:
+        raise HTTPException(400, detail=error("DELETE_FAILED", "删除失败"))
+    return success({"user_id": user_id, "action": "deleted"})
 
 
 # ========== 角色管理 ==========
@@ -214,6 +326,67 @@ async def revoke_role(
     if role:
         rbac.remove_role(req.user_id, role.id)
     return success({"user_id": req.user_id, "role": req.role_name, "action": "revoked"})
+
+
+@rbac_router.put("/roles/{role_id}/permissions")
+async def set_role_permissions(
+    role_id: str,
+    req: SetRolePermissionsRequest,
+    user: dict = Depends(get_current_admin),
+    rbac: RBACService = Depends(get_rbac),
+):
+    """整体替换角色权限（精细微调：勾选哪些就给哪些）"""
+    role = rbac.get_role(role_id)
+    if not role:
+        raise HTTPException(404, detail=error("NOT_FOUND", "角色不存在"))
+    n = rbac.set_role_permissions(role_id, req.perm_codes or [])
+    return success({
+        "role_id": role_id, "name": role.name,
+        "is_system": role.is_system, "perm_count": n,
+    })
+
+
+@rbac_router.post("/roles")
+async def create_role(
+    req: CreateRoleRequest,
+    user: dict = Depends(get_current_admin),
+    rbac: RBACService = Depends(get_rbac),
+):
+    """创建自定义角色（is_system=False，可删可改）"""
+    tenant_id = user.get("tenant_id", "tenant_default")
+    try:
+        role = rbac.create_role(
+            tenant_id, req.name, req.display_name,
+            req.description, req.perm_codes or [],
+        )
+    except ValueError as e:
+        raise HTTPException(400, detail=error("CREATE_FAILED", str(e)))
+    return success({
+        "id": role.id, "name": role.name,
+        "display_name": role.display_name, "is_system": role.is_system,
+        "perm_count": len(req.perm_codes or []),
+    })
+
+
+@rbac_router.delete("/roles/{role_id}")
+async def delete_role(
+    role_id: str,
+    user: dict = Depends(get_current_admin),
+    rbac: RBACService = Depends(get_rbac),
+):
+    """删除自定义角色（系统预置角色不可删）"""
+    role = rbac.get_role(role_id)
+    if not role:
+        raise HTTPException(404, detail=error("NOT_FOUND", "角色不存在"))
+    if role.is_system:
+        raise HTTPException(400, detail=error("SYS_ROLE", "系统预置角色不可删除"))
+    try:
+        ok = rbac.delete_role(role_id)
+    except ValueError as e:
+        raise HTTPException(400, detail=error("DELETE_FAILED", str(e)))
+    if not ok:
+        raise HTTPException(400, detail=error("DELETE_FAILED", "删除失败"))
+    return success({"role_id": role_id, "action": "deleted"})
 
 
 # ========== 仪表盘 ==========

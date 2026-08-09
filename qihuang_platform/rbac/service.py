@@ -86,6 +86,44 @@ class RBACService:
         """跨租户列出所有用户（超管用）"""
         return self.db.query(User).all()
 
+    def update_user(self, user_id: str, **kwargs) -> Optional[User]:
+        """更新用户可写字段"""
+        user = self.get_user(user_id)
+        if not user:
+            return None
+        allowed = {"display_name", "phone", "email", "org_id", "status", "extra"}
+        for k, v in kwargs.items():
+            if k in allowed and v is not None:
+                setattr(user, k, v)
+        self.db.add(user)
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
+    def reset_password(self, user_id: str, password: str = None) -> Optional[str]:
+        """重置密码；未提供则随机生成，返回明文"""
+        user = self.get_user(user_id)
+        if not user:
+            return None
+        if password is None:
+            import secrets
+            password = secrets.token_urlsafe(10)
+        pwd_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+        user.password_hash = pwd_hash
+        self.db.add(user)
+        self.db.commit()
+        return password
+
+    def delete_user(self, user_id: str) -> bool:
+        """删除用户及其角色关联"""
+        user = self.get_user(user_id)
+        if not user:
+            return False
+        self.db.query(UserRole).filter_by(user_id=user_id).delete()
+        self.db.delete(user)
+        self.db.commit()
+        return True
+
     # ── 角色管理 ──
 
     def get_role(self, role_id: str) -> Optional[Role]:
@@ -116,6 +154,70 @@ class RBACService:
         role = self.get_role_by_name(user.tenant_id, role_name)
         if role:
             self.assign_role(user.id, role.id, user.org_id)
+
+    # ── 角色权限精细管理 ──
+
+    def get_role_permissions(self, role_id: str) -> List[Permission]:
+        """获取角色绑定的全部权限"""
+        rp = self.db.query(RolePermission).filter_by(role_id=role_id).all()
+        perm_ids = [r.perm_id for r in rp]
+        return self.db.query(Permission).filter(Permission.id.in_(perm_ids)).all() if perm_ids else []
+
+    def set_role_permissions(self, role_id: str, perm_codes: List[str]) -> int:
+        """替换角色的全部权限（按 code 列表）；保留已有权限的 data_scope"""
+        role = self.get_role(role_id)
+        if not role:
+            raise ValueError("角色不存在")
+        old_scope = {rp.perm_id: rp.data_scope for rp in
+                     self.db.query(RolePermission).filter_by(role_id=role_id).all()}
+        perms = self.db.query(Permission).filter(
+            Permission.code.in_(perm_codes)
+        ).all() if perm_codes else []
+        self.db.query(RolePermission).filter_by(role_id=role_id).delete()
+        for p in perms:
+            self.db.add(RolePermission(
+                role_id=role_id, perm_id=p.id,
+                data_scope=old_scope.get(p.id, "TENANT"),
+            ))
+        self.db.commit()
+        return len(perms)
+
+    def create_role(self, tenant_id: str, name: str, display_name: str = None,
+                    description: str = None, perm_codes: List[str] = None) -> Role:
+        """创建自定义角色（is_system=False，可删可改）"""
+        name = (name or "").strip()
+        if not name:
+            raise ValueError("角色标识(name)不能为空")
+        existing = self.db.query(Role).filter_by(tenant_id=tenant_id, name=name).first()
+        if existing:
+            raise ValueError(f"角色 {name} 已存在")
+        role = Role(
+            id=_uid(), tenant_id=tenant_id, name=name,
+            display_name=display_name or name, description=description,
+            is_system=False,
+        )
+        self.db.add(role)
+        self.db.flush()
+        if perm_codes:
+            perms = self.db.query(Permission).filter(Permission.code.in_(perm_codes)).all()
+            for p in perms:
+                self.db.add(RolePermission(role_id=role.id, perm_id=p.id, data_scope="TENANT"))
+        self._log_audit(tenant_id, None, "CREATE_ROLE", "ROLE", role.id, {"name": name})
+        self.db.commit()
+        return role
+
+    def delete_role(self, role_id: str) -> bool:
+        """删除自定义角色（系统预置角色不可删，连带清理关联）"""
+        role = self.get_role(role_id)
+        if not role:
+            return False
+        if role.is_system:
+            raise ValueError("系统预置角色不可删除")
+        self.db.query(UserRole).filter_by(role_id=role_id).delete()
+        self.db.query(RolePermission).filter_by(role_id=role_id).delete()
+        self.db.delete(role)
+        self.db.commit()
+        return True
 
     def get_user_roles(self, user_id: str) -> List[Role]:
         """获取用户的所有角色"""

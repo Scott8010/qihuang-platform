@@ -15,7 +15,10 @@ from qihuang_platform.gateway.response import success, error
 BACKEND_BASE = "http://localhost:8601"
 
 # 内部 API Key（平台→现有API的认证凭据）
-INTERNAL_API_KEY = "qihuang-platform-internal-key-dev"
+# 与 8601 的 QH_API_KEYS 对齐（默认 qh_key_default_2026）。
+# 此前错配为 qihuang-platform-internal-key-dev，导致 8601 的 /api/v1/* 公开端点（药材/方剂/证候/经典检索）全部 401。
+import os
+INTERNAL_API_KEY = os.getenv("QH_BACKEND_API_KEY", "qh_key_default_2026")
 
 
 class BackendProxy:

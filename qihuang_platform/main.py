@@ -58,6 +58,16 @@ async def lifespan(app: FastAPI):
             db.close()
     except Exception as e:
         print(f"[Platform] 数据库初始化失败（可能已初始化）: {e}")
+
+    # 活态化周期聚合调度（默认 T+1=24h 自动回写 8601 /kg/api；可用
+    # QH_LIVING_AGG_INTERVAL_SECONDS 覆盖，开发期可设小值便于观察）
+    try:
+        from qihuang_platform.living.scheduler import start_living_scheduler
+        _interval = int(os.getenv("QH_LIVING_AGG_INTERVAL_SECONDS", str(24 * 3600)))
+        start_living_scheduler(_interval)
+    except Exception as e:
+        print(f"[Platform] 活态化调度启动失败: {e}")
+
     print(f"[Platform] Phase 0 — 骨架就绪，等待 Phase 1 挂载路由")
     yield
     print("[Platform] 平台已关闭")
@@ -173,6 +183,17 @@ try:
     print("[Platform] 中台能力路由已挂载 → /api/v1/core, /api/v1/health")
 except ImportError as e:
     print(f"[Platform] 中台能力模块未就绪: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════
+# 活态化反馈闭环路由挂载（P2：反馈采集 + 聚合回写 8601 /kg/api）
+# ═══════════════════════════════════════════════════════════════
+try:
+    from qihuang_platform.living import router as living_router
+    app.include_router(living_router)  # /api/v1/living/*
+    print("[Platform] 活态化反馈闭环路由已挂载 → /api/v1/living")
+except ImportError as e:
+    print(f"[Platform] 活态化模块未就绪: {e}")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -308,8 +329,9 @@ LEGACY_ADMIN_DIR = Path(__file__).resolve().parent / "frontend-admin"
 if ADMIN_DIR.exists():
     app.mount("/admin", StaticFiles(directory=str(ADMIN_DIR), html=True), name="admin-console")
     print(f"[Platform] 运营控制台(React)已挂载 → /admin/ (目录: {ADMIN_DIR})")
-elif LEGACY_ADMIN_DIR.exists():
-    # 降级到旧版 HTML 文件
+
+if LEGACY_ADMIN_DIR.exists():
+    # 旧版 HTML 入口（控制端反馈审核台等）始终并行挂载，不依赖 React 是否存在
     app.mount("/admin-static", StaticFiles(directory=str(LEGACY_ADMIN_DIR)), name="admin-static")
     print(f"[Platform] 管理端(旧版HTML)已挂载 → /admin-static/ (目录: {LEGACY_ADMIN_DIR})")
 

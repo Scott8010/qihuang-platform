@@ -3,7 +3,7 @@
 开发阶段使用 SQLite，生产通过 QH_DATABASE_URL 环境变量切换 PostgreSQL
 """
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 DATABASE_URL = os.getenv(
@@ -45,3 +45,35 @@ def get_db():
 def init_db():
     """初始化数据库表（开发/首次部署时调用）"""
     Base.metadata.create_all(bind=engine)
+    _migrate_living_columns()
+
+
+def _migrate_living_columns():
+    """活态化 B 架构预留：为已有 kg_feedback 表增补 source / business_weight 列。
+
+    create_all 不会为已存在的表追加新列，故用 ALTER TABLE 显式补齐。
+    PostgreSQL 用 IF NOT EXISTS 幂等；SQLite 等不支持该语法则静默跳过（不影响启动）。
+    """
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE kg_feedback ADD COLUMN IF NOT EXISTS "
+                "source VARCHAR(20) NOT NULL DEFAULT 'user'"
+            ))
+            conn.execute(text(
+                "ALTER TABLE kg_feedback ADD COLUMN IF NOT EXISTS "
+                "business_weight DOUBLE PRECISION NOT NULL DEFAULT 0.0"
+            ))
+            conn.execute(text(
+                "ALTER TABLE kg_feedback ALTER COLUMN kg_id TYPE VARCHAR(100)"
+            ))
+            conn.execute(text(
+                "ALTER TABLE kg_feedback ADD COLUMN IF NOT EXISTS "
+                "entity_name VARCHAR(100)"
+            ))
+            conn.execute(text(
+                "ALTER TABLE kg_feedback ADD COLUMN IF NOT EXISTS "
+                "entity_type VARCHAR(20)"
+            ))
+    except Exception as e:  # 迁移失败不应阻断平台启动
+        print("WARN: kg_feedback migration skipped:", e)

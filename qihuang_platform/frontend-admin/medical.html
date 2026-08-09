@@ -7,79 +7,85 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --primary:#2563eb;--primary-hover:#1d4ed8;--primary-light:#eff6ff;
-  --bg:#f8fafc;--surface:#fff;--border:#e2e8f0;--text:#1e293b;--text-secondary:#64748b;
-  --success:#16a34a;--warning:#d97706;--danger:#dc2626;--info:#0ea5e9;
-  --radius:8px;--shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
-  --sidebar-w:238px;--topbar-h:56px;
+  --primary:#2E5A4C;--primary-hover:#264a3f;--primary-light:#EAF2EE;--primary-deep:#22312B;
+  --accent:#C8A45D;--accent-deep:#8A6A1F;
+  --bg:#F3F6F4;--surface:#fff;--border:#E3ECE8;--text:#22312B;--text-secondary:#6B7C75;
+  --success:#2E5A4C;--warning:#C8A45D;--danger:#B03A2E;--info:#3D7363;
+  --sidebar-bg:#FFFFFF;--sidebar-fg:#4A5B54;--sidebar-muted:#8FA9A0;--sidebar-active:#2E5A4C;--sidebar-active-bg:#EAF2EE;
+  --radius:12px;--radius-lg:16px;--shadow:0 1px 3px rgba(34,49,43,.05),0 1px 2px rgba(34,49,43,.04);--shadow-md:0 12px 32px rgba(34,49,43,.10);
+  --sidebar-w:244px;--topbar-h:60px;
 }
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh}
+body{font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh;-webkit-font-smoothing:antialiased}
 a{color:var(--primary);text-decoration:none}
 button{cursor:pointer;font-family:inherit}
-.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#eff6ff 0%,#f0f9ff 50%,#ecfdf5 100%)}
-.login-card{background:var(--surface);border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.08);padding:40px;width:400px;max-width:90vw}
-.login-card h1{font-size:22px;color:var(--text);margin-bottom:4px;text-align:center}
+.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#EAF2EE 0%,#EAF2EE 45%,#F3F6F4 100%)}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);padding:42px 40px;width:400px;max-width:90vw}
+.login-card h1{font-size:23px;color:var(--text);margin-bottom:4px;text-align:center;letter-spacing:-.01em}
 .login-card .sub{font-size:13px;color:var(--text-secondary);text-align:center;margin-bottom:28px}
 .form-group{margin-bottom:16px}
 .form-group label{display:block;font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px}
-.form-group input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;transition:border-color .2s;background:var(--bg)}
-.form-group input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
-.login-card .btn{width:100%;padding:11px;border:none;border-radius:var(--radius);font-size:15px;font-weight:600;background:var(--primary);color:#fff;transition:background .2s}
-.login-card .btn:hover{background:var(--primary-hover)}
+.form-group input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;transition:border-color .2s,box-shadow .2s;background:var(--bg)}
+.form-group input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(46,90,76,.12)}
+.login-card .btn{width:100%;padding:11px;border:none;border-radius:var(--radius);font-size:15px;font-weight:600;background:linear-gradient(135deg,#2E5A4C,#3D7363);color:#fff;transition:filter .2s,transform .1s}
+.login-card .btn:hover{filter:brightness(1.06)}
+.login-card .btn:active{transform:scale(.99)}
 .login-card .btn:disabled{opacity:.6;cursor:not-allowed}
 .login-err{color:var(--danger);font-size:13px;text-align:center;margin-top:12px;display:none}
 
 .app{display:none;min-height:100vh}
 .app.active{display:flex}
-.sidebar{width:var(--sidebar-w);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100}
-.sidebar-brand{padding:20px 24px;border-bottom:1px solid var(--border)}
-.sidebar-brand h2{font-size:16px;color:var(--text);font-weight:700}
-.sidebar-brand .ver{font-size:11px;color:var(--text-secondary);margin-top:2px}
-.sidebar-nav{flex:1;overflow-y:auto;padding:12px 0}
-.nav-group{padding:0 12px;margin-bottom:4px}
-.nav-group-title{font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;padding:8px 12px 4px}
-.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:6px;font-size:14px;color:var(--text-secondary);cursor:pointer;transition:all .15s;margin-bottom:2px;border:none;background:none;width:100%;text-align:left}
-.nav-item:hover{background:var(--bg);color:var(--text)}
-.nav-item.active{background:var(--primary-light);color:var(--primary);font-weight:600}
+
+.sidebar{width:var(--sidebar-w);background:var(--sidebar-bg);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100}
+.sidebar-brand{padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
+.brand-logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#2E5A4C,#3D7363);display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:800;color:#fff;box-shadow:0 4px 12px rgba(46,90,76,.35);flex-shrink:0}
+.brand-text h2{font-size:15px;color:var(--primary);font-weight:700;letter-spacing:.02em}
+.brand-text .ver{font-size:11px;color:var(--sidebar-muted);margin-top:1px}
+.sidebar-nav{flex:1;overflow-y:auto;padding:14px 12px}
+.nav-group{padding:0 4px;margin-bottom:8px}
+.nav-group-title{font-size:10.5px;font-weight:700;color:var(--sidebar-muted);text-transform:uppercase;letter-spacing:.8px;padding:10px 12px 6px}
+.nav-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;font-size:14px;color:var(--sidebar-fg);cursor:pointer;transition:all .15s;margin-bottom:3px;border:none;background:none;width:100%;text-align:left}
+.nav-item:hover{background:var(--bg);color:var(--primary)}
+.nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active);font-weight:600}
 .nav-item .icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
-.sidebar-footer{padding:12px 24px;border-top:1px solid var(--border);font-size:13px}
-.sidebar-footer .user-info{color:var(--text);font-weight:500;margin-bottom:4px}
-.sidebar-footer .user-role{font-size:11px;color:var(--text-secondary)}
-.sidebar-footer .logout-btn{font-size:12px;color:var(--danger);background:none;border:none;padding:4px 0;margin-top:8px;cursor:pointer}
+.sidebar-footer{padding:14px 20px;border-top:1px solid var(--border);font-size:13px}
+.sidebar-footer .user-info{color:var(--primary);font-weight:500;margin-bottom:3px;display:flex;align-items:center;gap:8px}
+.sidebar-footer .user-info::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.sidebar-footer .user-role{font-size:11px;color:var(--sidebar-muted)}
+.sidebar-footer .logout-btn{font-size:12px;color:var(--danger);background:none;border:none;padding:6px 0 0;margin-top:8px;cursor:pointer}
 
 .main{flex:1;margin-left:var(--sidebar-w);display:flex;flex-direction:column}
-.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;position:sticky;top:0;z-index:50}
-.topbar h3{font-size:16px;font-weight:600;color:var(--text)}
-.content{padding:24px;flex:1}
+.topbar{height:var(--topbar-h);background:rgba(255,255,255,.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 28px;gap:14px;position:sticky;top:0;z-index:50}
+.topbar h3{font-size:17px;font-weight:700;color:var(--text);letter-spacing:-.01em}
+.content{padding:28px;flex:1}
 
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
-.card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.card-header h4{font-size:15px;font-weight:600}
-.card-body{padding:20px}
-.card-footer{padding:12px 20px;border-top:1px solid var(--border);background:var(--bg)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow:hidden}
+.card-header{padding:16px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:linear-gradient(180deg,#fcfdfd,#fff)}
+.card-header h4{font-size:15px;font-weight:700;letter-spacing:-.01em}
+.card-body{padding:22px}
+.card-footer{padding:12px 22px;border-top:1px solid var(--border);background:#f8fafc}
 
 table{width:100%;border-collapse:collapse;font-size:14px}
-thead th{padding:10px 14px;text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.3px;border-bottom:2px solid var(--border);background:var(--bg)}
-tbody td{padding:10px 14px;border-bottom:1px solid var(--border);color:var(--text)}
-tbody tr:hover{background:var(--bg)}
+thead th{padding:11px 15px;text-align:left;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--border);background:#f8fafc}
+tbody td{padding:11px 15px;border-bottom:1px solid var(--border);color:var(--text)}
+tbody tr:hover{background:#f8fafc}
 
-.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600}
-.badge-blue{background:var(--primary-light);color:var(--primary)}
-.badge-green{background:#dcfce7;color:var(--success)}
-.badge-yellow{background:#fef3c7;color:var(--warning)}
-.badge-red{background:#fee2e2;color:var(--danger)}
+.badge{display:inline-flex;align-items:center;border-radius:999px;padding:3px 11px;font-size:11px;font-weight:600;background:#f1f5f9;color:var(--text-secondary)}
+.badge-blue{background:var(--primary-light);color:var(--primary-deep)}
+.badge-green{background:#dcfce7;color:#047857}
+.badge-yellow{background:#fef3c7;color:#b45309}
+.badge-red{background:#fee2e2;color:#b91c1c}
 .badge-gray{background:#f1f5f9;color:var(--text-secondary)}
 
-.btn{padding:8px 16px;border-radius:6px;font-size:13px;font-weight:500;border:1px solid var(--border);background:var(--surface);color:var(--text);transition:all .15s}
-.btn:hover{background:var(--bg)}
-.btn-primary{background:var(--primary);color:#fff;border-color:var(--primary)}
-.btn-primary:hover{background:var(--primary-hover)}
+.btn{padding:9px 17px;border-radius:var(--radius);font-size:13.5px;font-weight:600;border:1px solid var(--border);background:var(--surface);color:var(--text);transition:all .15s}
+.btn:hover{background:#f8fafc;border-color:#cbd5e1}
+.btn-primary{background:linear-gradient(135deg,#2E5A4C,#3D7363);color:#fff;border-color:transparent;box-shadow:0 2px 8px rgba(46,90,76,.25)}
+.btn-primary:hover{filter:brightness(1.06);background:linear-gradient(135deg,#2E5A4C,#3D7363)}
 .btn-danger{background:var(--danger);color:#fff;border-color:var(--danger)}
-.btn-sm{padding:5px 10px;font-size:12px}
+.btn-sm{padding:6px 12px;font-size:12.5px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 
-input,select,textarea{font-family:inherit;font-size:14px;padding:9px 12px;border:1px solid var(--border);border-radius:6px;width:100%;transition:border-color .2s;background:var(--surface)}
-input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+input,select,textarea{font-family:inherit;font-size:14px;padding:10px 13px;border:1px solid var(--border);border-radius:var(--radius);width:100%;transition:border-color .2s,box-shadow .2s;background:var(--surface)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(46,90,76,.12)}
 select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2364748b'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
 textarea{resize:vertical;min-height:80px}
 .form-row{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap}
@@ -132,13 +138,132 @@ textarea{resize:vertical;min-height:80px}
 .herb-add{display:flex;gap:8px}
 .herb-add input{flex:1;max-width:150px}
 
+/* ═══════════════ Knowledge Feedback (redesigned) ═══════════════ */
+/* ═══════════════ Knowledge Feedback · 运营控制台风格 ═══════════════ */
+.fb-hero{position:relative;background:linear-gradient(135deg,#EAF2EE 0%,#F3F6F4 55%,#f8fafc 100%);border:1px solid #CBD9D3;border-radius:16px;padding:24px 26px;margin-bottom:22px;overflow:hidden}
+.fb-hero::after{content:"";position:absolute;right:-40px;top:-40px;width:170px;height:170px;background:radial-gradient(circle,rgba(46,90,76,.12),transparent 70%);border-radius:50%}
+.fb-hero h2{font-size:20px;font-weight:700;margin-bottom:8px;color:#22312B;letter-spacing:-.01em}
+.fb-hero p{font-size:13.5px;color:#475569;line-height:1.7;max-width:780px}
+.fb-hero b{color:#047857}
+
+.fb-search-row{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;margin-bottom:22px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.fb-search-row select,.fb-search-row input{height:42px;border:1px solid #e2e8f0;border-radius:9px;padding:0 14px;font-size:14px;background:#fff;color:#22312B;outline:none;transition:border-color .15s,box-shadow .15s}
+.fb-search-row select:focus,.fb-search-row input:focus{border-color:#22312B;box-shadow:0 0 0 3px rgba(15,23,42,.08)}
+.fb-search-row button,.fb-search-row .btn{flex:0 0 auto;height:42px;padding:0 20px;border:none;border-radius:9px;background:#22312B;color:#fff;font-size:14px;font-weight:500;cursor:pointer;transition:background .15s,transform .1s}
+.fb-search-row button:hover,.fb-search-row .btn:hover{background:#1e293b}
+.fb-search-row button:active{transform:scale(.98)}
+
+.fb-section-title{font-size:14px;font-weight:700;color:#22312B;margin:26px 0 14px;display:flex;align-items:center;gap:8px}
+.fb-section-title .sub{font-size:12px;color:#94a3b8;font-weight:400}
+
+.fb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:14px;margin-bottom:24px}
+
+.fb-card{position:relative;background:#fff;border:1px solid #e7ebf0;border-radius:16px;box-shadow:0 1px 3px rgba(15,23,42,.05);overflow:hidden;cursor:pointer;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;display:flex;flex-direction:column}
+.fb-card:hover{transform:translateY(-4px);box-shadow:0 12px 28px rgba(15,23,42,.10);border-color:#cbd5e1}
+.fb-card .fb-card-header{padding:18px 18px 8px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.fb-card .fb-card-title{font-size:16px;font-weight:700;color:#22312B;margin-bottom:6px;letter-spacing:-.01em}
+.fb-card .fb-card-body{padding:0 18px 14px;flex:1;font-size:13px;color:#64748b;line-height:1.6}
+.fb-card .fb-card-footer{padding:12px 18px;border-top:1px solid #f1f5f9;background:#fafbfc;font-size:12px;color:#94a3b8;display:flex;justify-content:space-between;align-items:center}
+.fb-card .fb-card-footer .go{color:#3D7363;font-weight:600}
+
+.fb-type-herb{border-top:3px solid #2E5A4C}
+.fb-type-formula{border-top:3px solid #f59e0b}
+.fb-type-syndrome{border-top:3px solid #8b5cf6}
+
+.fb-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.fb-tag{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:500;background:#f1f5f9;color:#64748b}
+
+.fb-detail-card{position:relative;background:#fff;border:1px solid #e7ebf0;border-radius:18px;box-shadow:0 6px 24px rgba(15,23,42,.07);overflow:hidden;margin-top:20px}
+.fb-detail-card.fb-type-herb{border-top:4px solid #2E5A4C}
+.fb-detail-card.fb-type-formula{border-top:4px solid #f59e0b}
+.fb-detail-card.fb-type-syndrome{border-top:4px solid #8b5cf6}
+.fb-detail-header{padding:22px 24px;border-bottom:1px solid #f1f5f9;background:linear-gradient(180deg,#fcfdfd,#fff)}
+.fb-detail-title{font-size:21px;font-weight:700;color:#22312B;margin-bottom:6px;letter-spacing:-.02em;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.fb-detail-sub{font-size:13.5px;color:#64748b;line-height:1.6;max-width:680px}
+.fb-detail-body{padding:24px}
+
+.fb-meta-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:22px}
+.fb-meta-box{background:#f8fafc;border:1px solid #eef2f6;border-radius:12px;padding:16px}
+.fb-meta-box .label{font-size:12px;color:#94a3b8;margin-bottom:6px}
+.fb-meta-box .value{font-size:18px;font-weight:700;color:#22312B}
+.fb-confidence-bar{height:9px;background:#e9eef3;border-radius:999px;overflow:hidden;margin-top:10px}
+.fb-confidence-bar>div{height:100%;border-radius:999px;transition:width .5s ease}
+
+.fb-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:20px}
+.fb-action-btn{flex:1;min-width:150px;padding:15px 18px;border-radius:13px;border:1px solid #e2e8f0;background:#fff;font-size:14px;font-weight:600;color:#334155;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px}
+.fb-action-btn:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(15,23,42,.08);border-color:#cbd5e1}
+.fb-action-btn.primary{background:#22312B;color:#fff;border-color:#22312B}
+.fb-action-btn.primary:hover{background:#1e293b}
+.fb-action-btn.danger{background:#fff;border-color:#fecaca;color:#dc2626}
+.fb-action-btn.danger:hover{background:#fef2f2}
+.fb-action-btn.text{flex:0 0 auto;min-width:auto;padding:11px 16px;font-size:13px;background:#f8fafc;border-color:#e2e8f0;color:#64748b}
+
+.fb-help{margin-top:20px;padding:15px 17px;background:#EAF2EE;border:1px solid #CBD9D3;border-radius:12px;font-size:12.5px;color:#475569;line-height:1.7}
+.fb-help b{color:#065f46}
+
+.fb-correction{padding:18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;margin-top:16px}
+.fb-correction>div:first-child{font-size:13px;font-weight:600;margin-bottom:12px;color:#22312B}
+.fb-correction .form-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.fb-correction .form-row input{flex:1;min-width:160px;height:42px;border:1px solid #e2e8f0;border-radius:9px;padding:0 14px;font-size:14px;outline:none}
+.fb-correction .form-row input:focus{border-color:#22312B;box-shadow:0 0 0 3px rgba(15,23,42,.08)}
+.fb-correction textarea{width:100%;min-height:80px;border:1px solid #e2e8f0;border-radius:9px;padding:12px 14px;font-size:14px;font-family:inherit;outline:none;resize:vertical}
+.fb-correction textarea:focus{border-color:#22312B;box-shadow:0 0 0 3px rgba(15,23,42,.08)}
+.fb-correction button{height:42px;padding:0 22px;border:none;border-radius:9px;background:#22312B;color:#fff;font-size:14px;font-weight:500;cursor:pointer;transition:background .15s}
+.fb-correction button:hover{background:#1e293b}
+
+.fb-empty{padding:64px 24px;text-align:center;color:#94a3b8}
+.fb-empty .icon{font-size:52px;margin-bottom:16px;opacity:.7}
+.fb-empty h4{font-size:17px;color:#334155;margin-bottom:8px}
+.fb-empty p{font-size:13.5px;line-height:1.6;max-width:440px;margin:0 auto}
+
+/* 反馈区内的 badge 与控制台统一（中性胶囊） */
+.fb-card .badge,.fb-detail-title .badge{display:inline-flex;align-items:center;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:600;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0}
+
+/* ═══════════════ 工作台首页（临床工作台卡片风） ═══════════════ */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px;margin-bottom:22px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;box-shadow:var(--shadow)}
+.stat-label{font-size:12px;color:var(--text-secondary);margin-bottom:6px}
+.stat-value{font-size:28px;font-weight:700;color:var(--primary)}
+.stat-sub{font-size:12px;color:var(--text-secondary);margin-top:4px}
+.home-hero{display:flex;align-items:center;justify-content:space-between;gap:16px;background:linear-gradient(120deg,#2E5A4C 0%,#3D7363 60%,#C8A45D 140%);border-radius:var(--radius);padding:26px 30px;color:#fff;margin-bottom:22px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.home-hero::after{content:"";position:absolute;right:-30px;bottom:-50px;width:200px;height:200px;background:radial-gradient(circle,rgba(255,255,255,.12),transparent 70%);border-radius:50%}
+.home-greet{font-size:22px;font-weight:700}
+.home-sub{font-size:13.5px;opacity:.9;margin-top:6px;max-width:560px;line-height:1.6}
+.home-date{font-size:13px;opacity:.85;background:rgba(255,255,255,.16);padding:7px 14px;border-radius:999px;white-space:nowrap;align-self:flex-start}
+.home-grid{display:grid;grid-template-columns:1.2fr 1fr;gap:18px;margin-bottom:24px}
+.home-continue{padding:24px}
+.home-continue-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.home-continue-tag{font-size:11px;font-weight:700;color:#8A6A1F;background:#FBF4E4;border:1px solid #EAD9B0;padding:3px 10px;border-radius:999px}
+.home-continue-chap{font-size:12px;color:var(--text-secondary)}
+.home-continue-title{font-size:19px;font-weight:700;color:var(--text);margin-bottom:14px}
+.home-progress{height:10px;background:var(--bg);border-radius:999px;overflow:hidden}
+.home-progress-bar{height:100%;background:linear-gradient(90deg,#2E5A4C,#3D7363);border-radius:999px}
+.home-progress-meta{display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);margin:8px 0 16px}
+.home-continue-btn{width:100%}
+.home-tasks{padding:24px}
+.home-tasks-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:16px}
+.home-task{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}
+.home-task:last-child{border-bottom:none}
+.home-task-ic{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.home-task-body{flex:1;min-width:0}
+.home-task-name{font-size:14px;font-weight:600;color:var(--text)}
+.home-task-sub{font-size:12px;color:var(--text-secondary);margin-top:2px}
+.home-quick-title{font-size:15px;font-weight:700;color:var(--text);margin:4px 0 14px}
+.home-quick{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
+.home-quick-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;cursor:pointer;transition:transform .18s,box-shadow .18s,border-color .18s}
+.home-quick-card:hover{transform:translateY(-3px);box-shadow:var(--shadow);border-color:var(--primary)}
+.home-quick-ic{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:21px;color:#fff;margin-bottom:12px}
+.home-quick-title2{font-size:14px;font-weight:700;color:var(--text)}
+.home-quick-sub{font-size:12px;color:var(--text-secondary);margin-top:3px}
+
 @media(max-width:768px){
-  .sidebar{width:60px}
-  .sidebar-brand h2,.sidebar-brand .ver,.nav-group-title,.nav-item span:not(.icon),.sidebar-footer{display:none}
+  .sidebar{width:64px}
+  .brand-text,.nav-group-title,.nav-item span:not(.icon),.sidebar-footer{display:none}
+  .sidebar-brand{justify-content:center;padding:14px 0}
   .nav-item{justify-content:center;padding:10px 0}
   .nav-item .icon{margin:0}
-  .main{margin-left:60px}
-  :root{--sidebar-w:60px}
+  .main{margin-left:64px}
+  :root{--sidebar-w:64px}
 }
 </style>
 </head>
@@ -151,7 +276,7 @@ textarea{resize:vertical;min-height:80px}
     <div class="sub">医疗辅助平台</div>
     <div class="form-group"><label>账号</label><input id="loginUser" placeholder="输入账号" autocomplete="username"></div>
     <div class="form-group"><label>密码</label><input id="loginPass" type="password" placeholder="输入密码" autocomplete="current-password"></div>
-    <button class="btn" id="loginBtn" onclick="doLogin()">登 录</button>
+    <button class="btn btn-primary" id="loginBtn" onclick="doLogin()">登 录</button>
     <div class="login-err" id="loginErr"></div>
   </div>
 </div>
@@ -159,11 +284,12 @@ textarea{resize:vertical;min-height:80px}
 <!-- ═══════════════ App Layout ═══════════════ -->
 <div class="app" id="app">
   <aside class="sidebar">
-    <div class="sidebar-brand"><h2>岐黄智脑</h2><div class="ver">医疗辅助平台 v1.0</div></div>
+    <div class="sidebar-brand"><div class="brand-logo">岐</div><div class="brand-text"><h2>岐黄智脑</h2><div class="ver">医疗辅助平台</div></div></div>
     <nav class="sidebar-nav">
+      <button class="nav-item active" data-tab="home" style="margin:2px 4px 8px"><span class="icon">🏠</span><span>工作台</span></button>
       <div class="nav-group">
         <div class="nav-group-title">诊疗辅助</div>
-        <button class="nav-item active" data-tab="diagnose"><span class="icon">🔍</span><span>辅助辨证</span></button>
+        <button class="nav-item" data-tab="diagnose"><span class="icon">🔍</span><span>辅助辨证</span></button>
         <button class="nav-item" data-tab="review"><span class="icon">🛡️</span><span>处方审查</span></button>
         <button class="nav-item" data-tab="formula"><span class="icon">💊</span><span>方剂推荐</span></button>
       </div>
@@ -175,6 +301,10 @@ textarea{resize:vertical;min-height:80px}
       <div class="nav-group">
         <div class="nav-group-title">知识库</div>
         <button class="nav-item" data-tab="evidence"><span class="icon">📚</span><span>文献佐证</span></button>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-title">活态反馈</div>
+        <button class="nav-item" data-tab="feedback"><span class="icon">💡</span><span>知识反馈</span></button>
       </div>
     </nav>
     <div class="sidebar-footer">
@@ -190,7 +320,7 @@ textarea{resize:vertical;min-height:80px}
 </div>
 
 <script>
-const API='http://localhost:8602';
+const API='http://111.231.63.73:8602';
 let TOKEN='',USER={};
 
 /* ═══════════════ Auth ═══════════════ */
@@ -219,7 +349,7 @@ function api(path,opts={}){
 }
 
 /* ═══════════════ Navigation ═══════════════ */
-const titles={diagnose:'辅助辨证',review:'处方安全审查',formula:'方剂推荐',cases:'医案管理',reports:'报告中心',evidence:'文献佐证'};
+const titles={home:'工作台',diagnose:'辅助辨证',review:'处方安全审查',formula:'方剂推荐',cases:'医案管理',reports:'报告中心',evidence:'文献佐证',feedback:'知识反馈'};
 
 function switchTab(name){
   document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active',el.dataset.tab===name));
@@ -232,7 +362,67 @@ function switchTab(name){
     case 'cases':loadCases();break;
     case 'reports':loadReports();break;
     case 'evidence':loadEvidence();break;
+    case 'home':loadMedicalHome();break;
+    case 'feedback':loadFeedback();break;
   }
+}
+
+function loadMedicalHome(){
+  const uname=USER.username||USER.sub||'医师';
+  const c=document.getElementById('contentArea');
+  const today=new Date().toLocaleDateString('zh-CN',{month:'long',day:'numeric',weekday:'long'});
+  c.innerHTML=`
+  <div class="home-hero">
+    <div>
+      <div class="home-greet">${esc(uname)}，上午好 👋</div>
+      <div class="home-sub">临床辅助已就绪，先处理今日待办，或开始一次辨证推演。</div>
+    </div>
+    <div class="home-date">${today}</div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card"><div class="stat-label">待审处方</div><div class="stat-value">3</div><div class="stat-sub">需四级审查</div></div>
+    <div class="stat-card"><div class="stat-label">待写医案</div><div class="stat-value">2</div><div class="stat-sub">跟诊待归档</div></div>
+    <div class="stat-card"><div class="stat-label">重点关注病证</div><div class="stat-value">5</div><div class="stat-sub">本周高频</div></div>
+    <div class="stat-card"><div class="stat-label">知识库节点</div><div class="stat-value">6144</div><div class="stat-sub">图谱持续生长</div></div>
+  </div>
+
+  <div class="home-grid">
+    <div class="home-continue card">
+      <div class="home-continue-head">
+        <span class="home-continue-tag">继续研读</span>
+        <span class="home-continue-chap">六经辨证 · 少阳病</span>
+      </div>
+      <div class="home-continue-title">《伤寒论》临床研读</div>
+      <div class="home-progress"><div class="home-progress-bar" style="width:45%"></div></div>
+      <div class="home-progress-meta"><span>已完成 45%</span><span>预计还需 6 天</span></div>
+      <button class="btn btn-primary home-continue-btn" onclick="switchTab('evidence')">继续研读 →</button>
+    </div>
+
+    <div class="home-tasks card">
+      <div class="home-tasks-title">📋 今日待办</div>
+      <div class="home-task"><span class="home-task-ic" style="background:var(--primary-light)">🛡️</span><div class="home-task-body"><div class="home-task-name">审查「四逆汤」处方</div><div class="home-task-sub">少阴病 · 回阳救逆</div></div><span class="badge badge-yellow">待审</span></div>
+      <div class="home-task"><span class="home-task-ic" style="background:var(--primary-light)">📝</span><div class="home-task-body"><div class="home-task-name">归档「脾胃虚弱」医案</div><div class="home-task-sub">跟诊笔记待整理</div></div><span class="badge badge-yellow">待写</span></div>
+      <div class="home-task"><span class="home-task-ic" style="background:var(--primary-light)">💡</span><div class="home-task-body"><div class="home-task-name">复核 1 条知识反馈</div><div class="home-task-sub">帮助图谱越用越准</div></div><span class="badge badge-yellow">待复核</span></div>
+    </div>
+  </div>
+
+  <div class="home-quick-title">🚀 快捷入口</div>
+  <div class="home-quick">
+    ${medQuick('🔍','辅助辨证','证治推演','diagnose','var(--primary)')}
+    ${medQuick('🛡️','处方审查','四级安全审查','review','#3D7363')}
+    ${medQuick('💊','方剂推荐','君臣佐使','formula','var(--accent)')}
+    ${medQuick('📋','医案管理','名老中医','cases','var(--primary)')}
+    ${medQuick('📄','报告中心','诊疗报告','reports','#3D7363')}
+    ${medQuick('💡','知识反馈','纠错与共建','feedback','var(--accent)')}
+  </div>`;
+}
+function medQuick(ic,title,sub,tab,color){
+  return `<div class="home-quick-card" onclick="switchTab('${tab}')">
+    <div class="home-quick-ic" style="background:${color}">${ic}</div>
+    <div class="home-quick-title2">${title}</div>
+    <div class="home-quick-sub">${sub}</div>
+  </div>`;
 }
 
 document.querySelectorAll('.nav-item').forEach(el=>el.addEventListener('click',()=>switchTab(el.dataset.tab)));
@@ -241,7 +431,7 @@ function showApp(){
   document.getElementById('loginPage').style.display='none';
   document.getElementById('app').classList.add('active');
   document.getElementById('sidebarUser').textContent=USER.username||USER.sub||'医师';
-  switchTab('diagnose');
+  switchTab('home');
 }
 
 function toast(msg,type='info'){
@@ -249,12 +439,249 @@ function toast(msg,type='info'){
   setTimeout(()=>t.remove(),3000);
 }
 
+/* ═══════════════ Auto-login ═══════════════ */
+async function autoLogin(){
+  try{
+    const r=await fetch(API+'/dev/admin-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'doctor'})});
+    const d=await r.json();
+    if(d.code===0&&d.data&&d.data.access_token){
+      TOKEN=d.data.access_token;USER=d.data.user||{};
+      localStorage.setItem('med_token',TOKEN);localStorage.setItem('med_user',JSON.stringify(USER));
+      showApp();
+    }else{console.log('auto login failed',d.message);}
+  }catch(e){console.log('auto login error',e);}
+}
 (function(){
   TOKEN=localStorage.getItem('med_token');
   const u=localStorage.getItem('med_user');
-  if(TOKEN&&u){try{USER=JSON.parse(u);showApp()}catch(e){localStorage.removeItem('med_token')}}
+  if(TOKEN&&u){try{USER=JSON.parse(u);showApp()}catch(e){localStorage.removeItem('med_token'); autoLogin();}}
+  else{autoLogin();}
   document.getElementById('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
 })();
+
+/* ═══════════════ 知识反馈 (redesigned · 医师端) ═══════════════ */
+const FB_TYPE_LABELS={herb:'药材',formula:'方剂',syndrome:'证候'};
+const FB_TYPE_COLORS={herb:'fb-type-herb',formula:'fb-type-formula',syndrome:'fb-type-syndrome'};
+
+const HOT_KNOWLEDGE=[
+  {name:'人参',type:'herb',summary:'大补元气、复脉固脱，常用于气虚欲脱、脾肺气虚证。',tags:['补气','急救']},
+  {name:'附子',type:'herb',summary:'回阳救逆、补火助阳，有毒，需久煎30-60分钟。',tags:['温阳','毒性','急救']},
+  {name:'黄芪',type:'herb',summary:'补气升阳、益卫固表，适合自汗、久泻、气虚水肿。',tags:['补气','固表']},
+  {name:'桂枝',type:'herb',summary:'发汗解肌、温通经脉，常配芍药调和营卫。',tags:['解表','温经']},
+  {name:'桂枝汤',type:'formula',summary:'解肌发表、调和营卫，主治外感风寒表虚证。',tags:['太阳病','表虚']},
+  {name:'麻黄汤',type:'formula',summary:'发汗解表、宣肺平喘，主治外感风寒表实证。',tags:['太阳病','表实']},
+  {name:'四逆汤',type:'formula',summary:'回阳救逆，主治少阴病四肢厥逆、脉微欲绝。',tags:['少阴病','亡阳']},
+  {name:'补中益气汤',type:'formula',summary:'补中益气、升阳举陷，主治脾胃气虚、脏器下垂。',tags:['气虚','下陷']},
+  {name:'风寒表证',type:'syndrome',summary:'恶寒重、发热轻、无汗、头痛身痛，治宜辛温解表。',tags:['表证','外感']},
+  {name:'脾胃虚弱',type:'syndrome',summary:'食少便溏、腹胀乏力，治宜健脾益气。',tags:['脾胃','气虚']}
+];
+
+let fbKgId=null,fbType='herb',fbName='';
+
+function loadFeedback(){
+  document.getElementById('contentArea').innerHTML=`
+    <div class="fb-hero">
+      <h2>🩺 临床知识核验 · 你的经验会让系统更可靠</h2>
+      <p>点选下方临床高频知识点，或直接搜索药材 / 方剂 / 证候进行核验。<b>"临床可用"</b>提升该知识置信度；<b>"临床存疑"</b>提醒管理员复核；纠错请附上依据，审核后回写图谱。</p>
+    </div>
+    <div class="fb-search-row">
+      <select id="fbType" onchange="fbType=this.value">
+        <option value="herb">药材</option>
+        <option value="formula">方剂</option>
+        <option value="syndrome">证候</option>
+      </select>
+      <input id="fbName" placeholder="输入知识点名称，如'附子'或'四逆汤'" onkeydown="if(event.key==='Enter')resolveEntity()">
+      <button class="btn btn-primary" onclick="resolveEntity()">🔍 解析知识点</button>
+    </div>
+
+    <div class="fb-section-title">🔥 临床高频知识点 <span class="sub">点卡片直接核验</span></div>
+    <div class="fb-grid" id="fbHotGrid"></div>
+
+    <div id="fbResultArea"></div>
+  `;
+  renderHotGrid();
+}
+
+function renderHotGrid(){
+  const grid=document.getElementById('fbHotGrid');
+  if(!grid)return;
+  grid.innerHTML=HOT_KNOWLEDGE.map(k=>`
+    <div class="fb-card ${FB_TYPE_COLORS[k.type]}" onclick="pickHot('${esc(k.name)}','${k.type}')">
+      <div class="fb-card-header">
+        <div class="fb-card-title">${esc(k.name)}</div>
+        <span class="badge badge-blue">${FB_TYPE_LABELS[k.type]}</span>
+      </div>
+      <div class="fb-card-body">${esc(k.summary)}</div>
+      <div class="fb-card-footer">
+        <div class="fb-tags">${k.tags.map(t=>`<span class="fb-tag">${esc(t)}</span>`).join('')}</div>
+        <span style="color:var(--primary);font-weight:500">去核验 →</span>
+      </div>
+    </div>`).join('');
+}
+
+function pickHot(name,type){
+  fbType=type;
+  document.getElementById('fbType').value=type;
+  document.getElementById('fbName').value=name;
+  resolveEntity();
+}
+
+async function resolveEntity(){
+  const name=document.getElementById('fbName').value.trim();
+  fbType=document.getElementById('fbType').value;
+  if(!name){toast('请输入知识点名称','error');return}
+  fbName=name;
+  const meta=HOT_KNOWLEDGE.find(k=>k.name===name&&k.type===fbType);
+  const area=document.getElementById('fbResultArea');
+  area.innerHTML='<div style="text-align:center;padding:30px"><span class="spinner"></span><p style="color:var(--text-secondary);font-size:13px;margin-top:10px">正在定位知识图谱节点…</p></div>';
+  try{
+    const r=await api('/api/v1/living/resolve?name='+encodeURIComponent(name)+'&type='+fbType);
+    if(r.code!==0){area.innerHTML=renderPartialCard(name,fbType,meta);return}
+    const d=r.data;
+    if(!d.kg_id){fbKgId=null;area.innerHTML=renderPartialCard(name,fbType,meta);return}
+    fbKgId=d.kg_id;
+    let conf=null;
+    try{
+      const c=await api('/api/v1/living/kg/'+encodeURIComponent(fbKgId)+'/confidence?target=node');
+      if(c.code===0&&c.data&&c.data.confidence!==null&&c.data.confidence!==undefined)conf=c.data.confidence;
+    }catch(e){/* 置信度读取失败不阻断 */}
+    area.innerHTML=renderDetailCard(name,fbType,fbKgId,conf,meta);
+  }catch(e){area.innerHTML=renderPartialCard(name,fbType,meta);toast('解析失败: '+e.message,'error')}
+}
+
+function renderPartialCard(name,type,meta){
+  const summary=meta?meta.summary:'系统已收到你的检索请求。该知识点目前尚未与图谱完整关联，仍可提交反馈帮助我们补充。';
+  const tags=meta?meta.tags:[];
+  const tips=[
+    '该知识点可能尚未完成图谱结构化，管理员会据此优先补录。',
+    '如果你发现名称有误，可重新搜索或切换上方类型再试。',
+    '你的反馈（临床可用/存疑/纠错）会进入审核队列，不会直接修改图谱。'
+  ];
+  return `
+    <div class="fb-detail-card ${FB_TYPE_COLORS[type]}">
+      <div class="fb-detail-header">
+        <div>
+          <div class="fb-detail-title">${esc(name)} <span class="badge badge-blue">${FB_TYPE_LABELS[type]}</span></div>
+          <div class="fb-detail-sub">${esc(summary)}</div>
+          ${tags.length?`<div class="fb-tags" style="margin-top:8px">${tags.map(t=>`<span class="fb-tag">${esc(t)}</span>`).join('')}</div>`:''}
+        </div>
+      </div>
+      <div class="fb-detail-body">
+        <div class="fb-meta-row">
+          <div class="fb-meta-box" style="grid-column:1/-1">
+            <div class="label">图谱状态</div>
+            <div class="value" style="color:#d97706;font-size:16px">🚧 待补全</div>
+            <div style="font-size:13px;color:#64748b;margin-top:6px;line-height:1.7">${tips.map(t=>`• ${esc(t)}`).join('<br>')}</div>
+          </div>
+        </div>
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px">结合临床经验，这条知识你怎么看？</div>
+        <div class="fb-actions">
+          <button class="fb-action-btn primary" onclick="submitFeedback('adopt')">✅ 临床可用</button>
+          <button class="fb-action-btn danger" onclick="submitFeedback('dislike')">⚠️ 临床存疑</button>
+          <button class="fb-action-btn text" onclick="toggleCorrection()">✏️ 纠错 / 补充证据</button>
+        </div>
+        <div id="fbCorrectionBox" class="fb-correction" style="display:none">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px">纠错 / 补充临床证据</div>
+          <div class="form-row">
+            <input id="fbField" placeholder="字段名，如'禁忌症' / '剂量' / '配伍'">
+            <input id="fbNewValue" placeholder="你认为正确的内容或证据">
+          </div>
+          <textarea id="fbReason" placeholder="临床依据 / 文献出处 / 病例说明（有助于管理员更快采纳）"></textarea>
+          <button class="btn btn-primary" style="margin-top:10px" onclick="submitFeedback('expert_correction')">提交纠错</button>
+        </div>
+        <div class="fb-help">
+          <b>核验说明：</b>即使该知识点暂未接入完整图谱，你的反馈仍会进入队列。待管理员补录节点后，本次反馈会被关联并参与置信度计算。
+        </div>
+        <div id="fbNote" style="margin-top:14px;font-size:13px;color:var(--success);min-height:20px"></div>
+      </div>
+    </div>`;
+}
+
+function renderNotFound(name){
+  return `<div class="fb-detail-card"><div class="fb-empty"><div class="icon">🔍</div><h4>未找到 "${esc(name)}"</h4><p>请检查名称是否正确，或切换上方类型（药材 / 方剂 / 证候）再试。</p></div></div>`;
+}
+
+function renderDetailCard(name,type,kgId,conf,meta){
+  const summary=meta?meta.summary:'已定位到知识图谱节点，请结合临床经验给出核验意见。';
+  const tags=meta?meta.tags:[];
+  const confVal=conf===null?'—':conf;
+  const pct=conf===null?0:Math.round(conf*100);
+  const confColor=pct>=85?'#22c55e':pct>=60?'#f59e0b':'#ef4444';
+  return `
+    <div class="fb-detail-card ${FB_TYPE_COLORS[type]}">
+      <div class="fb-detail-header">
+        <div>
+          <div class="fb-detail-title">${esc(name)} <span class="badge badge-blue">${FB_TYPE_LABELS[type]}</span></div>
+          <div class="fb-detail-sub">${esc(summary)}</div>
+          ${tags.length?`<div class="fb-tags" style="margin-top:8px">${tags.map(t=>`<span class="fb-tag">${esc(t)}</span>`).join('')}</div>`:''}
+        </div>
+      </div>
+      <div class="fb-detail-body">
+        <div class="fb-meta-row">
+          <div class="fb-meta-box">
+            <div class="label">当前置信度</div>
+            <div class="value" style="color:${confColor}">${confVal}</div>
+            <div class="fb-confidence-bar"><div style="width:${pct}%;background:linear-gradient(90deg,${confColor},#86ef7c)"></div></div>
+          </div>
+          <div class="fb-meta-box">
+            <div class="label">知识节点 ID</div>
+            <div class="value" style="font-family:monospace;font-size:12px;font-weight:500;color:var(--text-secondary)">${esc(kgId)}</div>
+          </div>
+        </div>
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px">结合临床经验，这条知识你怎么看？</div>
+        <div class="fb-actions">
+          <button class="fb-action-btn primary" onclick="submitFeedback('adopt')">✅ 临床可用</button>
+          <button class="fb-action-btn danger" onclick="submitFeedback('dislike')">⚠️ 临床存疑</button>
+          <button class="fb-action-btn text" onclick="toggleCorrection()">✏️ 纠错 / 补充证据</button>
+        </div>
+        <div id="fbCorrectionBox" class="fb-correction" style="display:none">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px">纠错 / 补充临床证据</div>
+          <div class="form-row">
+            <input id="fbField" placeholder="字段名，如'禁忌症' / '剂量' / '配伍'">
+            <input id="fbNewValue" placeholder="你认为正确的内容或证据">
+          </div>
+          <textarea id="fbReason" placeholder="临床依据 / 文献出处 / 病例说明（有助于管理员更快采纳）"></textarea>
+          <button class="btn btn-primary" style="margin-top:10px" onclick="submitFeedback('expert_correction')">提交纠错</button>
+        </div>
+        <div class="fb-help">
+          <b>核验说明：</b> ✅"临床可用"表示你认可该知识在当前场景下成立；⚠️"临床存疑"请谨慎使用，系统会标记该节点需复核；✏️纠错请给出字段、正确内容及依据，经管理员审核后回写图谱。
+        </div>
+        <div id="fbNote" style="margin-top:14px;font-size:13px;color:var(--success);min-height:20px"></div>
+      </div>
+    </div>`;
+}
+
+function toggleCorrection(){
+  const box=document.getElementById('fbCorrectionBox');
+  if(box)box.style.display=box.style.display==='none'?'block':'none';
+}
+
+async function submitFeedback(type){
+  const body={target:'node',feedback_type:type};
+  if(fbKgId){
+    body.kg_id=fbKgId;
+  }else{
+    body.kg_id='pending:'+fbName;
+    body.entity_name=fbName;
+    body.entity_type=fbType;
+  }
+  if(type==='expert_correction'){
+    const field=document.getElementById('fbField').value.trim();
+    const newVal=document.getElementById('fbNewValue').value.trim();
+    const reason=document.getElementById('fbReason').value.trim();
+    if(!field||!newVal){toast('请填写字段名和正确内容','error');return}
+    body.field=field;body.new_value=newVal;body.reason=reason;
+  }
+  try{
+    const r=await api('/api/v1/living/feedback',{method:'POST',body:JSON.stringify(body)});
+    if(r.code!==0){toast(r.message||'提交失败','error');return}
+    const labelMap={adopt:'✅ 已记录：临床可用',dislike:'⚠️ 已记录：临床存疑，管理员将复核',expert_correction:'✏️ 已提交纠错，等待管理员审核'};
+    toast(labelMap[type],'success');
+    const note=document.getElementById('fbNote');
+    const pendingHint=fbKgId?'':'该知识点暂未关联图谱节点，管理员补录后会自动关联本次反馈。';
+    if(note)note.innerHTML='反馈已提交（编号 <b>'+esc(r.data&&r.data.feedback_id||'?')+'</b>）。'+pendingHint;
+  }catch(e){toast('提交失败: '+e.message,'error')}
+}
 
 function esc(s){if(!s)return'';const d=document.createElement('div');d.textContent=String(s);return d.innerHTML}
 
