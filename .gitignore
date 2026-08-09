@@ -56,3 +56,6 @@ frontend-admin-react/dist/
 # Deployment artifacts
 *.tar.gz
 *.zip
+
+# 前端 UI 验证截图（开发产物，不入库）
+qihuang_platform/frontend-admin/verify_shots/

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,9 +12,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Search, Boxes } from "lucide-react";
-import { C, tenants as seed, sceneMap, statusMap } from "@/lib/mock";
-import type { Tenant } from "@/lib/mock";
+import { Plus, Search, Boxes, Loader2 } from "lucide-react";
+import { C, sceneMap, statusMap } from "@/lib/mock";
+import { fetchTenants, createTenant } from "@/lib/api";
+import type { Tenant } from "@/lib/types";
 import TenantDetail from "./TenantDetail";
 
 const tabs = [
@@ -25,30 +26,39 @@ const tabs = [
 ];
 
 export default function Tenants() {
-  const [list, setList] = useState<Tenant[]>(seed);
+  const [list, setList] = useState<Tenant[]>([]);
+  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("ALL");
   const [kw, setKw] = useState("");
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<Tenant | null>(null);
   const [form, setForm] = useState({ name: "", scene: "HEALTH", plan: "标准版", contact: "", m3d: false });
 
+  const load = async () => {
+    setLoading(true);
+    const data = await fetchTenants();
+    setList(data);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
   const shown = list.filter(
     (t) => (tab === "ALL" || t.scene === tab) && (!kw || t.name.includes(kw) || t.id.includes(kw))
   );
 
-  const create = () => {
+  const create = async () => {
     if (!form.name.trim()) return;
-    setList([
-      {
-        id: `T-1024${String(list.length + 1).padStart(4, "0")}`,
-        name: form.name, scene: form.scene as Tenant["scene"], plan: form.plan,
-        orgs: 1, users: 0, usedCalls: 0, quotaCalls: form.plan === "体验版" ? 3000 : 50000,
-        status: form.plan === "体验版" ? "TRIAL" : "ACTIVE", expires: "2027-07-31", module3d: form.m3d,
-      },
-      ...list,
-    ]);
+    await createTenant({
+      name: form.name,
+      scene: form.scene,
+      plan: form.plan,
+      contact: form.contact,
+      module3d: form.m3d,
+    });
     setOpen(false);
     setForm({ name: "", scene: "HEALTH", plan: "标准版", contact: "", m3d: false });
+    await load();
   };
 
   if (detail) return <TenantDetail tenant={detail} onBack={() => setDetail(null)} />;
@@ -145,6 +155,12 @@ export default function Tenants() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {loading && (
+        <div className="flex items-center gap-2 text-[13px]" style={{ color: C.light }}>
+          <Loader2 className="w-4 h-4 animate-spin" /> 正在加载真实租户数据…
+        </div>
+      )}
 
       {/* 租户表 */}
       <Card className="border" style={{ borderColor: C.border }}>

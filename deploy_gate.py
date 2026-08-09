@@ -76,14 +76,21 @@ def api_post(path: str, token: str, payload: dict) -> int:
         return e.code
 
 
-def find_run(repo: str, head_sha: str, token: str):
-    try:
-        data = api_get(f"/repos/{repo}/actions/runs?per_page=20&head_sha={head_sha}", token)
-    except Exception as e:
-        print(f"⚠️ 查询 runs 失败: {e}")
-        return None
-    runs = data.get("workflow_runs", [])
-    return runs[0] if runs else None
+def find_run(repo: str, head_sha: str, token: str, retries: int = 8, wait: int = 10):
+    for i in range(retries):
+        try:
+            data = api_get(f"/repos/{repo}/actions/runs?per_page=20&head_sha={head_sha}", token)
+        except Exception as e:
+            print(f"⚠️ 查询 runs 失败: {e}")
+            time.sleep(wait)
+            continue
+        runs = data.get("workflow_runs", [])
+        if runs:
+            return runs[0]
+        if i < retries - 1:
+            print(f"  ⏳ run 尚未生成，等 {wait}s ({i+1}/{retries})")
+            time.sleep(wait)
+    return None
 
 
 def poll_run(repo: str, run_id: str, token: str, timeout: int):

@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { BookOpenCheck, ShieldAlert, Search, Check, X, Bell, User } from "lucide-react";
+import { BookOpenCheck, ShieldAlert, Search, Check, X, Bell } from "lucide-react";
 import { C } from "@/lib/types";
 
 /* ═══════════════════════════════════════════
@@ -43,7 +42,7 @@ export default function Content() {
   const [reviews, setReviews] = useState(REVIEWS);
   const [words] = useState(WORDS);
 
-  const handleAction = (id: string, action: "approve" | "reject") => {
+  const handleAction = (id: string, _action: "approve" | "reject") => {
     setReviews((prev) => prev.filter((r) => r.id !== id));
   };
 

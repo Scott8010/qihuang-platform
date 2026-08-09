@@ -120,11 +120,13 @@ export interface AuditLogItem {
 // Dashboard 响应
 export interface DashboardData {
   tenants: { total: number; active: number; new_this_month: number };
-  users: { total: number };
-  api: { total_calls: number; total_tokens: number; avg_latency_ms: number; today_calls: number; call_diff: number };
-  kg: { pending: number };
-  recent_ops: { time: string; user: string; action: string; target: string }[];
-  trend: { dates: string[]; values: number[] };
-  services: { name: string; key: string; status: string }[];
-  recent_calls: { endpoint: string; method: string; status_code: number; latency_ms: number; timestamp: string }[];
+  users?: { total: number };
+  api: { total_calls: number; total_tokens?: number; avg_latency_ms?: number; today_calls: number; call_diff?: number };
+  revenue?: { total_cents: number };
+  kg?: { pending: number };
+  recent_ops?: { time: string; user: string; action: string; target: string }[];
+  trend?: { dates: string[]; values: number[] };
+  services?: { name: string; key?: string; status: string; latency_ms?: number; uptime?: string }[];
+  recent_calls?: { endpoint?: string; method?: string; status_code?: number; latency_ms?: number; timestamp?: string; path?: string }[];
+  scene_distribution?: Record<string, number>;
 }

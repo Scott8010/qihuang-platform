@@ -49,42 +49,77 @@ export function logout() { _token = ""; localStorage.removeItem("qh_admin_token"
 // ═══ 仪表盘 ═══
 
 export async function fetchDashboard(): Promise<{
-  apiCalls: number; activeTenants: number; pendingReviews: number; apiUsage: number;
+  totalTenants: number; activeTenants: number; totalUsers: number;
+  apiCalls: number; todayCalls: number; apiUsage: number; revenueCents: number;
   callTrend: CallTrendItem[]; sceneDist: SceneDistItem[];
   alerts: AlertItem[]; reviews: TodoReviewItem[];
-  services: ServiceItem[];
+  services: ServiceItem[]; recentOps: { time: string; user: string; action: string; target: string }[];
 }> {
   try {
     const r = await get<{ code: number; data: DashboardData }>("/admin/v1/dashboard");
     if (r?.code !== 0 || !r.data) throw new Error("no data");
     const d = r.data;
+    const totalTenants = d.tenants?.total || 0;
+    const activeTenants = d.tenants?.active || 0;
+    const totalUsers = d.users?.total || 0;
+    const totalCalls = d.api?.total_calls || 0;
+    const todayCalls = d.api?.today_calls || 0;
+    const revenueCents = d.revenue?.total_cents || 0;
+
+    // 场景分布：按真实租户 scene 聚合；若后端未返回则按 active 租户数拆分
+    const sceneCounts: Record<string, number> = {};
+    if (d.scene_distribution && typeof d.scene_distribution === "object") {
+      Object.entries(d.scene_distribution).forEach(([k, v]) => { sceneCounts[k] = Number(v) || 0; });
+    }
+    const sceneDist: SceneDistItem[] = [
+      { name: "大健康", value: sceneCounts.HEALTH || sceneCounts.health || Math.max(0, Math.round(activeTenants * 0.5)), fill: "#2E5A4C" },
+      { name: "医疗", value: sceneCounts.MED || sceneCounts.med || Math.max(0, Math.round(activeTenants * 0.3)), fill: "#B03A2E" },
+      { name: "培训", value: sceneCounts.EDU || sceneCounts.edu || Math.max(0, Math.round(activeTenants * 0.2)), fill: "#C8A45D" },
+    ].filter((s) => s.value > 0);
+
+    // 告警：优先用 recent_calls， fallback 到 recent_ops
+    const alerts: AlertItem[] = [];
+    if (d.recent_calls && Array.isArray(d.recent_calls)) {
+      d.recent_calls.slice(0, 5).forEach((c: any) => {
+        const latency = c.latency_ms || c.latency || 0;
+        alerts.push({
+          level: latency > 1000 ? "high" : latency > 500 ? "mid" : "low",
+          text: `${c.endpoint || c.path || ""} - 时延 ${latency}ms`,
+          time: c.timestamp || "",
+        });
+      });
+    }
+    if (alerts.length === 0 && d.recent_ops) {
+      d.recent_ops.slice(0, 5).forEach((op: any) => {
+        alerts.push({ level: "low", text: `${op.user || "系统"} ${op.action} ${op.target || ""}`, time: op.time || "" });
+      });
+    }
+
     return {
-      apiCalls: d.api?.total_calls || 0,
-      activeTenants: d.tenants?.active || 0,
-      pendingReviews: d.kg?.pending || 0,
+      totalTenants, activeTenants, totalUsers,
+      apiCalls: totalCalls, todayCalls,
       apiUsage: d.api?.avg_latency_ms || 0,
+      revenueCents,
       callTrend: (d.trend?.dates || []).map((date: string, i: number) => ({
-        day: date, 大健康: Math.round((d.trend?.values[i] || 0) * 0.5),
+        day: date,
+        大健康: Math.round((d.trend?.values[i] || 0) * 0.5),
         医疗: Math.round((d.trend?.values[i] || 0) * 0.3),
         培训: Math.round((d.trend?.values[i] || 0) * 0.2),
       })),
-      sceneDist: [
-        { name: "大健康", value: d.tenants?.active || 0, fill: "#2E5A4C" },
-        { name: "医疗", value: Math.max(1, Math.round((d.tenants?.active || 0) * 0.4)), fill: "#B03A2E" },
-        { name: "培训", value: Math.max(1, Math.round((d.tenants?.active || 0) * 0.3)), fill: "#C8A45D" },
-      ],
-      alerts: (d.recent_calls || []).slice(0, 5).map((c: { endpoint: string; latency_ms: number; timestamp: string }) => ({
-        level: c.latency_ms > 1000 ? "high" : c.latency_ms > 500 ? "mid" : "low",
-        text: `${c.endpoint} - 时延 ${c.latency_ms}ms`, time: c.timestamp || "",
-      })),
+      sceneDist,
+      alerts,
       reviews: [],
-      services: (d.services || []).map((s: { name: string; status: string }) => ({
-        name: s.name, status: s.status, latency: "—", uptime: "—",
+      services: (d.services || []).map((s: any) => ({
+        name: s.name, status: s.status === "normal" ? "运行正常" : s.status === "warning" ? "DeepSeek 备用切换中" : s.status || "未知",
+        latency: s.latency_ms ? `${s.latency_ms}ms` : "—",
+        uptime: s.uptime || "—",
         ok: s.status === "normal",
       })),
+      recentOps: (d.recent_ops || []).slice(0, 8),
     };
-  } catch {
-    return { apiCalls: 0, activeTenants: 0, pendingReviews: 0, apiUsage: 0, callTrend: [], sceneDist: [], alerts: [], reviews: [], services: [] };
+  } catch (e) {
+    console.error("fetchDashboard error", e);
+    return { totalTenants: 0, activeTenants: 0, totalUsers: 0, apiCalls: 0, todayCalls: 0, apiUsage: 0, revenueCents: 0, callTrend: [], sceneDist: [], alerts: [], reviews: [], services: [], recentOps: [] };
   }
 }
 
@@ -94,20 +129,25 @@ export async function fetchTenants(): Promise<Tenant[]> {
   try {
     const r = await get<{ code: number; data: any[] }>("/admin/v1/tenants");
     if (r?.code !== 0 || !r.data) return [];
-    return (r.data || []).map((t: any) => ({
-      id: t.id || t.code || "",
-      name: t.name || "",
-      scene: t.scene || "HEALTH",
-      plan: t.plan || "标准版",
-      orgs: t.orgs || 1,
-      users: t.users || t.user_count || 0,
-      usedCalls: t.used_calls || t.api_usage || 0,
-      quotaCalls: t.quota_calls || t.quota || 50000,
-      status: t.status || "ACTIVE",
-      expires: t.expires || t.expire_date || "",
-      module3d: t.module_3d || t.module3d || false,
-    }));
-  } catch { return []; }
+    return (r.data || []).map((t: any) => {
+      const sceneUpper = (t.scene || "HEALTH").toUpperCase();
+      const planName = t.plan_name || t.plan || "体验版";
+      const statusUpper = (t.status || "active").toUpperCase();
+      return {
+        id: t.id || t.code || "",
+        name: t.display_name || t.name || "",
+        scene: sceneUpper === "MED" ? "MED" : sceneUpper === "EDU" ? "EDU" : "HEALTH",
+        plan: planName,
+        orgs: t.orgs || t.org_count || 1,
+        users: t.users || t.user_count || 0,
+        usedCalls: t.used_calls || t.api_usage || 0,
+        quotaCalls: t.quota_calls || t.quota || 3000,
+        status: ["TRIAL", "ACTIVE", "READONLY", "EXPIRED", "CLOSED"].includes(statusUpper) ? statusUpper : "ACTIVE",
+        expires: t.expires || t.expire_date || t.expired_at || "—",
+        module3d: t.module_3d || t.module3d || false,
+      };
+    });
+  } catch (e) { console.error("fetchTenants error", e); return []; }
 }
 
 export async function createTenant(body: {
