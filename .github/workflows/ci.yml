@@ -104,22 +104,14 @@ jobs:
 
       - name: 运行测试
         run: |
-          if ! pytest tests/ \
-            -v -s \
+          pytest tests/ \
+            -v \
             --tb=short \
             --cov=qihuang_platform \
             --cov-report=term-missing \
             --cov-report=html \
             --cov-report=xml \
-            --junitxml=junit.xml \
-            -p no:cacheprovider > /tmp/pytest_out.txt 2>&1; then
-            echo "## 测试失败摘要" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            tail -120 /tmp/pytest_out.txt >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            cat /tmp/pytest_out.txt
-            exit 1
-          fi
+            --junitxml=junit.xml
 
       - name: 上传覆盖率报告
         uses: actions/upload-artifact@v4
