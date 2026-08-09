@@ -5,6 +5,7 @@
         - dislike*0.005 - expert_reject*0.02
   new_c = clamp(old + delta, 0.05, 0.99)   # 保底 0.05，避免彻底抹除
 """
+import os
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 
@@ -19,14 +20,17 @@ _WEIGHTS = {
     "expert_adopt": 0.01,
     "dislike": -0.005,
     "expert_reject": -0.02,
+    # 活态化 B · 回路三（业务实证加权）业务使用信号基础正加权（小值，配合 business_weight 放大）
+    "business_use": 0.0003,
 }
 _BASELINE = 0.8          # 8601 节点无 confidence 属性时的兜底基线
 _MIN, _MAX = 0.05, 0.99  # 保底下限（P1 设计）
 
-# 活态化 B · 回路三（业务实证加权）增益系数 —— 架构预留。
-# 当前租户数据为仿真、KgFeedback.business_weight 恒为 0.0，故增益恒为 0（不改变 delta）。
-# 真实业务实证数据回灌（source='business' 且 business_weight>0）后，把 _BUSINESS_GAIN 调成 >0 即可激活。
-_BUSINESS_GAIN = 0.0
+# 活态化 B · 回路三（业务实证加权）增益系数 —— 可由环境变量 LIVING_BUSINESS_GAIN 激活。
+# 默认 0.0：仅 business_use 基础正加权生效，不按业务权重放大（仿真期安全）。
+# 真实业务实证数据回灌（source='business' 且 business_weight>0）后，设为 >0（如 0.5）即激活放大：
+#   delta *= (1 + LIVING_BUSINESS_GAIN * business_weight)
+_BUSINESS_GAIN = float(os.getenv("LIVING_BUSINESS_GAIN", "0.0"))
 
 
 def _business_multiplier(f: KgFeedback) -> float:

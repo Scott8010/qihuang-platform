@@ -255,3 +255,43 @@ def test_pending_feedback(client, admin_token):
         _cleanup(db)
     finally:
         db.close()
+
+
+# ───────────────────────────────────────────────────────────
+# 7) 回路三（业务实证加权）技术链路：business_use 信号加权验证
+# ───────────────────────────────────────────────────────────
+
+def test_business_signal_weights_delta(monkeypatch):
+    """回路三激活（LIVING_BUSINESS_GAIN>0）后，business_use 信号应放大 delta。"""
+    import importlib
+    import qihuang_platform.living.aggregator as agg
+
+    monkeypatch.setenv("LIVING_BUSINESS_GAIN", "0.5")
+    importlib.reload(agg)
+    try:
+        fake = FakeKgClient(conf_map={"kg-test-biz": 0.9})
+        monkeypatch.setattr(agg, "kg_client", fake)
+
+        db = SessionLocal()
+        try:
+            _cleanup(db)
+            _add_feedback(db, kg_id="kg-test-biz", feedback_type="business_use",
+                          source="business", business_weight=0.5)
+            summary = __import__("asyncio").run(agg.aggregate_feedback(db, client=fake))
+        finally:
+            db.close()
+
+        assert summary["items_written"] == 1, summary
+        items = {it["kg_id"]: it["confidence_abs"] for it in fake.batch_calls[0]}
+        # 基础 delta = 0.0003 * multiplier(1+0.5*0.5=1.25) = 0.000375
+        # new_c = 0.9 + 0.000375 = 0.900375
+        assert abs(items["kg-test-biz"] - 0.900375) < 1e-3, items
+    finally:
+        # 恢复默认增益（0.0），避免影响其他测试 / 仿真期生产
+        monkeypatch.delenv("LIVING_BUSINESS_GAIN", raising=False)
+        importlib.reload(agg)
+        db = SessionLocal()
+        try:
+            _cleanup(db)
+        finally:
+            db.close()

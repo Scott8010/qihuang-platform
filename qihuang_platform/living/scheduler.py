@@ -44,6 +44,14 @@ async def _run_once():
     except Exception as e:
         logger.exception(f"[living] 趋势采集异常: {e}")
 
+    # 回路三（业务实证加权）采集：默认开关关闭，不影响仿真期闭环
+    try:
+        from qihuang_platform.living.business_signal import collect_business_signals
+        bres = await collect_business_signals()
+        logger.info("[living] 回路三采集: %s", bres)
+    except Exception as e:
+        logger.exception(f"[living] 回路三采集异常: {e}")
+
 
 async def _loop(interval: int):
     while True:
