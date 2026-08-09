@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>岐黄智脑商业化平台(8602) · 服务器部署标准作业流程 SOP v1.0</title>
+<style>
+  :root{
+    --green:#1A8754; --green-d:#136b41; --blue:#2563EB; --blue-d:#1d4ed8;
+    --bg:#F5F7FA; --card:#FFFFFF; --ink:#1f2933; --muted:#5b6b7b;
+    --red:#dc2626; --amber:#d97706; --line:#e3e8ef; --ok:#16a34a;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.6;font-size:15px;}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 22px 60px;}
+  header.top{background:linear-gradient(120deg,var(--green),var(--blue));color:#fff;border-radius:16px;
+    padding:26px 30px;box-shadow:0 8px 24px rgba(26,135,84,.18);}
+  header.top h1{margin:0 0 6px;font-size:24px;letter-spacing:.5px;}
+  header.top .sub{opacity:.92;font-size:14px;}
+  .meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;}
+  .meta span{background:rgba(255,255,255,.16);padding:4px 12px;border-radius:20px;font-size:12.5px;}
+  section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin-top:20px;
+    box-shadow:0 2px 8px rgba(31,41,51,.04);}
+  section h2{margin:0 0 14px;font-size:18px;color:var(--green-d);display:flex;align-items:center;gap:8px;}
+  section h2::before{content:"";width:6px;height:20px;background:var(--green);border-radius:3px;display:inline-block;}
+  .principle{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+  .principle .p{background:#f0f7f3;border:1px solid #cfe7da;border-radius:12px;padding:14px 16px;}
+  .principle .p b{color:var(--green-d);display:block;margin-bottom:6px;font-size:15px;}
+  .principle .p span{font-size:13px;color:var(--muted);}
+  table.flow{width:100%;border-collapse:collapse;font-size:13.5px;}
+  table.flow th,table.flow td{border:1px solid var(--line);padding:9px 11px;vertical-align:top;text-align:left;}
+  table.flow th{background:#eef3f8;color:var(--blue-d);font-weight:600;}
+  table.flow tr:nth-child(even) td{background:#fafcfe;}
+  code{background:#eef1f5;padding:1px 6px;border-radius:5px;font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px;color:#9333ea;}
+  .pass{color:var(--ok);font-weight:600;}
+  .red{color:var(--red);font-weight:600;}
+  .amber{color:var(--amber);font-weight:600;}
+  .redlines{list-style:none;padding:0;margin:0;}
+  .redlines li{background:#fdf2f2;border-left:4px solid var(--red);padding:10px 14px;margin-bottom:10px;border-radius:8px;font-size:14px;}
+  .redlines li b{color:var(--red);}
+  .checklist{columns:2;column-gap:26px;}
+  .checklist label{display:block;break-inside:avoid;background:#f6f9fb;border:1px solid var(--line);
+    border-radius:9px;padding:9px 12px;margin-bottom:10px;font-size:13.5px;cursor:pointer;}
+  .checklist input{margin-right:9px;transform:scale(1.15);}
+  .rollback{font-size:13.5px;}
+  .rollback pre{background:#1f2933;color:#e5e7eb;padding:14px;border-radius:10px;overflow:auto;font-size:12.5px;}
+  footer{margin-top:26px;text-align:center;color:var(--muted);font-size:12.5px;}
+  .tag{display:inline-block;background:var(--green);color:#fff;font-size:11px;padding:2px 9px;border-radius:10px;margin-right:6px;vertical-align:middle;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>岐黄智脑商业化平台（8602）· 服务器部署标准作业流程</h1>
+  <div class="sub">Standard Operating Procedure · 任何改动发版都必须按此流程走，禁止"凭记忆部署"</div>
+  <div class="meta">
+    <span>文档版本：v1.0</span>
+    <span>生效日期：2026-08-10</span>
+    <span>适用范围：qihuang_platform 全部改动（CI/CD → 服务器 8602）</span>
+    <span>配套铁律：RULES.md #18 [岐黄专属]</span>
+  </div>
+</header>
+
+<!-- 核心原则 -->
+<section>
+  <h2>一、核心原则（三条不能破）</h2>
+  <div class="principle">
+    <div class="p"><b>① push ≠ 成功</b><span>GitHub Actions 的 <code>lint</code> + <code>test(3.13)</code> + <code>test(3.12)</code> + <code>deploy</code> 四个 job 全 <span class="pass">success</span>，且服务器实测通过，才算成功。</span></div>
+    <div class="p"><b>② 本地验证必须 fresh</b><span>清 pytest 缓存、用<span class="amber">全新数据库</span>，不能用陈旧 test DB 推断"测试过了"。</span></div>
+    <div class="p"><b>③ 接口 JSON ≠ 页面</b><span>部署后必须实测页面 HTTP 200，不能把 <code>/platform/health</code> 的 JSON 当成"页面已上线"。</span></div>
+  </div>
+</section>
+
+<!-- 阶段流程 -->
+<section>
+  <h2>二、六阶段标准流程（必须顺序走完）</h2>
+  <table class="flow">
+    <thead>
+      <tr><th style="width:62px">阶段</th><th style="width:150px">动作</th><th>命令 / 操作</th><th style="width:230px">通过标准</th><th style="width:200px">红线 / 注意</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>0</b><br>提交前<br>本地验证</td>
+        <td>跑 lint + 全量 test</td>
+        <td>
+          <code>pip install ruff==0.9.10</code><br>
+          <code>ruff check qihuang_platform/ tests/ --select=E,F,W,I --ignore=E501,E712,...</code><br>
+          <code>QH_DATABASE_URL="sqlite:///./test_ci_fresh.db" QH_REDIS_URL="" pytest tests/ --cache-clear</code>
+        </td>
+        <td><span class="pass">0 failed</span></td>
+        <td>禁止用 <code>.pytest_cache</code>；禁止用<span class="amber">陈旧 test DB</span>（旧 testuser_ci 等残留会导致 400 误判）；用全新 DB 文件模拟 CI 的 fresh-DB 条件。</td>
+      </tr>
+      <tr>
+        <td><b>1</b><br>代码整洁<br>与冲突检查</td>
+        <td>查根级重复模块、调试代码、前端纳入</td>
+        <td>
+          <code>find . -maxdepth 1 -type d -name rbac -o -maxdepth 1 -type d -name control</code> 应为空<br>
+          <code>grep -rn "print(" tests/</code> 应为空<br>
+          <code>git status</code> 无 untracked 的前端文件
+        </td>
+        <td>根目录无与包内同名的模块目录；无调试代码；所有要部署的前端已 <code>tracked</code></td>
+        <td class="red">禁止仓库根目录存在与 <code>qihuang_platform/</code> 内同名的模块目录（pytest importmode=prepend 会加载错模块 → test 红 → CD 不跑）。</td>
+      </tr>
+      <tr>
+        <td><b>2</b><br>提交 + push</td>
+        <td>commit + push main</td>
+        <td>
+          <code>git add -A</code><br>
+          <code>git commit -m "fix/feat/refactor(scope): 简述"</code><br>
+          <code>git push origin main</code>
+        </td>
+        <td>push 成功</td>
+        <td>push 即触发 CI，<span class="amber">push 完不声称成功</span>；commit message 写清影响范围。</td>
+      </tr>
+      <tr>
+        <td><b>3</b><br>轮询 CI<br>四 job 全绿</td>
+        <td>轮询 GitHub Actions run 状态</td>
+        <td>
+          <code>gh run watch</code><br>
+          或 GitHub API：<code>repos/Scott8010/qihuang-platform/actions/runs?per_page=3</code>
+        </td>
+        <td><span class="pass">lint ✅ / test(3.13) ✅ / test(3.12) ✅ / deploy ✅</span> 全 success</td>
+        <td class="red">任一 job failure → 部署未生效，禁止声称成功；必须本地修复重推。</td>
+      </tr>
+      <tr>
+        <td><b>4</b><br>部署后<br>服务器实测</td>
+        <td>health + 页面 + 关键端点</td>
+        <td>
+          <code>curl http://111.231.63.73:8602/platform/health</code> → <code>status: ok</code><br>
+          页面：<code>/admin/</code>、<code>/admin-static/admin.html</code>、<code>/admin-static/edu.html</code>、<code>/admin-static/medical.html</code> 等<br>
+          关键端点：<code>GET /admin/v1/roles/role_admin</code>（无 token → <span class="pass">401</span> 非 404，证明路由已注册）
+        </td>
+        <td>health ok；所有页面 200；关键端点返回真实响应（非 404）</td>
+        <td>部署后文件有<span class="amber">1-2 分钟同步窗口</span>，探测 404 先等再下结论，别立刻判失败。</td>
+      </tr>
+      <tr>
+        <td><b>5</b><br>交付确认</td>
+        <td>汇报时附实测证据</td>
+        <td>向老黄汇报，附：① CI 四 job 全绿截图/状态 ② 服务器 health ok ③ 页面 200</td>
+        <td>老黄能看到页面 + 数据</td>
+        <td class="red">禁止只说"成功了"不附证据；禁止把 <code>/platform/health</code> 的 JSON 当页面。</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 红线 -->
+<section>
+  <h2>三、红线（禁止项 · 违反即视为部署事故）</h2>
+  <ul class="redlines">
+    <li><b>红线1：</b>禁止把接口健康检查 JSON（如 <code>/platform/health</code> 返回的 <code>{"status":"ok"}</code>）当成"页面已部署"。页面入口是 <code>/admin/</code>、<code>/admin-static/*.html</code>。</li>
+    <li><b>红线2：</b>禁止 push 后未确认 CI 实际状态（四 job 全绿）就声称"部署成功"。这是 2026-08-09 误报老黄的根因。</li>
+    <li><b>红线3：</b>禁止仓库根目录存在与包内同名的模块目录（<code>./control</code>、<code>./rbac</code> 等）。pytest 加载错模块 → test 红 → CD 门禁挡住 → 部署不跑。</li>
+    <li><b>红线4：</b>禁止提交未 <code>git add</code> 的前端文件。untracked 文件 CD（rsync git checkout）不会同步，服务器上页面 404。</li>
+    <li><b>红线5：</b>禁止用陈旧 test DB 推断测试通过。旧数据残留会制造假失败（如重复用户返回 400 误判）。每次用全新 DB 文件。</li>
+  </ul>
+</section>
+
+<!-- 自检清单 -->
+<section>
+  <h2>四、部署前自检清单（勾完才能 push）</h2>
+  <div class="checklist">
+    <label><input type="checkbox"> 本地 lint 通过（ruff --select=E,F,W,I）</label>
+    <label><input type="checkbox"> 本地全量 test 0 failed（全新 DB 文件）</label>
+    <label><input type="checkbox"> 根目录无 <code>./rbac</code> <code>./control</code> 等重复模块目录</label>
+    <label><input type="checkbox"> 无调试 print / 临时文件残留</label>
+    <label><input type="checkbox"> 前端文件（HTML/JS）已 <code>git add</code>（tracked）</label>
+    <label><input type="checkbox"> 已 <code>git commit</code> + <code>git push origin main</code></label>
+    <label><input type="checkbox"> GitHub Actions 四 job 全 success（轮询确认）</label>
+    <label><input type="checkbox"> 服务器 <code>/platform/health</code> = ok</label>
+    <label><input type="checkbox"> 所有前端页面 HTTP 200</label>
+    <label><input type="checkbox"> 关键 API 端点返回真实数据（非 404）</label>
+    <label><input type="checkbox"> 已向老黄附"CI 绿 + health ok + 页面 200"三项证据汇报</label>
+  </div>
+</section>
+
+<!-- 故障回滚 -->
+<section>
+  <h2>五、故障与回滚</h2>
+  <div class="rollback">
+  <p><b>情况 A：CI 红（test/lint failure）</b><br>
+  → 本地修复 → 重新 <code>git push</code>，CI 自动重跑。不要绕过门禁强制部署。</p>
+  <p><b>情况 B：部署后页面/接口异常</b><br>
+  → 服务器紧急回滚到上次好版本：</p>
+  <pre># SSH 进服务器
+ssh root@111.231.63.73
+cd /root/qihuang_platform
+git log --oneline -5          # 找到上次好的 commit
+git checkout &lt;上次好commit&gt;  # 回滚代码
+systemctl restart qihuang-platform   # 或对应重启 8602 的指令
+curl http://localhost:8602/platform/health   # 确认 ok</pre>
+  <p><b>情况 C：404 疑似部署未完成</b><br>
+  → 先等 1-2 分钟同步窗口再探测；仍 404 才判定文件未同步，检查 git 是否 tracked + CD 是否跑过。</p>
+  </div>
+</section>
+
+<footer>
+  <span class="tag">岐黄智脑</span> 本 SOP 对应 RULES.md 铁律#18（[岐黄专属] 商业化平台 8602 CI/CD 部署门禁）。
+  任何人执行 8602 部署都必须逐阶段照走，禁止跳步。最后更新：2026-08-10。
+</footer>
+
+</div>
+</body>
+</html>
