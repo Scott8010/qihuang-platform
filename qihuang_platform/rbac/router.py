@@ -151,7 +151,8 @@ async def create_user(
             "display_name": u.display_name,
         })
     except ValueError as e:
-        raise HTTPException(400, detail=error("DUPLICATE", str(e)))
+        # 当前 ValueError 仅用于"用户已存在"，返回 409 Conflict
+        raise HTTPException(409, detail=error("DUPLICATE", str(e)))
 
 
 @rbac_router.get("/users")
@@ -297,6 +298,35 @@ async def list_roles(
             } for p in perms],
         })
     return success(result)
+
+
+@rbac_router.get("/roles/{role_id}")
+async def get_role(
+    role_id: str,
+    user: dict = Depends(get_current_admin),
+    rbac: RBACService = Depends(get_rbac),
+):
+    """获取单个角色详情（支持 role_id 或 role_name）"""
+    tenant_id = user.get("tenant_id", "tenant_default")
+    role = rbac.get_role(role_id)
+    if not role:
+        role = rbac.get_role_by_name(tenant_id, role_id)
+    if not role:
+        raise HTTPException(404, detail=error("NOT_FOUND", "角色不存在"))
+    perms = rbac.get_role_permissions(role.id)
+    return success({
+        "id": role.id,
+        "name": role.name,
+        "display_name": role.display_name,
+        "description": role.description,
+        "is_system": role.is_system,
+        "permissions": [{
+            "code": p.code,
+            "name": p.name,
+            "perm_type": p.perm_type,
+            "scene": p.scene,
+        } for p in perms],
+    })
 
 
 @rbac_router.post("/roles/assign")
