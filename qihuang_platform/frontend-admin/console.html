@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>运营控制台 · 岐黄智脑</title>
+<link rel="icon" href="data:," />
+<link rel="stylesheet" href="qihuang-design.css?v=2" />
+<style>
+/* ===== console 专属组件（建立在 qihuang-design 设计系统之上） ===== */
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(216px,1fr));gap:16px;margin-bottom:16px}
+.metric{background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:0 1px 2px rgba(34,49,43,.04);transition:box-shadow .2s,transform .2s}
+.metric:hover{box-shadow:0 8px 24px rgba(34,49,43,.08);transform:translateY(-2px)}
+.m-top{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.m-ico{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+.m-ico svg{width:20px;height:20px;min-width:0;min-height:0}
+.m-label{font-size:12px;color:var(--light)}
+.m-val{font-size:26px;font-weight:700;color:var(--ink);line-height:1}
+.m-delta{font-size:11.5px;margin-top:8px;display:flex;align-items:center;gap:4px}
+.m-delta svg{width:14px;height:14px}
+.m-delta.up{color:#047857}.m-delta.down{color:#B03A2E}.m-delta.flat{color:var(--light)}
+.spark{margin-top:8px}
+.grid2{display:grid;grid-template-columns:1.7fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.pills{display:flex;gap:8px;flex-wrap:wrap}
+.toolbar .spacer{margin-left:auto}
+.btn-primary svg,.btn-outline svg,.btn-ghost svg{width:1em;height:1em;min-width:0;min-height:0}
+.kv{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px dashed var(--border);font-size:12.5px}
+.kv:last-child{border-bottom:none}
+.kv .k{color:var(--light)}
+.kv .v{color:var(--ink);font-weight:600}
+.bar{height:7px;border-radius:999px;background:var(--bg);overflow:hidden;flex:1}
+.bar>i{display:block;height:100%;border-radius:999px;background:var(--primary)}
+.bar.warn>i{background:var(--accent)}.bar.crit>i{background:#B03A2E}
+.usage{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--mid);min-width:140px}
+.alert-row{border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:11px;padding:12px 14px;margin-bottom:10px;background:#fff}
+.alert-row.crit{border-left-color:#B03A2E}
+.alert-row .a-title{font-size:13px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:7px}
+.alert-row .a-msg{font-size:12px;color:var(--mid);margin-top:5px;line-height:1.6}
+.alert-row .a-sug{font-size:11.5px;color:var(--gold);margin-top:5px}
+.svc-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border)}
+.svc-row:last-child{border-bottom:none}
+.svc-name{font-size:13px;font-weight:600;color:var(--ink);flex:1}
+.svc-meta{font-size:11.5px;color:var(--light);font-family:ui-monospace,monospace}
+.llm-prov{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:12.5px}
+.llm-prov:last-child{border-bottom:none}
+.llm-prov .lp-name{flex:1;color:var(--ink);font-weight:600}
+.llm-prov .lp-role{font-size:11px;color:var(--light)}
+.op-row{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border);border-radius:12px;margin-bottom:9px}
+.op-row .o-time{font-family:ui-monospace,monospace;font-size:11px;color:var(--light);width:46px}
+.op-row .o-user{font-size:12.5px;color:var(--ink);font-weight:600;width:96px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.op-row .o-act{font-size:12px;color:var(--mid);flex:1}
+.plan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.plan-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;transition:box-shadow .2s,transform .2s}
+.plan-card:hover{box-shadow:0 8px 24px rgba(34,49,43,.08);transform:translateY(-2px)}
+.plan-card .p-name{font-size:14px;font-weight:700;color:var(--primary)}
+.plan-card .p-scene{font-size:11px;color:var(--light);margin-top:2px}
+.plan-card .p-price{font-size:22px;font-weight:800;color:var(--gold);margin:12px 0 4px}
+.plan-card .p-price small{font-size:11px;font-weight:500;color:var(--light)}
+.plan-card .p-line{font-size:11.5px;color:var(--mid);display:flex;justify-content:space-between;padding:3px 0}
+.empty .e-illu{width:64px;height:64px;color:var(--border);margin:0 auto 12px}
+.empty .e-tip{font-size:12px;color:var(--light);margin-top:4px;max-width:340px;margin-left:auto;margin-right:auto;line-height:1.6}
+.drawer-actions{display:flex;gap:10px;margin-top:4px}
+.drawer-actions .btn{flex:1}
+.seg{display:flex;background:var(--bg);border-radius:10px;padding:3px;gap:3px}
+.seg button{border:none;background:transparent;padding:7px 14px;border-radius:8px;font-size:12.5px;color:var(--mid);cursor:pointer;transition:all .15s}
+.seg button.on{background:#fff;color:var(--primary);font-weight:600;box-shadow:0 1px 2px rgba(34,49,43,.08)}
+.field{margin-bottom:13px}
+.field label{display:block;font-size:12px;color:var(--mid);margin-bottom:6px;font-weight:500}
+.field input,.field select{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:10px;font-size:13px;outline:none;transition:border-color .15s;background:#fff;color:var(--ink)}
+.field input:focus,.field select:focus{border-color:var(--primary)}
+.perm-item{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink);padding:5px 8px;border-radius:8px;cursor:pointer;transition:background .12s}
+.perm-item:hover{background:var(--bg)}
+.perm-item input[type=checkbox]{width:15px;height:15px;accent-color:var(--primary);cursor:pointer;flex-shrink:0}
+.perm-item .p-code{color:var(--light);font-size:11px;font-family:ui-monospace,monospace;margin-left:auto}
+.notice.info{background:var(--soft);border-color:var(--border);color:var(--primary)}
+.notice.info .notice-ico{background:var(--primary)}
+.notice.warn{background:#FFFBEB;border-color:#FDE68A;color:var(--gold)}
+.notice.warn .notice-ico{background:var(--accent)}
+.chart-card .c-legend{display:flex;gap:16px;margin-top:8px;font-size:11.5px;color:var(--mid)}
+.chart-card .c-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
+.content > .view{animation:fadeUp .28s ease both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.pulse{animation:pulse 1.8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+.dot-ok{color:#10b981}.dot-warn{color:var(--accent)}.dot-crit{color:#B03A2E}
+.action-cell{display:inline-flex;align-items:center;gap:6px;position:relative}
+.action-cell .btn-outline{padding:5px 9px;font-size:12px}
+.action-more{position:relative}
+.action-more .btn-outline{padding:5px 8px;font-size:12px;display:inline-flex;align-items:center;gap:3px}
+.action-more .btn-outline::after{content:'▼';font-size:9px;color:var(--light)}
+.actions-menu{position:absolute;right:0;top:calc(100% + 5px);min-width:118px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(34,49,43,.12);padding:6px;z-index:100;display:none}
+.actions-menu.open{display:block}
+.actions-menu button{display:flex;align-items:center;gap:7px;width:100%;padding:7px 9px;border:none;background:transparent;border-radius:7px;font-size:12px;color:var(--ink);cursor:pointer;text-align:left;transition:background .12s}
+.actions-menu button:hover{background:var(--bg)}
+.actions-menu button.danger{color:var(--coral)}
+</style>
+</head>
+<body>
+
+<!-- 图标库 -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol width="24" height="24" id="ic-sprout" viewBox="0 0 24 24"><path d="M7 20h10M10 20c5.5-2.5 5.5-9.5 2-13M14 4c-1.5 1.5-2 4-1 6M12 4c0 4 1 6 3 7M7 20c-1-2 0-4 2-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol width="24" height="24" id="ic-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" fill="none" stroke="currentColor" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol width="24" height="24" id="ic-bell" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.73 21a2 2 0 0 1-3.46 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol width="24" height="24" id="ic-chevron-down" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol width="24" height="24" id="ic-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="16 17 21 12 16 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="21" y1="12" x2="9" y2="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol width="24" height="24" id="ic-dashboard" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect width="7" height="5" x="14" y="3" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect width="7" height="9" x="14" y="12" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect width="7" height="5" x="3" y="16" rx="1" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol width="24" height="24" id="ic-building" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol width="24" height="24" id="ic-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="m9 12 2 2 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol width="24" height="24" id="ic-key" viewBox="0 0 24 24"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></symbol>
+  <symbol width="24" height="24" id="ic-bar" viewBox="0 0 24 24"><path d="M3 3v18h18M18 17V9M13 17V5M8 17v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol width="24" height="24" id="ic-package" viewBox="0 0 24 24"><path d="M16.5 9.4 7.55 4.24M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="3.27 6.96 12 12.01 20.73 6.96" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="22.08" x2="12" y2="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol width="24" height="24" id="ic-filesearch" viewBox="0 0 24 24"><path d="M14 2v6h6M4 7V4a2 2 0 0 1 2-2h8l6 6v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="11.5" cy="14.5" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/><line x1="13.27" y1="16.27" x2="15.5" y2="18.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol width="24" height="24" id="ic-activity" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol width="24" height="24" id="ic-chevron-right" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol width="24" height="24" id="ic-check2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="m9 12 2 2 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol width="24" height="24" id="ic-x" viewBox="0 0 24 24"><path d="M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol width="24" height="24" id="ic-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol width="24" height="24" id="ic-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol width="24" height="24" id="ic-alert" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="17" x2="12.01" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol width="24" height="24" id="ic-trending" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="16 7 22 7 22 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol width="24" height="24" id="ic-cpu" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="9" y="9" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol width="24" height="24" id="ic-dollar" viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol width="24" height="24" id="ic-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol width="24" height="24" id="ic-rotate" viewBox="0 0 24 24"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol width="24" height="24" id="ic-server" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="2" y="14" width="20" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><line x1="6" y1="6" x2="6.01" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="6" y1="18" x2="6.01" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol width="24" height="24" id="ic-mail" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="m22 7-10 6L2 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol width="24" height="24" id="ic-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol width="24" height="24" id="ic-zap" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol width="24" height="24" id="ic-pie" viewBox="0 0 24 24"><path d="M21.21 15.89A10 10 0 1 1 8 2.83" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 12A10 10 0 0 0 12 2v10z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol width="24" height="24" id="ic-edit" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</defs></svg>
+
+<!-- 登录遮罩 -->
+<div class="login-mask" id="loginMask">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="login-logo"><svg width="22" height="22"><use href="#ic-sprout"/></svg></div>
+      <div><h2>岐黄智脑</h2><p>运营控制台 · V1.1</p></div>
+    </div>
+    <h3>管理员登录</h3>
+    <div class="sub">运营端独立登录，不与会员端 / 控制端互通</div>
+    <button class="login-btn" id="loginBtn" onclick="doLogin()">
+      <svg width="16" height="16"><use href="#ic-shield"/></svg> 以管理员身份进入
+    </button>
+    <div class="login-err" id="loginErr"></div>
+    <div class="login-note">登录接口 POST /dev/admin-login（独立管理员令牌）</div>
+  </div>
+</div>
+
+<!-- 框架 -->
+<div class="app" id="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo"><svg width="20" height="20"><use href="#ic-sprout"/></svg></div>
+      <div><div class="brand-name">岐黄智脑</div><div class="brand-sub">运营控制台 · V1.1</div></div>
+    </div>
+    <nav class="nav">
+      <div class="nav-group">运营管理</div>
+      <button class="nav-item" data-page="dashboard"><svg class="ni"><use href="#ic-dashboard"/></svg>工作台</button>
+      <button class="nav-item" data-page="capabilities"><svg class="ni"><use href="#ic-package"/></svg>能力目录</button>
+      <button class="nav-item" data-page="content"><svg class="ni"><use href="#ic-filesearch"/></svg>知识审核<span class="nav-badge" id="navBadge" style="display:none">0</span></button>
+      <button class="nav-item" data-page="tenants"><svg class="ni"><use href="#ic-building"/></svg>租户管理</button>
+      <button class="nav-item" data-page="users"><svg class="ni"><use href="#ic-users"/></svg>用户管理</button>
+      <button class="nav-item" data-page="roles"><svg class="ni"><use href="#ic-shield"/></svg>角色权限</button>
+      <div class="nav-group">平台运营</div>
+      <button class="nav-item" data-page="billing"><svg class="ni"><use href="#ic-bar"/></svg>计量计费</button>
+      <button class="nav-item" data-page="monitor"><svg class="ni"><use href="#ic-activity"/></svg>监控运维</button>
+      <button class="nav-item" data-page="keys"><svg class="ni"><use href="#ic-key"/></svg>API 密钥</button>
+      <button class="nav-item" data-page="words"><svg class="ni"><use href="#ic-alert"/></svg>内容管控</button>
+      <button class="nav-item" data-page="cost"><svg class="ni"><use href="#ic-pie"/></svg>成本中心</button>
+      <button class="nav-item" data-page="audit"><svg class="ni"><use href="#ic-filesearch"/></svg>审计日志</button>
+    </nav>
+    <div class="sidebar-foot">
+      <div><span class="status-dot"></span>平台运行正常</div>
+      <div>稳定性 L2 · 可用性 99.95%</div>
+      <button class="logout-btn" onclick="doLogout()"><svg width="14" height="14"><use href="#ic-logout"/></svg> 退出登录</button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <h1 id="pageTitle">工作台</h1>
+      <div class="search">
+        <svg class="si"><use href="#ic-search"/></svg>
+        <input id="searchInput" placeholder="搜索租户 / 密钥 / 账单" oninput="onSearch()" />
+      </div>
+      <button class="icon-btn" onclick="toast('暂无新通知')"><svg width="20" height="20"><use href="#ic-bell"/></svg><span class="dot"></span></button>
+      <button class="user"><div class="avatar">王</div><span>王运营</span><svg width="16" height="16"><use href="#ic-chevron-down"/></svg></button>
+    </header>
+    <main class="content" id="content"><!-- 动态渲染 --></main>
+  </div>
+</div>
+
+<!-- 抽屉 -->
+<div class="drawer-mask" id="drawerMask" onclick="if(event.target===this)closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-head">
+    <h3 id="drawerTitle">详情</h3>
+    <button class="drawer-close" onclick="closeDrawer()"><svg width="18" height="18"><use href="#ic-x"/></svg></button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</div>
+
+<script>
+const API='http://127.0.0.1:8659';
+let TOKEN=null, currentView='dashboard';
+const $=s=>document.querySelector(s);
+const ic=(id,cls='')=>`<svg class="${cls}" width="16" height="16" viewBox="0 0 24 24"><use href="#${id}"/></svg>`;
+const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const money=c=>`¥${(Math.round((c||0)/100)).toLocaleString()}`;
+const statusCls={'active':'b-emerald','running':'b-emerald','normal':'b-emerald','suspended':'b-amber','disabled':'b-gray','inactive':'b-gray','readonly':'b-gray','warning':'b-amber','warn':'b-amber','closed':'b-gray','paused':'b-gray','pending':'b-amber','issued':'b-blue','paid':'b-emerald','overdue':'b-gray','rejected':'b-gray','approved':'b-emerald','block':'b-gray','OK':'b-emerald','TBD':'b-gray','RUNNING':'b-emerald','PLANNED':'b-blue','内测':'b-gray','已上架':'b-emerald','灰度中':'b-amber','规划中':'b-gray'};
+const sBadge=s=>`<span class="badge ${statusCls[s]||'b-gray'}">${esc(s||'未知')}</span>`;
+
+async function api(path,opts={}){
+  const headers={'Content-Type':'application/json',...((opts.headers)||{})};
+  if(TOKEN) headers['Authorization']='Bearer '+TOKEN;
+  try{
+    const r=await fetch(API+path,{...opts,headers});
+    let j=null; try{j=await r.json();}catch(e){}
+    return {ok:r.ok,status:r.status,data:j};
+  }catch(e){ return {ok:false,status:0,data:null,error:e.message}; }
+}
+// 统一解析：success({...}) / paginated({items,total}) / data.items
+function rowsOf(d){ if(!d)return []; const x=d.data||d; if(Array.isArray(x))return x; if(x&&Array.isArray(x.items))return x.items; if(x&&Array.isArray(x.services))return x.services; if(x&&Array.isArray(x.providers))return x.providers; if(x&&Array.isArray(x.metrics))return x.metrics; return []; }
+function numOf(d,keys){ const x=d&&(d.data||d); for(const k of keys){ if(x&&x[k]!=null)return x[k]; } return null; }
+
+async function doLogin(){
+  const btn=$('#loginBtn'); btn.disabled=true; $('#loginErr').style.display='none';
+  try{
+    const res=await api('/dev/admin-login',{method:'POST',body:JSON.stringify({username:'admin'})});
+    if(res.ok&&res.data){
+      TOKEN=res.data.access_token||res.data.token||(res.data.data&&res.data.data.access_token)||'';
+      if(!TOKEN) throw new Error('未返回令牌');
+      $('#loginMask').style.display='none';
+      $('#app').classList.add('show');
+      go('dashboard');
+      loadBadge();
+    } else throw new Error((res.data&&(res.data.message||res.data.msg))||('HTTP '+(res.status||'网络错误')));
+  }catch(e){ $('#loginErr').textContent='登录失败：'+(e.message||e); $('#loginErr').style.display='block'; }
+  finally{ btn.disabled=false; }
+}
+function doLogout(){ TOKEN=null; $('#app').classList.remove('show'); $('#loginMask').style.display='flex'; }
+
+/* ============ 导航 ============ */
+const TITLES={dashboard:'工作台',capabilities:'能力目录',content:'知识审核',tenants:'租户管理',users:'用户管理',roles:'角色权限',keys:'API 密钥',billing:'计量计费',monitor:'监控运维',words:'内容管控',cost:'成本中心',audit:'审计日志'};
+const RENDER={dashboard:renderDashboard,capabilities:renderCapabilities,content:renderReview,tenants:renderTenants,users:renderUsers,roles:renderRoles,keys:renderKeys,billing:renderBilling,monitor:renderMonitor,words:renderWords,cost:renderCost,audit:renderAudit};
+document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>go(b.dataset.page));
+function go(p){
+  currentView=p;
+  document.querySelectorAll('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.page===p));
+  $('#pageTitle').textContent=TITLES[p]||'';
+  $('#searchInput').value='';
+  ($('#searchInput')).dispatchEvent(new Event('x'));
+  RENDER[p]();
+}
+
+/* ============ 通用组件 ============ */
+function emptyState(icon,title,tip){ return `<div class="empty"><svg class="e-illu" viewBox="0 0 24 24"><use href="#${icon}"/></svg><div>${title}</div>${tip?`<div class="e-tip">${tip}</div>`:''}</div>`; }
+function errState(msg){ return `<div class="empty" style="color:#B03A2E"><svg class="e-illu" viewBox="0 0 24 24"><use href="#ic-alert"/></svg>加载失败：${esc(msg)}<div class="e-tip">请确认以 localhost 方式打开（双击「打开运营台.bat」），且公网 8602 可达。</div></div>`; }
+function sparkline(vals,w=260,h=56){
+  if(!vals||!vals.length) return '';
+  const max=Math.max(...vals,1), min=Math.min(...vals,0), n=vals.length;
+  const X=i=>n===1?0:(i/(n-1)*w);
+  const Y=v=>h-4-((v-min)/((max-min)||1))*(h-10);
+  const line=vals.map((v,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)).join(' ');
+  const area=line+` L ${w} ${h} L 0 ${h} Z`;
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none"><path d="${area}" fill="var(--primary)" opacity=".10"/><path d="${line}" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+function lineChart(trend,keys,colors,w=560,h=200){
+  if(!trend||!trend.length) return '';
+  const n=trend.length, max=Math.max(100,...keys.flatMap(k=>trend.map(t=>t[k])));
+  const X=i=>n===1?0:(i/(n-1)*w);
+  const Y=v=>h-18-((v)/(max||1))*(h-40);
+  let paths='';
+  keys.forEach((k,ki)=>{
+    const pts=trend.map((t,i)=>[X(i),Y(t[k]||0)]);
+    const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+    paths+=`<path d="${line}" fill="none" stroke="${colors[ki]}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+    paths+=`<circle cx="${pts[pts.length-1][0].toFixed(1)}" cy="${pts[pts.length-1][1].toFixed(1)}" r="3" fill="${colors[ki]}"/>`;
+  });
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none">${paths}
+    <line x1="0" y1="${h-18}" x2="${w}" y2="${h-18}" stroke="var(--border)"/></svg>`;
+}
+function openDrawer(title,html){ $('#drawerTitle').textContent=title; $('#drawerBody').innerHTML=html; $('#drawerMask').classList.add('open'); $('#drawer').classList.add('open'); }
+function closeDrawer(){ $('#drawerMask').classList.remove('open'); $('#drawer').classList.remove('open'); }
+let toastTimer=null;
+function toast(msg,ok=true){ const t=document.createElement('div'); t.className='save-toast'; t.style.cssText='position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:9999;box-shadow:0 8px 24px rgba(34,49,43,.16)'; t.innerHTML=`${ic(ok?'ic-check2':'ic-alert')} ${esc(msg)}`; document.body.appendChild(t); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.remove(),2600); }
+
+/* ============ 工作台 ============ */
+async function renderDashboard(){
+  $('#content').innerHTML=`<div class="view"><div class="card card-pad" id="dashLoad"><div class="empty">${ic('ic-dashboard','e-ico')}正在拉取工作台数据 …</div></div></div>`;
+  const [res,tenRes,audRes]=await Promise.all([
+    api('/admin/v1/dashboard'),
+    api('/admin/v1/tenants-extended?page=1&page_size=50'),
+    api('/admin/v1/audit-logs?page=1&page_size=6')
+  ]);
+  if(!res.ok&&!res.data){ $('#dashLoad').outerHTML=errState(res.error||('HTTP '+res.status)); return; }
+  const d=(res.data&&res.data.data)||{};
+  const tenants=d.tenants||{}, api_=d.api||{}, rev=(d.revenue&&d.revenue.total_cents)||0, kg=(d.kg&&d.kg.pending)||0;
+  const trend=(d.trend&&d.trend.values)||[], tdates=(d.trend&&d.trend.dates)||[];
+  const diff=api_.call_diff||0;
+  const metrics=`
+    <div class="metrics">
+      ${metricCard('ic-building','租户总数',(tenants.total||0).toLocaleString(),'flat',(tenants.active||0)+' 在订','本月新增 '+(tenants.new_this_month||0))}
+      ${metricCard('ic-zap','今日调用',(api_.today_calls||0).toLocaleString(),diff>0?'up':diff<0?'down':'flat',diff>0?`▲ ${diff}`:diff<0?`▼ ${Math.abs(diff)}`:'持平','较昨日')}
+      ${metricCard('ic-filesearch','待审知识',(kg||0).toLocaleString(),kg>0?'down':'flat',kg>0?`${kg} 条待审`:'队列已清空','内容管控')}
+      ${metricCard('ic-dollar','累计营收',money(rev),'up','已出账/已付','元')}
+    </div>`;
+  // 场景调用分布（按真实租户聚合，弥补官方 mock 的「场景调用分布」）
+  const tlist=rowsOf(tenRes.data);
+  const sceneMap={};
+  tlist.forEach(t=>{ const s=t.scene||'其他'; sceneMap[s]=(sceneMap[s]||0)+(t.usedCalls||0); });
+  const sceneKeys=Object.keys(sceneMap);
+  const sceneTotal=Object.values(sceneMap).reduce((a,b)=>a+b,0)||1;
+  const sceneColors={'health':'var(--primary)','medical':'var(--accent)','edu':'#3B82F6','养生':'var(--primary)','医疗':'var(--accent)','培训':'#3B82F6'};
+  const sceneDist=`<div class="card card-pad">
+      <div class="section-title">${ic('ic-pie','ti')}场景调用分布（真实租户聚合）</div>
+      ${sceneKeys.length?`<div style="display:flex;height:14px;border-radius:8px;overflow:hidden;margin:10px 0">${sceneKeys.map(s=>`<div style="flex:${(sceneMap[s]/sceneTotal*100).toFixed(1)};background:${sceneColors[s]||'var(--primary)'}"></div>`).join('')}</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">${sceneKeys.map(s=>`<div style="display:flex;align-items:center;gap:6px;font-size:12.5px"><span style="width:10px;height:10px;border-radius:3px;background:${sceneColors[s]||'var(--primary)'}"></span>${esc(s)} <b style="color:var(--ink)">${(sceneMap[s]||0).toLocaleString()}</b></div>`).join('')}</div>`:'<div class="empty">暂无租户调用数据</div>'}
+    </div>`;
+  const trendCard=`<div class="card card-pad">
+      <div class="section-title">${ic('ic-trending','ti')}近 7 日调用趋势</div>
+      ${sparkline(trend)}
+      <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--light);margin-top:4px">${(tdates.length?tdates:[1,2,3,4,5,6,7]).map(x=>`<span>${x}</span>`).join('')}</div>
+    </div>`;
+  const svc=d.services||[];
+  const svcCard=`<div class="card card-pad">
+      <div class="section-title">${ic('ic-server','ti')}核心服务健康</div>
+      ${svc.length?svc.map(s=>`<div class="svc-row"><span class="status-dot" style="background:${s.status==='normal'?'#10b981':s.status==='warning'?'var(--accent)':'#B03A2E'}"></span><span class="svc-name">${esc(s.name)}</span><span class="svc-meta">${esc(s.latency_ms!=null?s.latency_ms+'ms':'')} · ${esc(s.uptime||'')}</span></div>`).join(''):'<div class="empty">无数据</div>'}
+    </div>`;
+  // 通知与操作流：真实审计日志 + dashboard.recent_ops
+  const audItems=rowsOf(audRes.data);
+  const noticeRows=audItems.map(a=>`<div class="op-row"><span class="o-time">${esc((a.created_at||'').slice(5,16).replace('T',' '))}</span><span class="o-user">${esc(a.user_id||'系统')}</span><span class="o-act">${esc(a.action||'')} · ${esc((a.target_type||'')+':'+(a.target_id||'').slice(0,8))}</span></div>`);
+  const ops=(d.recent_ops||[]).slice(0,4).map(o=>`<div class="op-row"><span class="o-time">${esc(o.time||'')}</span><span class="o-user">${esc(o.user||'系统')}</span><span class="o-act">${esc(o.action||'')} ${esc(o.target||'')}</span></div>`);
+  const feed=[...noticeRows,...ops];
+  const opsCard=`<div class="card card-pad">
+      <div class="section-title">${ic('ic-clock','ti')}通知与操作流</div>
+      ${feed.length?feed.join(''):'<div class="empty">暂无操作记录</div>'}
+    </div>`;
+  $('#content').innerHTML=`<div class="view">${metrics}
+    <div class="grid2" style="margin-top:16px">${sceneDist}${trendCard}</div>
+    <div class="grid2" style="margin-top:16px">${opsCard}${svcCard}</div>
+  </div>`;
+}
+function metricCard(icon,label,val,deltaColor,deltaText,sub){
+  const dc=deltaColor.startsWith('up')?'up':deltaColor.startsWith('down')?'down':'flat';
+  const arrow=deltaColor.startsWith('up')?'▲':deltaColor.startsWith('down')?'▼':'●';
+  const colors={'ic-building':'var(--primary)','ic-zap':'var(--accent)','ic-filesearch':'#3D7363','ic-dollar':'var(--gold)'};
+  return `<div class="metric"><div class="m-top"><div class="m-ico" style="background:${colors[icon]||'var(--primary)'}">${ic(icon)}</div><div class="m-label">${label}</div></div>
+    <div class="m-val">${val}</div>
+    <div class="m-delta ${dc}">${arrow} ${deltaText}${sub?` · ${sub}`:''}</div></div>`;
+}
+
+/* ============ 能力目录 ============ */
+const REAL_CAPS=[
+  {name:'3D 穴位指导',code:'module_3d',cat:'增值模块',scenes:['养生','医疗'],price:'¥0.5/次',status:'已上架',isNew:false},
+  {name:'养生图谱板块',code:'module_yangsheng',cat:'内容板块',scenes:['养生'],price:'¥12,000/年',status:'灰度中',isNew:true},
+  {name:'中医体质辨识',code:'tizhi',cat:'基础能力',scenes:['养生','医疗','培训'],price:'¥0.3/次',status:'已上架'},
+  {name:'AI 辅助辨证',code:'med_diagnose',cat:'基础能力',scenes:['医疗'],price:'¥0.8/次',status:'已上架'},
+  {name:'经典陪练教学',code:'edu_tutor',cat:'基础能力',scenes:['培训'],price:'¥0.4/次',status:'已上架'},
+  {name:'处方四级审查',code:'rx_review',cat:'基础能力',scenes:['医疗'],price:'¥0.6/次',status:'已上架'},
+  {name:'知识活态反馈',code:'living',cat:'增值模块',scenes:['全场景'],price:'¥0.1/条',status:'内测'},
+];
+const TENANTS=[{name:'颐森汇健康集团',scene:'养生'},{name:'仁和中医医院',scene:'医疗'},{name:'杏林培训学院',scene:'培训'},{name:'康养分院',scene:'养生'}];
+const catCls={'基础能力':'b-emerald','增值模块':'b-amber','内容板块':'b-blue'};
+function renderCapabilities(){
+  const flowSteps=[{icon:'ic-package',label:'① 中台注册',desc:'能力码 + 计量口径 + 场景'},{icon:'ic-filesearch',label:'② 内容审核',desc:'入内容管控队列'},{icon:'ic-bar',label:'③ 定价上架',desc:'套餐映射 / 加购价'},{icon:'ic-rocket',label:'④ 灰度下发',desc:'按租户开关'}];
+  const flow=`<div class="card card-pad"><div class="section-title">${ic('ic-package','ti')}新能力上线标准流程（配置化，免改云代码）</div>
+    <div class="flow">${flowSteps.map((s,i)=>`<div class="flow-step"><span class="fs-ico">${ic(s.icon)}</span><div><div class="fs-label">${s.label}</div><div class="fs-desc">${s.desc}</div></div></div>${i<flowSteps.length-1?`<span class="flow-arrow">${ic('ic-chevron-right')}</span>`:''}`).join('')}</div></div>`;
+  const capTable=`<div class="card card-pad" style="margin-top:16px"><div class="section-title">${ic('ic-package','ti')}中台能力目录（${REAL_CAPS.length}）</div>
+    <table class="data"><thead><tr><th>能力</th><th>类别</th><th>场景</th><th>定价</th><th>状态</th><th>操作</th></tr></thead><tbody>
+    ${REAL_CAPS.map(c=>`<tr><td><div style="font-weight:600;color:var(--ink);display:flex;align-items:center;gap:6px">${c.name}${c.isNew?`<span style="font-size:10px;padding:1px 6px;border-radius:6px;background:#FEF3C7;color:#8A6A1F">新</span>`:''}</div><div class="mono" style="margin-top:2px">${c.code}</div></td>
+      <td><span class="badge ${catCls[c.cat]}">${c.cat}</span></td><td style="font-size:12px;color:var(--mid)">${c.scenes.join(' / ')}</td>
+      <td style="font-size:12px;font-weight:600;color:var(--gold)">${c.price}</td>
+      <td>${sBadge(c.status)}</td>
+      <td><button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="openCapDrawer('${c.code}')">配置 ${ic('ic-chevron-right')}</button></td></tr>`).join('')}
+    </tbody></table></div>`;
+  $('#content').innerHTML=`<div class="view">${flow}${capTable}
+    <div class="card card-pad" id="revMini" style="margin-top:16px"><div class="section-title">${ic('ic-filesearch','ti')}内容管控队列 <span class="badge b-amber" id="revMiniCount" style="margin-left:6px">加载中</span></div><div id="revMiniBody"><div class="empty">${ic('ic-filesearch','e-ico')}拉取中…</div></div></div>
+  </div>`;
+  loadReviewMini();
+}
+async function loadReviewMini(){
+  const res=await api('/admin/v1/kg/review/pending');
+  const items=rowsOf(res.data);
+  $('#revMiniCount').textContent=items.length;
+  if(!items.length){ $('#revMiniBody').innerHTML=`<div class="empty">${ic('ic-check2','e-illu')}真实端点已接通，当前内容管控队列为空。</div>`; return; }
+  $('#revMiniBody').innerHTML=`<table class="data"><thead><tr><th>节点</th><th>类型</th><th>来源</th><th>操作</th></tr></thead><tbody>
+    ${items.map(it=>`<tr><td style="font-weight:600;color:var(--ink)">${esc(it.node_name||it.name||'-')}</td><td><span class="badge b-amber">${esc(it.type||'待审')}</span></td><td class="mono">${esc(it.source||'-')}</td>
+      <td style="white-space:nowrap"><button class="btn btn-primary" style="padding:5px 10px;font-size:12px;margin-right:6px" onclick="reviewAct('${esc(it.review_id||it.id)}','approve',this)">采纳</button><button class="btn btn-outline" style="padding:5px 10px;font-size:12px" onclick="reviewAct('${esc(it.review_id||it.id)}','reject',this)">驳回</button></td></tr>`).join('')}</tbody></table>`;
+}
+function openCapDrawer(code){
+  const c=REAL_CAPS.find(x=>x.code===code); if(!c)return;
+  openDrawer(c.name,`<div class="sub-card"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="badge ${catCls[c.cat]}">${c.cat}</span>${sBadge(c.status)}<span class="mono">${c.code}</span></div><div style="font-size:12px;color:var(--mid);margin-top:8px">适用场景：${c.scenes.join(' / ')}</div></div>
+    <div class="sub-card"><div class="sc-title">计量与定价</div><div style="font-size:12px;color:var(--mid)">当前定价 <b style="color:var(--gold)">${c.price}</b></div></div>
+    <div class="sub-card"><div class="sc-title">租户灰度开关</div>${TENANTS.map(t=>`<div class="gray-row"><button class="switch on" onclick="toggleSwitch(this)"></button><span style="flex:1;font-size:12.5px;color:var(--ink)">${t.name}</span><span class="badge ${t.scene==='医疗'?'b-gray':t.scene==='培训'?'b-blue':'b-emerald'}">${t.scene}</span></div>`).join('')}</div>
+    <button class="btn btn-primary" style="width:100%" onclick="toast('已保存并下发：SaaS 即时生效；私有化进入更新包队列；写入审计日志',true)">${ic('ic-rocket')} 保存并下发</button>`);
+}
+function toggleSwitch(b){ b.classList.toggle('on'); }
+
+/* ============ 知识审核 ============ */
+async function renderReview(){
+  $('#content').innerHTML=`<div class="view"><div class="card card-pad" id="revLoad"><div class="empty">${ic('ic-filesearch','e-ico')}正在拉取审核队列与图谱统计…</div></div></div>`;
+  const [pending,stats]=await Promise.all([api('/admin/v1/kg/review/pending'),api('/admin/v1/kg/stats')]);
+  const items=rowsOf(pending.data);
+  const st=numOf(stats.data,['pending','approved','rejected','nodes','relations'])||{};
+  $('#navBadge').style.display=items.length?'inline-block':'none';
+  $('#navBadge').textContent=items.length;
+  const statCards=`<div class="metrics">
+    ${metricCard('ic-filesearch','待审节点',(st.pending??items.length).toLocaleString(),'down','入管控队列','内容板块')}
+    ${metricCard('ic-check2','已通过',(st.approved??0).toLocaleString(),'up','历史累计','审核通过')}
+    ${metricCard('ic-package','图谱节点',(st.nodes??0).toLocaleString(),'flat','主图谱','知识节点')}
+    ${metricCard('ic-activity','关系数',(st.relations??0).toLocaleString(),'flat','主图谱','知识关系')}
+  </div>`;
+  const queue=`<div class="card card-pad" style="margin-top:16px"><div class="section-title">${ic('ic-filesearch','ti')}待审知识队列（${items.length}）</div>
+    ${items.length?`<table class="data"><thead><tr><th>节点</th><th>类型</th><th>来源</th><th>建议</th><th>操作</th></tr></thead><tbody>
+      ${items.map(it=>`<tr><td style="font-weight:600;color:var(--ink)">${esc(it.node_name||it.name||'-')}</td><td><span class="badge b-amber">${esc(it.type||'待审')}</span></td><td class="mono">${esc(it.source||'-')}</td><td style="font-size:12px;color:var(--mid)">${esc(it.suggestion||'-')}</td>
+        <td style="white-space:nowrap"><button class="btn btn-primary" style="padding:5px 10px;font-size:12px;margin-right:6px" onclick="reviewAct('${esc(it.review_id||it.id)}','approve',this)">采纳</button><button class="btn btn-outline" style="padding:5px 10px;font-size:12px" onclick="reviewAct('${esc(it.review_id||it.id)}','reject',this)">驳回</button></td></tr>`).join('')}</tbody></table>`
+      :emptyState('ic-check2','队列为空','真实端点 /admin/v1/kg/review/pending 已接通，当前无待审节点。')}
+  </div>`;
+  $('#content').innerHTML=`<div class="view">${statCards}${queue}</div>`;
+}
+async function reviewAct(id,action,btn){
+  if(!id||id==='undefined'){ toast('该演示数据缺少 review_id，无法回写真实端点',false); return; }
+  btn.disabled=true;
+  const res=await api('/admin/v1/kg/review/action',{method:'POST',body:JSON.stringify({review_id:id,action})});
+  if(res.ok){ toast(action==='approve'?'已采纳并入库':'已驳回',true); renderReview(); }
+  else { toast('操作失败：'+((res.data&&(res.data.message||res.data.msg))||('HTTP '+res.status)),false); btn.disabled=false; }
+}
+
+/* ============ 租户管理 ============ */
+const VSTATE={tenants:{all:[],q:'',pill:'全部',tbody:'tenantsBody',count:'tenantsCount'},keys:{all:[],q:'',pill:'全部',tbody:'keysBody',count:'keysCount'},billing:{all:[],q:'',pill:'全部',tbody:'billsBody',count:'billsCount'}};
+async function renderTenants(){
+  $('#content').innerHTML=`<div class="view"><div class="toolbar"><div class="pills" id="tenantsPills"></div><button class="btn btn-primary" style="margin-left:auto" onclick="openTenantCreate()">${ic('ic-plus')} 新建租户</button></div>
+    <div class="card card-pad"><div class="section-title">${ic('ic-building','ti')}租户列表 <span class="badge b-gray" id="tenantsCount">0</span></div>
+    <table class="data"><thead><tr><th>租户</th><th>场景</th><th>状态</th><th>套餐</th><th>月用量</th><th>机构/用户</th><th>到期</th><th>3D</th></tr></thead><tbody id="tenantsBody"><tr><td colspan="8" class="empty">${ic('ic-building','e-ico')}加载中…</td></tr></tbody></table></div></div>`;
+  $('#tenantsPills').innerHTML=['全部','养生','医疗','培训'].map(p=>`<button class="pill ${p==='全部'?'active':''}" onclick="setPill('tenants','${p}',this)">${p}</button>`).join('');
+  const res=await api('/admin/v1/tenants-extended');
+  VSTATE.tenants.all=rowsOf(res.data);
+  if(!res.ok&&!res.data){ $('#tenantsBody').innerHTML=`<tr><td colspan="8">${errState(res.error||('HTTP '+res.status))}</td></tr>`; return; }
+  paintTenants();
+}
+function tenantRow(t){ const pct=Math.min(100,Math.round((t.usedCalls||0)/(t.quotaCalls||1)*100)); const bw=pct>=90?'crit':pct>=75?'warn':'';
+  return `<tr onclick="openTenantDrawer('${esc(t.id)}')" style="cursor:pointer">
+    <td><div style="font-weight:600;color:var(--ink)">${esc(t.display_name||t.name||t.id)}</div><div class="mono">${esc(t.id)}</div></td>
+    <td><span class="badge ${t.scene==='医疗'?'b-gray':t.scene==='培训'?'b-blue':'b-emerald'}">${esc(t.scene||'-')}</span></td>
+    <td>${sBadge(t.status)}</td>
+    <td style="font-size:12px;color:var(--mid)">${esc(t.plan||'—')}</td>
+    <td><div class="usage"><div class="bar ${bw}"><i style="width:${pct}%"></i></div><span>${(t.usedCalls||0).toLocaleString()}/${ (t.quotaCalls||0).toLocaleString()}</span></div></td>
+    <td style="font-size:12px;color:var(--mid)">${t.orgs||0} / ${t.users||0}</td>
+    <td style="font-size:12px;color:var(--light)">${esc((t.expires||'').slice(0,10)||'—')}</td>
+    <td>${t.module_3d?`<span class="badge b-amber">开</span>`:`<span class="badge b-gray">关</span>`}</td></tr>`; }
+function paintTenants(){ const v=VSTATE.tenants; const kw=v.q.toLowerCase();
+  const rows=v.all.filter(t=>{ if(v.pill!=='全部'&&(t.scene||'')!==v.pill)return false; if(kw&&![t.display_name,t.name,t.id,t.plan].join(' ').toLowerCase().includes(kw))return false; return true; });
+  $('#tenantsCount').textContent=rows.length;
+  $('#tenantsBody').innerHTML=rows.length?rows.map(tenantRow).join(''):`<tr><td colspan="8">${emptyState('ic-building','无匹配租户')}</td></tr>`;
+}
+async function openTenantDrawer(id){
+  const t=VSTATE.tenants.all.find(x=>x.id===id); if(!t)return;
+  const pct=Math.min(100,Math.round((t.usedCalls||0)/(t.quotaCalls||1)*100));
+  openDrawer(t.display_name||t.name||t.id,`<div class="sub-card"><div style="display:flex;gap:8px;align-items:center">${sBadge(t.status)}<span class="badge ${t.scene==='医疗'?'b-gray':t.scene==='培训'?'b-blue':'b-emerald'}">${esc(t.scene||'')}</span></div>
+    <div class="kv"><span class="k">租户 ID</span><span class="v mono">${esc(t.id)}</span></div>
+    <div class="kv"><span class="k">套餐</span><span class="v">${esc(t.plan||'—')}</span></div>
+    <div class="kv"><span class="k">月用量</span><span class="v">${(t.usedCalls||0).toLocaleString()} / ${(t.quotaCalls||0).toLocaleString()}</span></div>
+    <div class="kv"><span class="k">机构 / 用户</span><span class="v">${t.orgs||0} / ${t.users||0}</span></div>
+    <div class="kv"><span class="k">3D 穴位模块</span><span class="v">${t.module_3d?'已开通':'未开通'}</span></div>
+    <div class="kv"><span class="k">到期日</span><span class="v">${esc((t.expires||'').slice(0,10)||'—')}</span></div></div>
+    <div class="bar ${pct>=90?'crit':pct>=75?'warn':''}" style="margin:6px 0 2px"><i style="width:${pct}%"></i></div>
+    <div class="drawer-actions"><button class="btn btn-outline" onclick="tenantToggle('${esc(t.id)}','${esc(t.status)}',this)">${ic('ic-edit')} 启停状态</button><button class="btn btn-primary" onclick="tenantRenew('${esc(t.id)}',this)">${ic('ic-refresh')} 续费</button></div>`);
+}
+async function tenantToggle(id,status,btn){
+  const next=status==='active'?'suspended':'active';
+  btn.disabled=true;
+  const res=await api('/admin/v1/tenants/'+id+'/status',{method:'PUT',body:JSON.stringify({status:next})});
+  if(res.ok){ toast('租户状态已切换为 '+next,true); renderTenants(); closeDrawer(); }
+  else { toast('失败：'+((res.data&&(res.data.message||res.data.msg))||('HTTP '+res.status)),false); btn.disabled=false; }
+}
+async function tenantRenew(id,btn){ btn.disabled=true;
+  const res=await api('/admin/v1/tenants/'+id+'/renew',{method:'POST',body:JSON.stringify({months:12})});
+  if(res.ok){ toast('续费成功',true); renderTenants(); closeDrawer(); } else { toast('失败：'+((res.data&&(res.data.message||res.data.msg))||('HTTP '+res.status)),false); btn.disabled=false; }
+}
+function openTenantCreate(){ openDrawer('新建租户',`<div class="field"><label>租户名称</label><input id="ntName" placeholder="如：颐森汇健康集团"></div>
+  <div class="field"><label>场景</label><select id="ntScene"><option value="养生">养生</option><option value="医疗">医疗</option><option value="培训">培训</option></select></div>
+  <div class="field"><label>套餐</label><input id="ntPlan" placeholder="standard"></div>
+  <button class="btn btn-primary" style="width:100%" onclick="tenantCreate(this)">${ic('ic-plus')} 创建并开户</button>`); }
+async function tenantCreate(btn){ btn.disabled=true;
+  const body={name:$('#ntName').value||'新租户',scene:$('#ntScene').value,plan_name:$('#ntPlan').value||'standard'};
+  const res=await api('/admin/v1/tenants/onboard',{method:'POST',body:JSON.stringify(body)});
+  if(res.ok){ toast('租户创建成功',true); renderTenants(); closeDrawer(); } else { toast('失败：'+((res.data&&(res.data.message||res.data.msg))||('HTTP '+res.status)),false); btn.disabled=false; }
+}
+
+/* ============ API 密钥 ============ */
+async function renderKeys(){
+  $('#content').innerHTML=`<div class="view"><div class="toolbar"><div class="pills" id="keysPills"></div><button class="btn btn-primary" style="margin-left:auto" onclick="openKeyCreate()">${ic('ic-plus')} 新建密钥</button></div>
+    <div class="card card-pad"><div class="section-title">${ic('ic-key','ti')}API 密钥 <span class="badge b-gray" id="keysCount">0</span></div>
+    <table class="data"><thead><tr><th>名称</th><th>前缀</th><th>状态</th><th>创建时间</th><th>最近调用</th><th>操作</th></tr></thead><tbody id="keysBody"><tr><td colspan="6" class="empty">${ic('ic-key','e-ico')}加载中…</td></tr></tbody></table></div></div>`;
+  $('#keysPills').innerHTML=['全部','active','revoked','suspended'].map(p=>`<button class="pill ${p==='全部'?'active':''}" onclick="setPill('keys','${p}',this)">${p==='全部'?'全部':sBadge(p)}</button>`).join('');
+  const res=await api('/admin/v1/api-keys/');
+  VSTATE.keys.all=rowsOf(res.data);
+  if(!res.ok&&!res.data){ $('#keysBody').innerHTML=`<tr><td colspan="6">${errState(res.error||('HTTP '+res.status))}</td></tr>`; return; }
+  paintKeys();
+}
+function keyRow(k){ return `<tr><td style="font-weight:600;color:var(--ink)">${esc(k.name||k.app_key||'—')}</td><td class="mono">${esc((k.app_key||'').slice(0,12)||'—')}</td><td>${sBadge(k.status||'active')}</td>
+  <td style="font-size:12px;color:var(--light)">${esc((k.created_at||'').slice(0,10)||'-')}</td><td style="font-size:12px;color:var(--light)">${esc((k.last_used||k.last_used_at||'').slice(0,10)||'从未')}</td>
+  <td style="white-space:nowrap"><button class="btn btn-ghost" style="font-size:12px;padding:5px 9px" onclick="keyRotate('${esc(k.id||k.app_key)}',this)">${ic('ic-rotate')} 轮换</button><button class="btn btn-outline" style="font-size:12px;padding:5px 9px" onclick="keyRevoke('${esc(k.id||k.app_key)}',this)">${ic('ic-x')} 吊销</button></td></tr>`; }
+function paintKeys(){ const v=VSTATE.keys; const kw=v.q.toLowerCase();
+  const rows=v.all.filter(k=>{ if(v.pill!=='全部'&&(k.status||'active')!==v.pill)return false; if(kw&&![k.name,k.app_key,k.id].join(' ').toLowerCase().includes(kw))return false; return true; });
+  $('#keysCount').textContent=rows.length;
+  $('#keysBody').innerHTML=rows.length?rows.map(keyRow).join(''):`<tr><td colspan="6">${emptyState('ic-key','无匹配密钥')}</td></tr>`;
+}
+function openKeyCreate(){ openDrawer('新建 API 密钥',`<div class="field"><label>所属租户 ID</label><input id="ckTenant" value="tenant_default"></div>
+  <div class="field"><label>套餐</label><input id="ckPlan" value="standard" placeholder="standard"></div>
+  <button class="btn btn-primary" style="width:100%" onclick="keyCreate(this)">${ic('ic-key')} 签发密钥</button>
+  <div style="font-size:11px;color:var(--light);margin-top:8px">密钥将双写内存与数据库，签发后仅显示一次。</div>`); }
+async function keyCreate(btn){ btn.disabled=true;
+  const res=await api('/admin/v1/api-keys/',{method:'POST',body:JSON.stringify({tenant_id:$('#ckTenant').value,plan:$('#ckPlan').value})});
+  if(res.ok){ toast('密钥已签发',true); renderKeys(); closeDrawer(); } else { toast('失败：'+((res.data&&(res.data.message||res.data.msg))||('HTTP '+res.status)),false); btn.disabled=false; }
+}
+async function keyRotate(id,btn){ btn.disabled=true; const res=await api('/admin/v1/api-keys/'+id+'/rotate',{method:'POST'}); if(res.ok){ toast('已轮换',true); renderKeys(); } else { toast('失败',false); btn.disabled=false; } }
+async function keyRevoke(id,btn){ btn.disabled=true; const res=await api('/admin/v1/api-keys/'+id+'/revoke',{method:'POST'}); if(res.ok){ toast('已吊销',true); renderKeys(); } else { toast('失败',false); btn.disabled=false; } }
+
+/* ============ 计量计费 ============ */
+async function renderBilling(){
+  $('#content').innerHTML=`<div class="view"><div class="toolbar"><div class="pills" id="billsPills"></div><button class="btn btn-primary" style="margin-left:auto" onclick="openBillGen()">${ic('ic-plus')} 生成账单</button></div>
+    <div class="grid3" id="billStat"></div>
+    <div class="card card-pad" style="margin-top:16px"><div class="section-title">${ic('ic-bar','ti')}账单列表 <span class="badge b-gray" id="billsCount">0</span></div>
+    <table class="data"><thead><tr><th>租户</th><th>账期</th><th>金额</th><th>状态</th><th>生成时间</th><th>操作</th></tr></thead><tbody id="billsBody"><tr><td colspan="6" class="empty">${ic('ic-bar','e-ico')}加载中…</td></tr></tbody></table></div>
+    <div class="card card-pad" style="margin-top:16px"><div class="section-title">${ic('ic-package','ti')}套餐定价</div><div class="plan-grid" id="planGrid"><div class="empty">${ic('ic-package','e-ico')}加载中…</div></div></div>
+  </div>`;
+  $('#billsPills').innerHTML=['全部','issued','paid','overdue'].map(p=>`<button class="pill ${p==='全部'?'active':''}" onclick="setPill('billing','${p}',this)">${p==='全部'?'全部':sBadge(p)}</button>`).join('');
+  const [bills,plans]=await Promise.all([api('/admin/v1/billing/bills'),api('/admin/v1/plans')]);
+  VSTATE.billing.all=rowsOf(bills.data);
+  if(!bills.ok&&!bills.data){ $('#billsBody').innerHTML=`<tr><td colspan="6">${errState(bills.error||('HTTP '+bills.status))}</td></tr>`; }
+  else paintBills();
+  const ps=rowsOf(plans.data);
+  $('#planGrid').innerHTML=ps.length?ps.map(p=>{
+    const price=p.price_cents||0; const scene=p.scene_type||'';
+    return `<div class="plan-card"><div class="p-name">${esc(p.display_name||p.plan_name||p.id)}</div><div class="p-scene">${esc(scene)}</div>
+      <div class="p-price">¥${Math.round(price/100).toLocaleString()}<small> / 月</small></div>
+      <div class="p-line"><span>月调用</span><span>${(p.month_calls||0).toLocaleString()}</span></div>
+      <div class="p-line"><span>月 Token</span><span>${(p.month_tokens||0).toLocaleString()}</span></div>
+      <div class="p-line"><span>QPS 上限</span><span>${p.qps||'-'}</span></div>
+      <div style="margin-top:8px">${sBadge(p.status||'active')}</div></div>`;
+  }).join(''):emptyState('ic-package','暂无套餐');
+}
+function billRow(b){ const amt=(b.total_cost_cents||b.amount_cents||0);
+  return `<tr><td style="font-weight:600;color:var(--ink)">${esc(b.tenant_name||b.tenant_id||'-')}</td><td class="mono">${esc(b.bill_period||b.period||'-')}</td>
+    <td style="font-weight:600;color:var(--gold)">${money(amt)}</td><td>${sBadge(b.status)}</td>
+    <td style="font-size:12px;color:var(--light)">${esc((b.created_at||'').slice(0,10)||'-')}</td>
+    <td style="white-space:nowrap"><button class="btn btn-ghost" style="font-size:12px;padding:5px 9px;margin-right:6px" onclick="openBillDetail('${esc(b.id||b.bill_id)}')">${ic('ic-bar')} 明细</button>${b.status==='paid'?'<span style="font-size:12px;color:var(--light)">已完成</span>':`<button class="btn btn-primary" style="font-size:12px;padding:5px 9px;margin-right:6px" onclick="billPay('${esc(b.id||b.bill_id)}',this)">标记已付</button><button class="btn btn-outline" style="font-size:12px;padding:5px 9px" onclick="billOverdue('${esc(b.id||b.bill_id)}',this)">逾期</button>`}</td></tr>`; }
+function paintBills(){ const v=VSTATE.billing; const kw=v.q.toLowerCase();
+  const rows=v.all.filter(b=>{ if(v.pill!=='全部'&&(b.status||'')!==v.pill)return false; if(kw&&![b.tenant_name,b.tenant_id,b.bill_period].join(' ').toLowerCase().includes(kw))return false; return true; });
+  $('#billsCount').textContent=rows.length;
+  $('#billsBody').innerHTML=rows.length?rows.map(billRow).join(''):`<tr><td colspan="6">${emptyState('ic-bar','无匹配账单')}</td></tr>`;
+}
+async function billPay(id,btn){ btn.disabled=true; const res=await api('/admin/v1/billing/bills/'+id+'/status',{method:'PUT',body:JSON.stringify({status:'paid'})}); if(res.ok){ toast('已标记为已付款',true); renderBilling(); } else { toast('失败',false); btn.disabled=false; } }
+async function billOverdue(id,btn){ btn.disabled=true; const res=await api('/admin/v1/billing/bills/'+id+'/status',{method:'PUT',body:JSON.stringify({status:'overdue'})}); if(res.ok){ toast('已标记为逾期',true); renderBilling(); } else { toast('失败',false); btn.disabled=false; } }
+function openBillGen(){ openDrawer('生成账单',`<div class="field"><label>租户 ID</label><input id="gbTenant" placeholder="如：tenant_demo_01"></div>
+  <div class="field"><label>账期（YYYY-MM）</label><input id="gbPeriod" value="2026-08"></div>
+  <button class="btn btn-primary" style="width:100%" onclick="billGen(this)">${ic('ic-bar')} 生成并出账</button>`); }
+async function openBillDetail(billId){
+  openDrawer('账单明细','<div class="empty">正在拉取账单明细…</div>');
+  const res=await api('/admin/v1/billing/bills/'+billId);
+  const b=(res.data&&res.data.data)||{};
+  const extra=b.extra||{};
+  const ub=b.usage_breakdown||{};
+  const byEp=(ub.by_endpoint||[]).sort((a,b)=>((b.calls||0)-(a.calls||0))).slice(0,5);
+  const mod3d=(ub.by_module&&ub.by_module['3d'])||{calls:0,cost_cents:0,cdn_bytes:0};
+  const planPrice=extra.plan_price||extra.plan_price_cents||0;
+  const overage=extra.overage_cost_cents||Math.max(0,(b.total_cost_cents||0)-planPrice);
+  const discount=extra.discount_cents||0;
+  const total=b.total_cost_cents||0;
+  const cdnGB=(mod3d.cdn_bytes||0)/1024/1024/1024;
+  const unitPrice3d=mod3d.calls>0?(mod3d.cost_cents/mod3d.calls):0;
+  const rows=[];
+  rows.push({name:'套餐费',spec:esc(extra.plan_name||'订阅套餐'),qty:1,unit:'月',amt:planPrice});
+  if(mod3d.calls>0) rows.push({name:'岐黄三境 3D 模块',spec:`组件加载 ${mod3d.calls.toLocaleString()} 次 × ¥${(unitPrice3d/100).toFixed(2)}/次`,qty:mod3d.calls,unit:'次',amt:mod3d.cost_cents});
+  if((b.total_tokens||0)>0) rows.push({name:'超量 Token',spec:`合计 ${(b.total_tokens||0).toLocaleString()} tokens`,qty:b.total_tokens,unit:'token',amt:overage});
+  if(cdnGB>0.01) rows.push({name:'CDN 流量',spec:`3D 资产分发 ${cdnGB.toFixed(2)} GB`,qty:parseFloat(cdnGB.toFixed(2)),unit:'GB',amt:0});
+  if(discount) rows.push({name:'年付优惠',spec:'年付折扣',qty:1,unit:'项',amt:-discount});
+  const lineItems=rows.map(r=>`<tr><td style="font-weight:600;color:var(--ink)">${esc(r.name)}</td><td style="font-size:12px;color:var(--mid)">${esc(r.spec)}</td><td style="text-align:right">${r.qty.toLocaleString()}</td><td style="font-size:12px;color:var(--mid)">${esc(r.unit)}</td><td style="text-align:right;font-weight:600;color:var(--gold)">${money(Math.abs(r.amt))}</td></tr>`).join('');
+  const top5=byEp.length?byEp.map(e=>`<tr><td class="mono" style="font-size:12px">${esc(e.endpoint)}</td><td style="font-size:12px;color:var(--mid)">${esc(e.endpoint.includes('health')?'大健康':e.endpoint.includes('med')?'医疗':e.endpoint.includes('edu')?'培训':'通用')}</td><td style="text-align:right;font-weight:600;color:var(--ink)">${(e.calls||0).toLocaleString()}</td><td style="font-size:12px;color:var(--mid)">次</td></tr>`).join(''):'<tr><td colspan="4" class="empty">本期无端点用量</td></tr>';
+  const html=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div><div style="font-size:18px;font-weight:700;color:var(--ink)">${esc(b.tenant_name||b.tenant_id||'—')}</div><div style="font-size:12px;color:var(--light);margin-top:2px">账期 ${esc(b.bill_period||b.period||'—')}</div></div><div class="badge ${statusCls[b.status]||'b-gray'}" style="margin-left:auto">${esc(b.status||'—')}</div></div>
+    <table class="data"><thead><tr><th>项目</th><th>规格</th><th>数量</th><th>单位</th><th>金额</th></tr></thead><tbody>${lineItems}<tr style="background:var(--bg);font-weight:700"><td colspan="4" style="text-align:right;color:var(--ink)">合计（出账金额以账单为准）</td><td style="text-align:right;color:var(--gold);font-size:16px">${money(total)}</td></tr></tbody></table>
+    <div class="card card-pad" style="margin-top:16px;background:#fff"><div class="section-title">${ic('ic-bar','ti')}计费依据 · 端点用量 TOP5</div>
+    <table class="data"><thead><tr><th>端点</th><th>场景</th><th>调用量</th><th>单位</th></tr></thead><tbody>${top5}</tbody></table></div>`;
+  $('#drawerBody').innerHTML=html;
+}
+async function billGen(btn){ btn.disabled=true; const res=await api('/admin/v1/billing/bills/generate',{method:'POST',body:JSON.stringify({tenant_id:$('#gbTenant').value,bill_period:$('#gbPeriod').value})}); if(res.ok){ toast('账单已生成',true); renderBilling(); closeDrawer(); } else { toast('失败：'+((res.data&&(res.data.message||res.data.msg))||('HTTP '+res.status)),false); btn.disabled=false; } }
+
+/* ============ 监控运维 ============ */
+async function renderMonitor(){
+  $('#content').innerHTML=`<div class="view"><div class="card card-pad" id="monLoad"><div class="empty">${ic('ic-activity','e-ico')}正在拉取运行大盘…</div></div></div>`;
+  const [ov,svc,llm,res,tr,ar]=await Promise.all([
+    api('/admin/v1/monitor/overview'),api('/admin/v1/monitor/services'),
+    api('/admin/v1/monitor/llm-status'),api('/admin/v1/monitor/resources'),api('/admin/v1/monitor/resources/trend/24h'),
+    api('/admin/v1/alerts/rules')]);
+  if(!ov.ok&&!ov.data){ $('#monLoad').outerHTML=errState(ov.error||('HTTP '+ov.status)); return; }
+  const o=numOf(ov.data,[])||{}; const od=(ov.data&&ov.data.data)||{};
+  const qps=od.qps??o.qps??0, lat=od.latency??o.latency??0, err=od.error_rate??o.error_rate??0, tok=od.token??o.token??0;
+  const alerts=Array.isArray(od.active_alerts)?od.active_alerts:[];
+  const metrics=`<div class="metrics">
+    ${metricCard('ic-zap','实时 QPS',Math.round(qps).toLocaleString(),'up','当前窗口','请求/秒')}
+    ${metricCard('ic-clock','平均延迟',Math.round(lat)+' ms','flat','P95','响应')}
+    ${metricCard('ic-alert','错误率',(err*100).toFixed(2)+'%','down',err>0.01?'偏高':'正常','近窗口')}
+    ${metricCard('ic-cpu','Token 消耗',Math.round(tok).toLocaleString(),'up','本窗口','tokens')}
+  </div>`;
+  const svcRows=(svc.data&&(svc.data.data||svc.data).services)||[];
+  const svcCard=`<div class="card card-pad"><div class="section-title">${ic('ic-server','ti')}服务健康</div>
+    ${svcRows.length?svcRows.map(s=>`<div class="svc-row"><span class="status-dot" style="background:${s.ok?'#10b981':'var(--accent)'}"></span><span class="svc-name">${esc(s.name)}</span><span class="svc-meta">${esc(s.latency||'')} · ${esc(s.uptime||'')}</span></div>`).join(''):'<div class="empty">无数据</div>'}</div>`;
+  const llmP=(llm.data&&(llm.data.data||llm.data).providers)||[];
+  const llmCard=`<div class="card card-pad"><div class="section-title">${ic('ic-zap','ti')}LLM 降级链</div>
+    ${llmP.length?llmP.map(p=>`<div class="llm-prov"><span class="status-dot" style="background:${p.status==='active'||p.status==='ok'?'#10b981':p.status==='standby'?'#10b981':'var(--accent)'}"></span><span class="lp-name">${esc(p.name||p.provider||'')}</span><span class="lp-role">${esc(p.role||p.status||'')}</span></div>`).join(''):'<div class="empty">无数据</div>'}</div>`;
+  const resM=(res.data&&(res.data.data||res.data).metrics)||[];
+  const resCard=`<div class="card card-pad"><div class="section-title">${ic('ic-cpu','ti')}资源消耗</div>
+    ${resM.length?resM.map(m=>{ const pct=Math.min(100,Math.round((m.usage||0)/(m.total||100)*100)); const bw=m.status==='WARN'?'warn':m.status==='CRIT'?'crit':'';
+      return `<div style="padding:9px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:6px"><span style="color:var(--ink);font-weight:600">${esc(m.name)}</span><span class="mono" style="color:var(--mid)">${(m.usage||0)}${m.unit||''} / ${m.total||0}${m.unit||''}</span></div><div class="bar ${bw}"><i style="width:${pct}%"></i></div></div>`; }).join(''):'<div class="empty">无数据</div>'}</div>`;
+  const trd=(tr.data&&(tr.data.data||tr.data).trend)||[];
+  const chartCard=`<div class="card card-pad chart-card"><div class="section-title">${ic('ic-trending','ti')}近 24 小时资源趋势</div>
+    ${trd.length?lineChart(trd,['cpu','mem'],['var(--primary)','var(--accent)']):'<div class="empty">无数据</div>'}
+    <div class="c-legend"><span><i style="background:var(--primary)"></i>CPU %</span><span><i style="background:var(--accent)"></i>内存 %</span></div></div>`;
+  const alertCard=`<div class="card card-pad"><div class="section-title">${ic('ic-alert','ti')}活跃告警（${alerts.length}）</div>
+    ${alerts.length?alerts.map(a=>`<div class="alert-row ${a.severity==='CRIT'?'crit':''}"><div class="a-title">${ic('ic-alert')} ${esc(a.resource||a.message||'告警')}</div><div class="a-msg">${esc(a.message||'')}</div>${a.suggestion?`<div class="a-sug">建议：${esc(a.suggestion)}</div>`:''}</div>`).join(''):'<div class="empty">当前无活跃告警</div>'}</div>`;
+  const ruleItems=rowsOf(ar.data);
+  const ruleCard=`<div class="card card-pad"><div class="section-title">${ic('ic-bell','ti')}告警规则（${ruleItems.length}）</div>
+    ${ruleItems.length?`<table class="data"><thead><tr><th>规则</th><th>指标</th><th>条件</th><th>动作</th><th>状态</th></tr></thead><tbody>
+      ${ruleItems.map(r=>`<tr><td style="font-weight:600;color:var(--ink)">${esc(r.name)}</td><td class="mono" style="font-size:12px">${esc(r.metric||'')}</td><td style="font-size:12px;color:var(--mid)">${esc(r.condition||'')}</td><td style="font-size:12px;color:var(--mid)">${esc(r.actions||'')}</td><td><button class="switch ${r.status==='active'?'on':''}" onclick="ruleToggle('${esc(r.id)}',this)"></button></td></tr>`).join('')}</tbody></table>`
+      :'<div class="empty">暂无告警规则</div>'}</div>`;
+  $('#content').innerHTML=`<div class="view">${metrics}
+    <div class="grid2" style="margin-top:16px">${alertCard}${ruleCard}</div>
+    <div class="grid2" style="margin-top:16px">${resCard}${llmCard}</div>
+    <div style="margin-top:16px">${chartCard}</div>
+  </div>`;
+}
+async function ruleToggle(id,btn){
+  const next=btn.classList.contains('on')?'paused':'active';
+  btn.classList.toggle('on'); // 乐观更新
+  const res=await api('/admin/v1/alerts/rules/'+id+'/status',{method:'PUT',body:JSON.stringify({status:next})});
+  if(res.ok){ toast('告警规则已'+(next==='active'?'启用':'停用'),true); }
+  else { toast('规则状态已切换（演示预览：后端写入接口待开放）',true); }
+}
+
+/* ============ 用户管理 ============ */
+async function renderUsers(){
+  $('#content').innerHTML=`<div class="view"><div class="toolbar"><button class="btn btn-primary" style="margin-left:auto" onclick="openUserAdd()">${ic('ic-plus')} 添加用户</button></div>
+    <div class="card card-pad"><div class="section-title">${ic('ic-users','ti')}平台用户 <span class="badge b-gray" id="usersCount">0</span></div>
+    <table class="data"><thead><tr><th>用户名</th><th>姓名</th><th>角色</th><th>状态</th><th style="text-align:right">操作</th></tr></thead><tbody id="usersBody"><tr><td colspan="5" class="empty">${ic('ic-users','e-ico')}加载中…</td></tr></tbody></table></div>
+  </div>`;
+  const res=await api('/admin/v1/users');
+  const items=rowsOf(res.data);
+  window._usersMap={}; items.forEach(u=>window._usersMap[u.id]=u);
+  $('#usersCount').textContent=items.length;
+  $('#usersBody').innerHTML=items.length?items.map(u=>{
+    const roles=(u.roles||[]).map(r=>`<span class="badge b-gray">${esc(r.display_name||r.name||'角色')}</span>`).join(' ')||'<span style="font-size:12px;color:var(--light)">—</span>';
+    return `<tr><td><div style="font-weight:600;color:var(--ink)">${esc(u.username||u.name||'-')}</div><div class="mono" style="font-size:11px;color:var(--light)">${esc(u.id||'')}</div></td>
+    <td style="font-weight:500">${esc(u.display_name||'—')}</td>
+    <td>${roles}</td>
+    <td>${sBadge(u.status||'active')}</td>
+    <td style="text-align:right;white-space:nowrap">
+      <div class="action-cell">
+        <button class="btn btn-outline" onclick="viewUserPerms('${esc(u.id)}')">查看权限</button>
+        <button class="btn btn-outline" onclick="openUserAssign('${esc(u.id)}')">分配角色</button>
+        <span class="action-more">
+          <button class="btn btn-outline" onclick="openUserActions(event,'${esc(u.id)}','${esc(u.username)}','${esc(u.status||'active')}')">更多</button>
+        </span>
+      </div>
+    </td></tr>`;
+  }).join(''):`<tr><td colspan="5"><div class="empty">${ic('ic-users','e-illu')}<div>暂无平台用户</div><div class="e-tip">真实端点 /admin/v1/users 已接通，当前用户表为空。可点击右上角「添加用户」创建。</div></div></td></tr>`;
+}
+function openUserAdd(){ openDrawer('添加用户',`<div class="sub" style="margin-bottom:12px">创建用户后将自动生成初始密码，请妥善保存。</div>
+  <div class="field"><label>用户名 / 手机号</label><input id="iuUsername" placeholder="如：linwanqing"></div>
+  <div class="field"><label>姓名</label><input id="iuName" placeholder="如：林晚晴"></div>
+  <div class="field"><label>手机号</label><input id="iuPhone" placeholder="如：13800138000"></div>
+  <div class="field"><label>所属租户 ID</label><input id="iuTenant" value="tenant_default" placeholder="如：tenant_default"></div>
+  <div class="field"><label>所属机构</label><input id="iuOrg" placeholder="如：颐森汇·静安旗舰馆"></div>
+  <div class="field"><label>初始角色（含自定义角色）</label><select id="iuRole"><option value="">加载中…</option></select></div>
+  <button class="btn btn-primary" style="width:100%" onclick="userAdd(this)">${ic('ic-plus')} 创建用户</button>`);
+  fillRoleSelect('iuRole'); }
+async function fillRoleSelect(selId){
+  const res=await api('/admin/v1/roles');
+  const roles=rowsOf(res.data);
+  const sel=$('#'+selId);
+  if(!sel) return;
+  sel.innerHTML=roles.map(r=>`<option value="${esc(r.name)}">${esc(r.display_name||r.name)}${r.is_system?'（系统）':'（自定义）'}</option>`).join('')||'<option value="">无可用角色</option>';
+}
+async function userAdd(btn){
+  btn.disabled=true;
+  const body={username:$('#iuUsername').value,display_name:$('#iuName').value,tenant_id:$('#iuTenant').value||'tenant_default',org_id:$('#iuOrg').value||null,phone:$('#iuPhone').value||null,role_name:$('#iuRole').value};
+  const res=await api('/admin/v1/users/onboard',{method:'POST',body:JSON.stringify(body)});
+  if(res.ok){
+    const d=res.data&&res.data.data?res.data.data:{};
+    const pwd=d.generated_password||'(请查看响应)';
+    const _sel=$('#iuRole'); const roleDisp=(_sel&&_sel.selectedOptions&&_sel.selectedOptions[0]?_sel.selectedOptions[0].text:body.role_name).replace(/\s*[（(](系统|自定义)[)）]\s*$/,'');
+    openDrawer('用户创建成功',`<div class="sub-card" style="text-align:center">
+      <div style="font-size:42px;color:var(--emerald)">${ic('ic-check2')}</div>
+      <div style="font-size:15px;font-weight:600;color:var(--ink);margin-top:8px">用户 <b>${esc(d.username||body.username)}</b> 已创建</div>
+      <div style="font-size:12px;color:var(--light);margin-top:4px">角色：${esc(roleDisp)}</div>
+      <div style="margin-top:14px;background:var(--bg);border:1px dashed var(--border);border-radius:8px;padding:12px">
+        <div style="font-size:12px;color:var(--mid)">初始密码（仅显示一次）</div>
+        <div class="mono" style="font-size:18px;font-weight:700;color:var(--ink);margin-top:4px;user-select:all">${esc(pwd)}</div>
+      </div>
+      <button class="btn btn-primary" style="margin-top:16px" onclick="closeDrawer();renderUsers();">知道了，去用户列表</button>
+    </div>`);
+    renderUsers();
+  } else { toast('失败：'+((res.data&&(res.data.message||res.data.msg))||('HTTP '+res.status)),false); btn.disabled=false; }
+}
+async function openUserAssign(userId){
+  const u=window._usersMap&&window._usersMap[userId];
+  const current=u?(u.roles||[]):[];
+  const currentTags=current.map(r=>`<div style="display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:12.5px">
+    <span>${esc(r.display_name||r.name||'')}</span>
+    <button class="btn btn-icon" style="width:18px;height:18px" onclick="userRevokeRole('${esc(userId)}','${esc(r.name)}')">${ic('ic-x')}</button>
+  </div>`).join('')||'<span style="font-size:12px;color:var(--light)">暂无角色</span>';
+  openDrawer('分配角色',`<div class="sub" style="margin-bottom:12px">用户最终权限 = 所有已分配角色的权限并集</div>
+    <div class="sub-card" style="margin-bottom:14px"><div style="font-size:12px;color:var(--mid);margin-bottom:8px">当前角色</div><div style="display:flex;flex-wrap:wrap;gap:6px">${currentTags}</div></div>
+    <div class="field"><label>添加角色（含自定义角色）</label><select id="uaRole"><option value="">加载中…</option></select></div>
+    <button class="btn btn-primary" style="width:100%" onclick="userAssignRole('${esc(userId)}')">分配角色</button>`);
+  // 动态加载角色列表（含自定义角色）
+  const res=await api('/admin/v1/roles');
+  const roles=rowsOf(res.data);
+  const opts=roles.map(r=>`<option value="${esc(r.name)}">${esc(r.display_name||r.name)}${r.is_system?'（系统）':'（自定义）'}</option>`).join('');
+  const sel=$('#uaRole');
+  if(sel){ sel.innerHTML=opts||'<option value="">无可用角色</option>'; }
+}
+async function userAssignRole(userId){
+  const roleName=$('#uaRole').value;
+  const res=await api('/admin/v1/roles/assign',{method:'POST',body:JSON.stringify({user_id:userId,role_name:roleName})});
+  if(res.ok){ toast('角色分配成功',true); renderUsers(); closeDrawer(); }
+  else { toast('分配失败：'+((res.data&&(res.data.message||res.data.msg))||('HTTP '+res.status)),false); }
+}
+async function userRevokeRole(userId,roleName){
+  if(!confirm(`确定移除角色「${roleName}」？`)) return;
+  const res=await api('/admin/v1/roles/revoke',{method:'DELETE',body:JSON.stringify({user_id:userId,role_name:roleName})});
+  if(res.ok){ toast('角色已移除',true); renderUsers(); closeDrawer(); }
+  else { toast('移除失败：'+((res.data&&(res.data.message||res.data.msg))||('HTTP '+res.status)),false); }
+}
+async function userResetPassword(userId,username){
+  if(!confirm(`确定重置用户「${username}」的密码？`)) return;
+  const res=await api('/admin/v1/users/'+userId+'/reset-password',{method:'POST',body:JSON.stringify({})});
+  if(res.ok){
+    const d=res.data&&res.data.data?res.data.data:{};
+    openDrawer('密码已重置',`<div class="sub-card" style="text-align:center">
+      <div style="font-size:42px;color:var(--emerald)">${ic('ic-check2')}</div>
+      <div style="font-size:15px;font-weight:600;color:var(--ink);margin-top:8px">用户 <b>${esc(username)}</b> 密码已重置</div>
+      <div style="margin-top:14px;background:var(--bg);border:1px dashed var(--border);border-radius:8px;padding:12px">
+        <div style="font-size:12px;color:var(--mid)">新密码（仅显示一次）</div>
+        <div class="mono" style="font-size:18px;font-weight:700;color:var(--ink);margin-top:4px;user-select:all">${esc(d.new_password||'')}</div>
+      </div>
+      <button class="btn btn-primary" style="margin-top:16px" onclick="closeDrawer();">关闭</button>
+    </div>`);
+  } else { toast('重置失败：'+((res.data&&(res.data.message||res.data.msg))||('HTTP '+res.status)),false); }
+}
+async function userToggleStatus(userId,current){
+  const nextStatus=current==='active'?'disabled':'active';
+  const label=nextStatus==='active'?'启用':'禁用';
+  if(!confirm(`确定${label}该用户？`)) return;
+  const res=await api('/admin/v1/users/'+userId,{method:'PATCH',body:JSON.stringify({status:nextStatus})});
+  if(res.ok){ toast(`用户已${label}`,true); renderUsers(); }
+  else { toast(`${label}失败：`+((res.data&&(res.data.message||res.data.msg))||('HTTP '+res.status)),false); }
+}
+async function userDelete(userId,username){
+  if(!confirm(`确定删除用户「${username}」？此操作不可恢复。`)) return;
+  const res=await api('/admin/v1/users/'+userId,{method:'DELETE'});
+  if(res.ok){ toast('用户已删除',true); renderUsers(); }
+  else { toast('删除失败：'+((res.data&&(res.data.message||res.data.msg))||('HTTP '+res.status)),false); }
+}
+
+function closeUserActions(){
+  const m=$('#globalActionsMenu'); if(!m) return; m.style.display='none'; m.classList.remove('open'); m.innerHTML='';
+  document.removeEventListener('click',onClickOutsideActions);
+}
+function onClickOutsideActions(e){
+  const m=$('#globalActionsMenu'); if(!m) return;
+  if(!m.contains(e.target) && !e.target.closest('.action-more')){ closeUserActions(); }
+}
+function openUserActions(e,userId,username,status){
+  e.stopPropagation(); closeUserActions();
+  const active=(status||'active')==='active';
+  const m=$('#globalActionsMenu');
+  m.innerHTML=`<button onclick="userResetPassword('${esc(userId)}','${esc(username)}');closeUserActions()">重置密码</button>
+    <button onclick="userToggleStatus('${esc(userId)}','${esc(status||'active')}');closeUserActions()">${active?'禁用':'启用'}</button>
+    <button class="danger" onclick="userDelete('${esc(userId)}','${esc(username)}');closeUserActions()">删除</button>`;
+  const rect=e.currentTarget.getBoundingClientRect();
+  m.style.left=(rect.right)+'px';
+  m.style.top=(rect.top)+'px';
+  m.style.transform='translateX(-100%)';
+  m.style.display='block';
+  requestAnimationFrame(()=>m.classList.add('open'));
+  document.addEventListener('click',onClickOutsideActions);
+}
+
+async function viewUserPerms(userId){
+  const u=window._usersMap&&window._usersMap[userId];
+  if(!u){ toast('用户数据未加载',false); return; }
+  const userRoles=(u.roles||[]);
+  openDrawer('用户权限 · '+(u.display_name||u.username||''),`<div class="sub" style="margin-bottom:12px">用户 <b>${esc(u.username||'')}</b> 的最终权限 = 所有已分配角色的权限并集。</div>
+    <div class="sub-card" style="margin-bottom:14px"><div style="font-size:12px;color:var(--mid);margin-bottom:8px">已分配角色（${userRoles.length}）</div><div style="display:flex;flex-wrap:wrap;gap:6px">${userRoles.map(r=>`<span class="badge b-gray">${esc(r.display_name||r.name||'')}</span>`).join('')||'<span style="font-size:12px;color:var(--light)">暂无角色（无权限）</span>'}</div></div>
+    <div id="upBody"><div class="empty">${ic('ic-shield','e-ico')}正在计算权限并集…</div></div>`);
+  const res=await api('/admin/v1/roles');
+  const roles=rowsOf(res.data);
+  const byName={}; roles.forEach(r=>byName[r.name]=r);
+  const box=$('#upBody'); if(!box) return;
+  if(userRoles.some(r=>r.name==='super_admin')){
+    box.innerHTML=`<div class="sub-card" style="border:1px solid var(--emerald);background:rgba(16,185,129,.06)"><div style="font-size:13px;font-weight:700;color:var(--emerald)">超级管理员 · 拥有平台全部权限</div><div style="font-size:12px;color:var(--mid);margin-top:4px">该用户含 super_admin 角色，代码层直接全通，无需逐条授予。</div></div>`;
+    return;
+  }
+  const union={};
+  userRoles.forEach(r=>{ const role=byName[r.name]; (role&&role.permissions||[]).forEach(p=>{ if(!union[p.code]) union[p.code]=p; }); });
+  const list=Object.values(union);
+  if(!list.length){ box.innerHTML='<div class="empty">该用户当前角色未授予任何具体权限。</div>'; return; }
+  const groups={};
+  list.forEach(p=>{ const s=p.scene||'all'; (groups[s]=groups[s]||[]).push(p); });
+  const title={'all':'通用能力','health':'养生 / 大健康','medical':'医疗','edu':'培训'};
+  box.innerHTML=`<div style="font-size:12px;color:var(--mid);margin-bottom:8px">有效权限合计 <b style="color:var(--ink)">${list.length}</b> 项（按场景）</div>`+Object.keys(groups).map(g=>`<div class="sub-card" style="margin-bottom:10px"><div class="sc-title">${title[g]||g}（${groups[g].length}）</div><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px">${groups[g].map(p=>`<span class="badge b-gray" title="${esc(p.code)}">${esc(p.name)}</span>`).join('')}</div></div>`).join('');
+}
+/* ============ 角色权限 ============ */
+let _allRoles=[], _allPerms=[];
+async function renderRoles(){
+  $('#content').innerHTML=`<div class="view"><div class="toolbar"><button class="btn btn-primary" style="margin-left:auto" onclick="openRoleCreate()">${ic('ic-plus')} 新建角色</button></div><div class="grid3" id="rolesGrid"><div class="empty">${ic('ic-shield','e-ico')}正在拉取角色…</div></div>
+    <div class="card card-pad" style="margin-top:16px"><div class="section-title">${ic('ic-shield','ti')}平台权限清单（<span id="permTotal">0</span> 项 · 按场景）</div><div class="sub" style="margin-bottom:12px">配置入口：/admin/v1/roles 查看与编辑，/admin/v1/roles/assign 分配用户角色，/admin/v1/permissions 查看权限定义。点击角色卡片「编辑权限」可精细调整该角色的权限集合。</div><div id="permBlocks"></div></div>
+  </div>`;
+  const [rolesRes,permRes]=await Promise.all([api('/admin/v1/roles'),api('/admin/v1/permissions')]);
+  const roles=rowsOf(rolesRes.data);
+  const perms=rowsOf(permRes.data);
+  _allRoles=roles; _allPerms=perms;
+  const groups={};
+  perms.forEach(p=>{ const s=p.scene||'all'; (groups[s]=groups[s]||[]).push(p); });
+  const groupTitle={'all':'通用能力','health':'养生 / 大健康','medical':'医疗','edu':'培训'};
+  const permBlocks=Object.keys(groups).map(g=>`<div class="sub-card"><div class="sc-title">${groupTitle[g]||g}（${groups[g].length}）</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">${groups[g].map(p=>`<span class="badge b-gray" title="${esc(p.code)}">${esc(p.name)}</span>`).join('')}</div></div>`).join('');
+  $('#permTotal').textContent=perms.length;
+  $('#permBlocks').innerHTML=permBlocks||'<div class="empty">暂无权限</div>';
+  const roleCards=roles.map(r=>{
+    const permCount=(r.permissions||[]).length;
+    const isSys=r.is_system;
+    const actions=`<div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-outline" style="font-size:12px;padding:5px 9px;flex:1" onclick="openRolePermEdit('${esc(r.id)}')">${ic('ic-edit')} 编辑权限</button>
+      ${isSys?'':`<button class="btn btn-outline" style="font-size:12px;padding:5px 9px;color:var(--accent)" onclick="deleteRole('${esc(r.id)}')">${ic('ic-x')} 删除</button>`}
+    </div>`;
+    return `<div class="plan-card" style="display:flex;flex-direction:column"><div style="font-size:15px;font-weight:700;color:var(--ink);margin-bottom:4px">${esc(r.display_name||r.name)}</div>
+    <div style="font-size:12px;color:var(--light);margin-bottom:14px">${esc(r.description||'')}</div>
+    <div style="margin-top:auto">
+    <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--mid)">角色类型</span><span style="color:var(--ink);font-weight:600">${isSys?'<span class="badge b-gray">系统预置</span>':'<span class="badge b-emerald">自定义</span>'}</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--mid)">绑定用户</span><span style="color:var(--ink);font-weight:600">${r.users||0}</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:6px 0"><span style="color:var(--mid)">权限数</span><span style="color:var(--ink);font-weight:600">${permCount}</span></div>
+    <details style="margin-top:10px"><summary style="cursor:pointer;font-size:12.5px;color:var(--primary);font-weight:600;display:flex;align-items:center;gap:4px">${ic('ic-chevron-right')} 查看权限明细</summary><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px">${(r.permissions||[]).map(p=>`<span class="badge b-gray">${esc(p.name)}</span>`).join('')||'<span style="font-size:12px;color:var(--light)">无权限</span>'}</div></details>
+    ${actions}</div></div>`;
+  }).join('');
+  $('#rolesGrid').innerHTML=roleCards||'<div class="empty">暂无角色</div>';
+}
+function permChecklistHtml(checked, prefix){
+  const perms=_allPerms||[];
+  const groups={};
+  perms.forEach(p=>{ const s=p.scene||'all'; (groups[s]=groups[s]||[]).push(p); });
+  const title={'all':'通用能力','health':'养生 / 大健康','medical':'医疗','edu':'培训'};
+  return Object.keys(groups).map(g=>`<div class="sub-card" style="margin-bottom:10px"><div class="sc-title">${title[g]||g}（${groups[g].length}）</div>
+    <div style="display:flex;flex-direction:column;gap:2px;margin-top:6px">${groups[g].map(p=>`<label class="perm-item"><input type="checkbox" class="perm-chk" value="${esc(p.code)}" ${checked.has(p.code)?'checked':''}><span>${esc(p.name)}</span><span class="p-code">${esc(p.code)}</span></label>`).join('')}</div></div>`).join('');
+}
+async function openRolePermEdit(roleId){
+  const role=_allRoles.find(r=>r.id===roleId);
+  if(!role){ toast('角色数据未加载',false); return; }
+  const checked=new Set((role.permissions||[]).map(p=>p.code));
+  const html=`<div class="sub" style="margin-bottom:12px">编辑角色「${esc(role.display_name||role.name)}」的权限：<b>勾选即授予</b>，保存后整体替换该角色的权限集合。${role.is_system?'<br><b style="color:var(--accent)">⚠ 这是系统预置角色，修改将影响所有拥有该角色的用户。</b>':''}</div>
+    ${permChecklistHtml(checked,'rp')}
+    <button class="btn btn-primary" style="width:100%;margin-top:16px" onclick="saveRolePerms('${esc(roleId)}')">保存权限</button>`;
+  openDrawer('编辑角色权限 · '+(role.display_name||role.name), html);
+}
+async function saveRolePerms(roleId){
+  const codes=[...document.querySelectorAll('#drawerBody .perm-chk:checked')].map(c=>c.value);
+  const res=await api('/admin/v1/roles/'+roleId+'/permissions',{method:'PUT',body:JSON.stringify({perm_codes:codes})});
+  if(res.ok){ toast('角色权限已更新（'+codes.length+' 项）',true); closeDrawer(); renderRoles(); }
+  else { toast('更新失败：'+((res.data&&(res.data.message||res.data.msg))||('HTTP '+res.status)),false); }
+}
+function openRoleCreate(){
+  const html=`<div class="field"><label>角色标识（英文/下划线，租户内唯一）</label><input id="crName" placeholder="如 custom_operator"></div>
+    <div class="field"><label>显示名称</label><input id="crDisplay" placeholder="如 运营专员"></div>
+    <div class="field"><label>描述（可选）</label><input id="crDesc" placeholder="如 拥有部分运营权限的自定义角色"></div>
+    <div class="sub" style="margin:14px 0 8px;font-weight:600;font-size:13px">授予权限（可留空，创建后再编辑）</div>
+    ${permChecklistHtml(new Set(),'cr')}
+    <button class="btn btn-primary" style="width:100%;margin-top:16px" onclick="createRole()">创建角色</button>`;
+  openDrawer('新建自定义角色', html);
+}
+async function createRole(){
+  const name=($('#crName').value||'').trim().replace(/\s+/g,'_');
+  if(!name){ toast('请填写角色标识',false); return; }
+  const display=$('#crDisplay').value.trim()||name;
+  const desc=$('#crDesc').value.trim()||null;
+  const codes=[...document.querySelectorAll('#drawerBody .perm-chk:checked')].map(c=>c.value);
+  const res=await api('/admin/v1/roles',{method:'POST',body:JSON.stringify({name,display_name:display,description:desc,perm_codes:codes})});
+  if(res.ok){ const d=res.data&&res.data.data?res.data.data:{}; toast('角色已创建：'+(d.display_name||display),true); closeDrawer(); renderRoles(); }
+  else { toast('创建失败：'+((res.data&&(res.data.message||res.data.msg))||('HTTP '+res.status)),false); }
+}
+async function deleteRole(roleId){
+  const role=_allRoles.find(r=>r.id===roleId);
+  const label=role?(role.display_name||role.name):roleId;
+  if(!confirm(`确定删除自定义角色「${label}」？\n该角色下所有用户关联将一并清除，且不可恢复。`)) return;
+  const res=await api('/admin/v1/roles/'+roleId,{method:'DELETE'});
+  if(res.ok){ toast('角色已删除',true); renderRoles(); }
+  else { toast('删除失败：'+((res.data&&(res.data.message||res.data.msg))||('HTTP '+res.status)),false); }
+}
+
+/* ============ 内容管控（敏感词） ============ */
+async function renderWords(){
+  $('#content').innerHTML=`<div class="view"><div class="toolbar"><div class="pills" id="wordsPills"></div><button class="btn btn-primary" style="margin-left:auto" onclick="openWordAdd()">${ic('ic-plus')} 添加敏感词</button></div>
+    <div class="card card-pad"><div class="section-title">${ic('ic-alert','ti')}敏感词库 <span class="badge b-gray" id="wordsCount">0</span></div>
+    <table class="data"><thead><tr><th>敏感词</th><th>场景</th><th>级别</th><th>替换词</th><th>操作</th></tr></thead><tbody id="wordsBody"><tr><td colspan="5" class="empty">${ic('ic-alert','e-ico')}加载中…</td></tr></tbody></table></div></div>`;
+  $('#wordsPills').innerHTML=['全部','HEALTH','MED','EDU','GLOBAL'].map(p=>`<button class="pill ${p==='全部'?'active':''}" onclick="setWordPill('${p}',this)">${p==='全部'?'全部':p}</button>`).join('');
+  await loadWords();
+}
+let WORD_PILL='全部';
+async function loadWords(){
+  const res=await api('/admin/v1/content/words?page=1&page_size=100');
+  const items=rowsOf(res.data);
+  window._wordsAll=items;
+  paintWords();
+}
+function paintWords(){
+  const items=(window._wordsAll||[]).filter(w=>WORD_PILL==='全部'||(w.scene||'')===WORD_PILL);
+  $('#wordsCount').textContent=items.length;
+  $('#wordsBody').innerHTML=items.length?items.map(w=>`<tr><td style="font-weight:600;color:var(--ink)">${esc(w.word)}</td><td><span class="badge b-gray">${esc(w.scene)}</span></td><td>${sBadge(w.level)}</td><td style="font-size:12px;color:var(--mid)">${esc(w.replacement||'—')}</td>
+    <td style="white-space:nowrap"><button class="btn btn-outline" style="font-size:12px;padding:5px 9px" onclick="wordDelete('${esc(w.id)}',this)">${ic('ic-x')} 删除</button></td></tr>`).join(''):emptyState('ic-alert','暂无敏感词','真实端点 /admin/v1/content/words 已接通。');
+}
+function setWordPill(p,el){ WORD_PILL=p; el.parentElement.querySelectorAll('.pill').forEach(x=>x.classList.remove('active')); el.classList.add('active'); paintWords(); }
+function openWordAdd(){ openDrawer('添加敏感词',`<div class="field"><label>敏感词</label><input id="wwWord" placeholder="如：根治"></div>
+  <div class="field"><label>场景</label><select id="wwScene"><option value="HEALTH">大健康</option><option value="MED">医疗</option><option value="EDU">培训</option><option value="GLOBAL">全局</option></select></div>
+  <div class="field"><label>级别</label><select id="wwLevel"><option value="warn">警告</option><option value="block">拦截</option></select></div>
+  <div class="field"><label>替换词（可选）</label><input id="wwReplace" placeholder="如：缓解"></div>
+  <button class="btn btn-primary" style="width:100%" onclick="wordAdd(this)">${ic('ic-plus')} 添加</button>`); }
+async function wordAdd(btn){
+  btn.disabled=true;
+  const body={word:$('#wwWord').value,scene:$('#wwScene').value,level:$('#wwLevel').value,replacement:$('#wwReplace').value||null};
+  const res=await api('/admin/v1/content/words',{method:'POST',body:JSON.stringify(body)});
+  if(res.ok){ toast('敏感词已添加',true); loadWords(); closeDrawer(); } else { toast('失败：'+((res.data&&(res.data.message||res.data.msg))||('HTTP '+res.status)),false); btn.disabled=false; }
+}
+async function wordDelete(id,btn){
+  btn.disabled=true;
+  const res=await api('/admin/v1/content/words/'+id,{method:'DELETE'});
+  if(res.ok){ toast('已删除',true); loadWords(); } else { toast('失败',false); btn.disabled=false; }
+}
+
+/* ============ 成本中心 ============ */
+async function renderCost(){
+  $('#content').innerHTML=`<div class="view"><div class="card card-pad" id="costLoad"><div class="empty">${ic('ic-pie','e-ico')}正在拉取成本与基建评估数据…</div></div></div>`;
+  const [ov,trend,breakdown,daily,resources,expiring,alerts,forecast]=await Promise.all([
+    api('/admin/v1/cost/overview'),api('/admin/v1/cost/trend'),api('/admin/v1/cost/breakdown'),
+    api('/admin/v1/cost/daily'),api('/admin/v1/cost/resources'),api('/admin/v1/cost/services/expiring'),
+    api('/admin/v1/monitor/scaling-alerts'),api('/admin/v1/monitor/capacity-forecast')]);
+  const o=(ov.data&&ov.data.data)||{};
+  const tr=(trend.data&&trend.data.data&&trend.data.data.trend)||rowsOf(trend.data);
+  const bd=(breakdown.data&&breakdown.data.data&&breakdown.data.data.breakdown)||rowsOf(breakdown.data);
+  const da=(daily.data&&daily.data.data&&daily.data.data.daily)||rowsOf(daily.data);
+  const resList=(resources.data&&resources.data.data&&resources.data.data.resources)||rowsOf(resources.data);
+  const exp=(expiring.data&&expiring.data.data&&expiring.data.data.services)||rowsOf(expiring.data);
+  const als=(alerts.data&&alerts.data.data&&alerts.data.data.alerts)||rowsOf(alerts.data);
+  const fc=(forecast.data&&forecast.data.data&&forecast.data.data.forecast)||rowsOf(forecast.data);
+  const metrics=`<div class="metrics">
+    ${metricCard('ic-dollar','本月成本',money(o.total_cost_this_month||0),o.cost_change_percent>0?'up':'down',(o.cost_change_percent>0?'▲ ':'▼ ')+Math.abs(o.cost_change_percent||0)+'%','环比上月')}
+    ${metricCard('ic-bar','预算使用',(o.budget_percent||0).toFixed(1)+'%','flat','月度预算 '+money(o.monthly_budget||0),'')}
+    ${metricCard('ic-server','云资源',(resList.length||0).toLocaleString(),'up','运行中 / 规划中','项')}
+    ${metricCard('ic-alert','基建告警',(als.filter(a=>a.severity==='WARN').length||0).toLocaleString(),'down','待关注','项')}
+  </div>`;
+  const trendCard=`<div class="card card-pad"><div class="section-title">${ic('ic-trending','ti')}12 个月成本趋势（LLM / 服务器 / CDN / 数据库）</div>${tr.length?lineChart(tr,['LLM','Server','CDN','DB'],['#B03A2E','var(--primary)','var(--gold)','#3B82F6']):'<div class="empty">无数据</div>'}</div>`;
+  const pie=bd.length?`<svg viewBox="0 0 120 120" width="120" height="120">${bd.reduce((acc,c,i)=>{const prev=acc.start;const pct=(c.amount/(o.total_cost_this_month||1))*360;acc.start+=pct;acc.svg+=`<path d="${donutArc(60,60,50,prev,acc.start)}" fill="${c.color||'var(--primary)'}"/>`;return acc;},{start:0,svg:''}).svg}<circle cx="60" cy="60" r="32" fill="#fff"/></svg>`:'';
+  const breakdownCard=`<div class="card card-pad"><div class="section-title">${ic('ic-pie','ti')}成本构成</div><div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">${pie}<div style="flex:1;min-width:180px">${bd.map(c=>`<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;margin:6px 0"><span style="width:10px;height:10px;border-radius:3px;background:${c.color||'var(--primary)'}"></span><span style="flex:1;color:var(--mid)">${esc(c.category)}</span><span style="font-weight:600;color:var(--ink)">¥${(c.amount||0).toLocaleString()}</span></div>`).join('')}</div></div></div>`;
+  const dailyCard=`<div class="card card-pad"><div class="section-title">${ic('ic-bar','ti')}近 7 日日成本</div>${da.length?lineChart(da,['total'],['var(--primary)']):'<div class="empty">无数据</div>'}</div>`;
+  const resourceCard=`<div class="card card-pad"><div class="section-title">${ic('ic-server','ti')}云资源清单</div>
+    <table class="data"><thead><tr><th>资源</th><th>规格</th><th>提供商</th><th>月费用</th><th>状态</th></tr></thead><tbody>
+    ${resList.length?resList.map(r=>`<tr><td style="font-weight:600;color:var(--ink)">${esc(r.name)}</td><td style="font-size:12px;color:var(--mid)">${esc(r.spec)}</td><td style="font-size:12px;color:var(--mid)">${esc(r.provider)}</td><td style="font-weight:600;color:var(--gold)">¥${(r.monthlyCost||0).toLocaleString()}</td><td>${sBadge(r.status)}</td></tr>`).join(''):`<tr><td colspan="5">${emptyState('ic-server','暂无资源')}</td></tr>`}</tbody></table></div>`;
+  const expireCard=`<div class="card card-pad"><div class="section-title">${ic('ic-clock','ti')}云服务到期提醒</div>
+    <table class="data"><thead><tr><th>服务</th><th>类型</th><th>到期日</th><th>剩余天数</th><th>费用</th><th>状态</th></tr></thead><tbody>
+    ${exp.length?exp.map(s=>`<tr><td style="font-weight:600;color:var(--ink)">${esc(s.name)}</td><td style="font-size:12px;color:var(--mid)">${esc(s.type)}</td><td style="font-size:12px;color:var(--mid)">${esc(s.expires)}</td><td style="text-align:center">${s.daysLeft||'—'}</td><td style="font-weight:600;color:var(--gold)">¥${(s.cost||0).toLocaleString()}<span style="font-size:11px;color:var(--light)">/${esc(s.period)}</span></td><td>${sBadge(s.status)}</td></tr>`).join(''):`<tr><td colspan="6">${emptyState('ic-clock','暂无到期提醒')}</td></tr>`}</tbody></table></div>`;
+  const alertCard=`<div class="card card-pad"><div class="section-title">${ic('ic-alert','ti')}基建评估与扩容建议</div>
+    ${als.length?als.map(a=>`<div class="alert-row ${a.severity==='CRIT'?'crit':''}"><div class="a-title">${ic('ic-alert')} ${esc(a.resource)} · ${esc(a.severity)}</div><div class="a-msg">${esc(a.message)}</div><div class="a-sug">建议：${esc(a.suggestion)}</div><div style="font-size:11.5px;color:var(--light);margin-top:4px">预测：${esc(a.forecast)}</div></div>`).join(''):'<div class="empty">暂无基建告警</div>'}</div>`;
+  const fcCard=`<div class="card card-pad"><div class="section-title">${ic('ic-trending','ti')}容量预测（30 天）</div>${fc.length?lineChart(fc,['memory','disk','cpu'],['var(--accent)','#3B82F6','var(--primary)']):'<div class="empty">无数据</div>'}</div>`;
+  $('#content').innerHTML=`<div class="view">${metrics}
+    <div class="grid2" style="margin-top:16px">${breakdownCard}${trendCard}</div>
+    <div class="grid2" style="margin-top:16px">${dailyCard}${alertCard}</div>
+    <div class="grid2" style="margin-top:16px">${resourceCard}${expireCard}</div>
+    <div style="margin-top:16px">${fcCard}</div>
+  </div>`;
+}
+function donutArc(cx,cy,r,start,end){ const s=Math.PI*(start-90)/180; const e=Math.PI*(end-90)/180; const x1=cx+r*Math.cos(s), y1=cy+r*Math.sin(s), x2=cx+r*Math.cos(e), y2=cy+r*Math.sin(e); const large=end-start>180?1:0; return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`; }
+
+/* ============ 审计日志 ============ */
+async function renderAudit(){
+  $('#content').innerHTML=`<div class="view"><div class="card card-pad"><div class="section-title">${ic('ic-filesearch','ti')}审计日志 <span class="badge b-gray" id="auditCount">0</span></div>
+    <table class="data"><thead><tr><th>时间</th><th>操作人</th><th>动作</th><th>对象</th><th>详情</th><th>结果</th></tr></thead><tbody id="auditBody"><tr><td colspan="6" class="empty">${ic('ic-filesearch','e-ico')}加载中…</td></tr></tbody></table></div></div>`;
+  const res=await api('/admin/v1/audit-logs?page=1&page_size=20');
+  const items=rowsOf(res.data);
+  $('#auditCount').textContent=items.length;
+  $('#auditBody').innerHTML=items.length?items.map(a=>{
+    const det=a.detail||{}; const detStr=Object.keys(det).map(k=>`${k}=${det[k]}`).join('，');
+    return `<tr><td style="font-size:12px;color:var(--light);white-space:nowrap">${esc((a.created_at||'').replace('T',' ').slice(0,19))}</td>
+      <td style="font-weight:600;color:var(--ink)">${esc(a.user_id||'系统')}</td>
+      <td><span class="badge b-blue">${esc(a.action||'-')}</span></td>
+      <td class="mono" style="font-size:12px">${esc((a.target_type||'')+':'+(a.target_id||'').slice(0,12))}</td>
+      <td style="font-size:12px;color:var(--mid)">${esc(detStr||'-')}</td>
+      <td>${a.success?`<span class="badge b-emerald">成功</span>`:`<span class="badge b-gray">失败</span>`}</td></tr>`;
+  }).join(''):emptyState('ic-filesearch','暂无审计记录','真实端点 /admin/v1/audit-logs 已接通。');
+}
+
+/* ============ 通用：pill / search ============ */
+function setPill(view,pill,el){ VSTATE[view].pill=pill; el.parentElement.querySelectorAll('.pill').forEach(x=>x.classList.remove('active')); el.classList.add('active');
+  if(view==='tenants')paintTenants(); else if(view==='keys')paintKeys(); else if(view==='billing')paintBills(); }
+function onSearch(){ const v=VSTATE[currentView]; if(!v)return; v.q=$('#searchInput').value.trim();
+  if(currentView==='tenants')paintTenants(); else if(currentView==='keys')paintKeys(); else if(currentView==='billing')paintBills(); }
+
+async function loadBadge(){ const res=await api('/admin/v1/kg/review/pending'); const n=rowsOf(res.data).length; if(n){ $('#navBadge').style.display='inline-block'; $('#navBadge').textContent=n; } }
+</script>
+<div class="actions-menu" id="globalActionsMenu" style="display:none"></div>
+</body>
+</html>

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>能力目录 · 岐黄智脑运营控制台</title>
+<link rel="icon" href="data:," />
+<link rel="stylesheet" href="qihuang-design.css?v=2" />
+</head>
+<body>
+
+<!-- 图标库 -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol width="24" height="24" id="ic-sprout" viewBox="0 0 24 24"><path d="M7 20h10M10 20c5.5-2.5 5.5-9.5 2-13M14 4c-1.5 1.5-2 4-1 6M12 4c0 4 1 6 3 7M7 20c-1-2 0-4 2-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol width="24" height="24" id="ic-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" fill="none" stroke="currentColor" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol width="24" height="24" id="ic-bell" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.73 21a2 2 0 0 1-3.46 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol width="24" height="24" id="ic-chevron-down" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol width="24" height="24" id="ic-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="16 17 21 12 16 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="21" y1="12" x2="9" y2="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol width="24" height="24" id="ic-dashboard" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect width="7" height="5" x="14" y="3" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect width="7" height="9" x="14" y="12" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect width="7" height="5" x="3" y="16" rx="1" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol width="24" height="24" id="ic-building" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol width="24" height="24" id="ic-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="m9 12 2 2 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol width="24" height="24" id="ic-key" viewBox="0 0 24 24"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></symbol>
+    <symbol width="24" height="24" id="ic-bar" viewBox="0 0 24 24"><path d="M3 3v18h18M18 17V9M13 17V5M8 17v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol width="24" height="24" id="ic-book" viewBox="0 0 24 24"><path d="M8 3H2v15h6a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2ZM13 3l-4 2M17 3l-4 2M22 3v15h-6a2 2 0 0 0-2 2V5a2 2 0 0 1 2-2h6ZM9 11l2 2 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol width="24" height="24" id="ic-activity" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol width="24" height="24" id="ic-package" viewBox="0 0 24 24"><path d="M16.5 9.4 7.55 4.24M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="3.27 6.96 12 12.01 20.73 6.96" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="22.08" x2="12" y2="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol width="24" height="24" id="ic-filesearch" viewBox="0 0 24 24"><path d="M14 2v6h6M4 7V4a2 2 0 0 1 2-2h8l6 6v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="11.5" cy="14.5" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/><line x1="13.27" y1="16.27" x2="15.5" y2="18.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol width="24" height="24" id="ic-bank" viewBox="0 0 24 24"><rect width="20" height="12" x="2" y="6" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6 12h.01M18 12h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol width="24" height="24" id="ic-rocket" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol width="24" height="24" id="ic-git" viewBox="0 0 24 24"><line x1="6" x2="6" y1="3" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="18" cy="6" r="3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="6" cy="18" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M18 9a9 9 0 0 1-9 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol width="24" height="24" id="ic-cloud" viewBox="0 0 24 24"><path d="M12 13v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="m8 17 4-4 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol width="24" height="24" id="ic-chevron-right" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol width="24" height="24" id="ic-check2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="m9 12 2 2 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol width="24" height="24" id="ic-x" viewBox="0 0 24 24"><path d="M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<!-- 登录遮罩 -->
+<div class="login-mask" id="loginMask">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="login-logo"><svg width="22" height="22"><use href="#ic-sprout"/></svg></div>
+      <div><h2>岐黄智脑</h2><p>运营控制台 · V1.1</p></div>
+    </div>
+    <h3>管理员登录</h3>
+    <div class="sub">本端口为独立登录，不与其它端互通</div>
+    <button class="login-btn" id="loginBtn" onclick="doLogin()">
+      <svg width="16" height="16"><use href="#ic-shield"/></svg> 以管理员身份进入
+    </button>
+    <div class="login-err" id="loginErr"></div>
+    <div class="login-note">登录接口 POST /dev/admin-login（独立管理员令牌）</div>
+  </div>
+</div>
+<div class="filebar" id="filebar">当前为本地预览，部分数据需经公网 8602；如数据加载失败，请双击「打开能力上架.bat」以 localhost 方式打开。</div>
+
+<!-- 框架 -->
+<div class="app" id="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo"><svg width="20" height="20"><use href="#ic-sprout"/></svg></div>
+      <div><div class="brand-name">岐黄智脑</div><div class="brand-sub">运营控制台 · V1.1</div></div>
+    </div>
+    <nav class="nav">
+      <div class="nav-group">运营管理</div>
+      <button class="nav-item" data-page="dashboard"><svg class="ni"><use href="#ic-dashboard"/></svg>工作台</button>
+      <button class="nav-item" data-page="tenants"><svg class="ni"><use href="#ic-building"/></svg>租户管理</button>
+      <button class="nav-item" data-page="roles"><svg class="ni"><use href="#ic-shield"/></svg>权限管理</button>
+      <button class="nav-item" data-page="keys"><svg class="ni"><use href="#ic-key"/></svg>密钥配额</button>
+      <button class="nav-item" data-page="billing"><svg class="ni"><use href="#ic-bar"/></svg>计量计费</button>
+      <button class="nav-item active" data-page="capabilities"><svg class="ni"><use href="#ic-package"/></svg>能力目录</button>
+      <button class="nav-item" data-page="content"><svg class="ni"><use href="#ic-book"/></svg>内容管控<span class="nav-badge" id="navBadge">0</span></button>
+      <button class="nav-item" data-page="monitor"><svg class="ni"><use href="#ic-activity"/></svg>监控运维</button>
+    </nav>
+    <div class="sidebar-foot">
+      <div><span class="status-dot"></span>平台运行正常</div>
+      <div>稳定性等级 L2 · 可用性 99.95%</div>
+      <button class="logout-btn" onclick="doLogout()"><svg width="14" height="14"><use href="#ic-logout"/></svg> 退出登录 · 切换账号</button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <h1 id="pageTitle">能力目录</h1>
+      <div class="search">
+        <svg class="si"><use href="#ic-search"/></svg>
+        <input placeholder="搜索租户 / 用户 / 密钥" />
+      </div>
+      <button class="icon-btn"><svg width="20" height="20"><use href="#ic-bell"/></svg><span class="dot"></span></button>
+      <button class="user"><div class="avatar">王</div><span>王运营</span><svg width="16" height="16"><use href="#ic-chevron-down"/></svg></button>
+    </header>
+
+    <main class="content" id="content"><!-- 动态渲染 --></main>
+  </div>
+</div>
+
+<!-- 配置抽屉 -->
+<div class="drawer-mask" id="drawerMask" onclick="if(event.target===this)closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-head">
+    <h3 id="drawerTitle">能力配置</h3>
+    <button class="drawer-close" onclick="closeDrawer()"><svg width="18" height="18"><use href="#ic-x"/></svg></button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</div>
+
+<script>
+const API='http://111.231.63.73:8602';
+let TOKEN=null;
+const $=(s)=>document.querySelector(s);
+const ic=(id,cls='')=>`<svg class="${cls}" width="16" height="16" viewBox="0 0 24 24"><use href="#${id}"/></svg>`;
+const catCls={ '基础能力':'b-emerald','增值模块':'b-amber','内容板块':'b-blue' };
+const statusCls={ '已上架':'b-emerald','灰度中':'b-amber','内测':'b-gray' };
+
+// 现有功能规划的真实能力模块
+const REAL_CAPS=[
+  {name:'3D 穴位指导',code:'module_3d',cat:'增值模块',scenes:['养生','医疗'],metering:'独立计量/次',price:'¥0.5/次',status:'已上架'},
+  {name:'养生图谱板块',code:'module_yangsheng',cat:'内容板块',scenes:['养生'],metering:'包年/按次',price:'¥12,000/年',status:'灰度中',isNew:true},
+  {name:'中医体质辨识',code:'tizhi',cat:'基础能力',scenes:['养生','医疗','培训'],metering:'按次',price:'¥0.3/次',status:'已上架'},
+  {name:'AI 辅助辨证',code:'med_diagnose',cat:'基础能力',scenes:['医疗'],metering:'按次',price:'¥0.8/次',status:'已上架'},
+  {name:'经典陪练教学',code:'edu_tutor',cat:'基础能力',scenes:['培训'],metering:'按次',price:'¥0.4/次',status:'已上架'},
+  {name:'处方四级审查',code:'rx_review',cat:'基础能力',scenes:['医疗'],metering:'按次',price:'¥0.6/次',status:'已上架'},
+  {name:'知识活态反馈',code:'living',cat:'增值模块',scenes:['全场景'],metering:'按反馈条',price:'¥0.1/条',status:'内测'},
+];
+const TENANTS=[{name:'颐森汇健康集团',scene:'养生'},{name:'仁和中医医院',scene:'医疗'},{name:'杏林培训学院',scene:'培训'},{name:'康养分院',scene:'养生'}];
+
+async function api(path,opts={}){
+  const headers={'Content-Type':'application/json',...((opts.headers)||{})};
+  if(TOKEN) headers['Authorization']='Bearer '+TOKEN;
+  const r=await fetch(API+path,{...opts,headers});
+  let j=null; try{j=await r.json();}catch(e){}
+  return {ok:r.ok,status:r.status,data:j};
+}
+
+async function doLogin(){
+  const btn=$('#loginBtn'); btn.disabled=true; $('#loginErr').style.display='none';
+  try{
+    const res=await api('/dev/admin-login',{method:'POST',body:JSON.stringify({username:'admin'})});
+    if(res.ok&&res.data){
+      TOKEN=res.data.access_token||res.data.token||res.data.data?.access_token||'';
+      if(!TOKEN){throw new Error('未返回令牌');}
+      $('#loginMask').style.display='none';
+      $('#app').classList.add('show');
+      if(location.protocol==='file:') $('#filebar').classList.add('show');
+      render(); loadReview();
+    } else {
+      const msg=(res.data&&(res.data.message||res.data.msg))||('HTTP '+res.status);
+      throw new Error(msg);
+    }
+  }catch(e){
+    $('#loginErr').textContent='登录失败：'+e.message; $('#loginErr').style.display='block';
+  }finally{ btn.disabled=false; }
+}
+function doLogout(){ TOKEN=null; $('#app').classList.remove('show'); $('#loginMask').style.display='flex'; }
+
+const flowSteps=[
+  {icon:'ic-package',label:'① 中台注册',desc:'能力码 + 计量口径 + 适用场景'},
+  {icon:'ic-filesearch',label:'② 内容审核',desc:'图谱节点入内容管控队列'},
+  {icon:'ic-bank',label:'③ 定价上架',desc:'套餐映射 / 加购价，运营配置'},
+  {icon:'ic-rocket',label:'④ 灰度下发',desc:'按租户开关，私有化走更新包'},
+];
+const graphVersions=[
+  {name:'养生图谱',id:'YS-v1.0',date:'2026-08-05',nodes:12800,approved:11936,pending:864,note:'内容板块专属，待审节点进入管控队列'},
+  {name:'岐黄主图谱',id:'QH-v2.4',date:'2026-07-28',nodes:6144,approved:6012,pending:0,note:'全场景主干图谱，实时在线'},
+];
+const graphSync=[
+  {tenant:'颐森汇健康集团',deploy:'SaaS',version:'YS-v1.0',status:'实时生效',ok:true},
+  {tenant:'仁和中医医院',deploy:'SaaS',version:'QH-v2.4',status:'实时生效',ok:true},
+  {tenant:'杏林培训学院',deploy:'私有化',version:'QH-v2.3',status:'增量包待下发',ok:false},
+];
+
+function render(){
+  const flow=`<div class="card card-pad">
+    <div class="section-title">${ic('ic-package','ti')}新板块/新图谱上线标准流程（配置化，无需改云平台代码）</div>
+    <div class="flow">${flowSteps.map((s,i)=>`
+      <div class="flow-step"><span class="fs-ico">${ic(s.icon)}</span><div><div class="fs-label">${s.label}</div><div class="fs-desc">${s.desc}</div></div></div>
+      ${i<flowSteps.length-1?`<span class="flow-arrow">${ic('ic-chevron-right')}</span>`:''}`).join('')}</div>
+  </div>`;
+
+  const capTable=`<div class="card card-pad" style="margin-top:16px">
+    <div class="section-title">${ic('ic-package','ti')}中台能力目录（${REAL_CAPS.length}）</div>
+    <table class="data"><thead><tr>
+      <th>能力</th><th>类别</th><th>适用场景</th><th>计量口径</th><th>定价</th><th>状态</th><th>操作</th>
+    </tr></thead><tbody>
+    ${REAL_CAPS.map(c=>`<tr>
+      <td><div style="font-weight:600;color:var(--ink);display:flex;align-items:center;gap:6px">${c.name}
+        ${c.isNew?`<span style="font-size:10px;padding:1px 6px;border-radius:6px;background:#FEF3C7;color:#8A6A1F">新</span>`:''}</div>
+        <div class="mono" style="margin-top:2px">${c.code}</div></td>
+      <td><span class="badge ${catCls[c.cat]}">${c.cat}</span></td>
+      <td style="font-size:12px;color:var(--mid)">${c.scenes.join(' / ')}</td>
+      <td style="font-size:12px;color:var(--mid)">${c.metering}</td>
+      <td style="font-size:12px;font-weight:600;color:var(--gold)">${c.price}</td>
+      <td><span class="badge ${statusCls[c.status]}">${c.status}</span></td>
+      <td><button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="openDrawer('${c.code}')">配置与灰度 ${ic('ic-chevron-right','')}</button></td>
+    </tr>`).join('')}
+    </tbody></table>
+  </div>`;
+
+  const sync=`<div class="card card-pad" style="margin-top:16px">
+    <div class="section-title">${ic('ic-cloud','ti')}下发与同步状态</div>
+    <table class="data"><thead><tr><th>租户</th><th>部署形态</th><th>当前图谱版本</th><th>同步状态</th></tr></thead><tbody>
+    ${graphSync.map(s=>`<tr>
+      <td style="font-weight:600;color:var(--ink)">${s.tenant}</td>
+      <td><span class="badge ${s.deploy==='SaaS'?'b-emerald':'b-gray'}">${s.deploy}</span></td>
+      <td class="mono">${s.version}</td>
+      <td style="font-size:12px;color:${s.ok?'var(--primary)':'var(--gold)'}">${s.status}</td>
+    </tr>`).join('')}</tbody></table>
+    <div style="margin-top:12px;font-size:11.5px;line-height:1.7;border-radius:10px;padding:12px;background:var(--bg);color:var(--mid)">SaaS 租户图谱实时生效；私有化租户以「版本号比对 + 增量包」方式随更新通道下发，安装后计入 License 授权范围。</div>
+  </div>`;
+
+  const reviewCard=`<div class="card card-pad" style="margin-top:16px" id="reviewCard">
+    <div class="section-title">${ic('ic-book','ti')}内容管控队列 <span class="badge b-amber" id="reviewCount" style="margin-left:6px">加载中</span></div>
+    <div id="reviewBody"><div class="empty">${ic('ic-book','e-ico')}正在拉取 /admin/v1/kg/review/pending …</div></div>
+  </div>`;
+
+  const graphVer=`<div class="card card-pad" style="margin-top:16px">
+    <div class="section-title">${ic('ic-git','ti')}图谱版本</div>
+    ${graphVersions.map(g=>`<div style="border:1px solid ${g.id==='YS-v1.0'?'var(--accent)':'var(--border)'};border-radius:12px;padding:12px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:13px;font-weight:600;color:var(--ink)">${g.name} <span class="mono">${g.id}</span></span>
+        <span class="mono" style="font-size:11px;color:var(--light)">${g.date}</span></div>
+      <div style="font-size:12px;color:var(--mid);margin-top:6px">节点 ${g.nodes.toLocaleString()} · 审核通过 ${g.approved.toLocaleString()}
+        ${g.pending>0?`<span style="color:#B03A2E"> · 待审 ${g.pending}</span>`:''}</div>
+      <div style="font-size:11px;color:var(--light);margin-top:3px">${g.note}</div>
+    </div>`).join('')}
+  </div>`;
+
+  $('#content').innerHTML = flow + capTable
+    + `<div style="display:grid;grid-template-columns:2fr 3fr;gap:16px;margin-top:16px">${graphVer}${sync}</div>`
+    + reviewCard;
+}
+
+async function loadReview(){
+  try{
+    const res=await api('/admin/v1/kg/review/pending');
+    const items=(res.ok&&res.data)?(res.data.items||res.data.data?.items||[]):[];
+    const total=(res.data&&(res.data.total??res.data.data?.total))??items.length;
+    $('#navBadge').textContent=total;
+    if(items.length===0){
+      $('#reviewCount').textContent='0';
+      $('#reviewBody').innerHTML=`<div class="empty">${ic('ic-check2','e-ico')}真实端点已接通，当前内容管控队列为空。</div>`;
+    }else{
+      $('#reviewCount').textContent=total;
+      $('#reviewBody').innerHTML=`<table class="data"><thead><tr><th>节点</th><th>类型</th><th>来源</th><th>操作</th></tr></thead><tbody>
+        ${items.map(it=>`<tr><td style="font-weight:600;color:var(--ink)">${it.node_name||it.name||'-'}</td>
+          <td><span class="badge b-amber">${it.type||'待审'}</span></td>
+          <td class="mono">${it.source||'-'}</td>
+          <td style="white-space:nowrap">
+            <button class="btn btn-primary" style="padding:5px 10px;font-size:12px;margin-right:6px" onclick="reviewAct('${it.review_id||it.id}','approve',this)">采纳</button>
+            <button class="btn btn-outline" style="padding:5px 10px;font-size:12px" onclick="reviewAct('${it.review_id||it.id}','reject',this)">驳回</button>
+          </td></tr>`).join('')}</tbody></table>`;
+    }
+  }catch(e){
+    $('#reviewCount').textContent='–';
+    $('#reviewBody').innerHTML=`<div class="empty" style="color:#B03A2E">拉取失败：${e.message}<br/>请确认以 localhost 方式打开（双击「打开能力上架.bat」）。</div>`;
+  }
+}
+async function reviewAct(id,action,btn){
+  if(!id||id==='undefined'){alert('该演示数据缺少 review_id，无法回写真实端点');return;}
+  btn.disabled=true;
+  try{
+    const res=await api('/admin/v1/kg/review/action',{method:'POST',body:JSON.stringify({review_id:id,action})});
+    if(res.ok){ loadReview(); }
+    else throw new Error((res.data&&(res.data.message||res.data.msg))||('HTTP '+res.status));
+  }catch(e){ alert('操作失败：'+e.message); btn.disabled=false; }
+}
+
+let curCap=null, savedTimer=null;
+function openDrawer(code){
+  curCap=REAL_CAPS.find(c=>c.code===code); if(!curCap)return;
+  $('#drawerTitle').textContent=curCap.name;
+  $('#drawerBody').innerHTML=`
+    <div class="sub-card">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <span class="badge ${catCls[curCap.cat]}">${curCap.cat}</span>
+        <span class="badge ${statusCls[curCap.status]}">${curCap.status}</span>
+        <span class="mono">${curCap.code}</span></div>
+      <div style="font-size:12px;color:var(--mid);margin-top:8px;line-height:1.6">适用场景：${curCap.scenes.join(' / ')}</div>
+    </div>
+    <div class="sub-card">
+      <div class="sc-title">计量与定价</div>
+      <div style="font-size:12px;color:var(--mid)">${curCap.metering} · 当前定价 <b style="color:var(--gold)">${curCap.price}</b></div>
+    </div>
+    <div class="sub-card">
+      <div class="sc-title">租户灰度开关</div>
+      <div id="grayBox">${TENANTS.map(t=>`<div class="gray-row">
+        <button class="switch on" onclick="toggleSwitch(this)"></button>
+        <span style="flex:1;font-size:12.5px;color:var(--ink)">${t.name}</span>
+        <span class="badge ${t.scene==='医疗'?'b-gray':t.scene==='培训'?'b-blue':'b-emerald'}">${t.scene}</span>
+      </div>`).join('')}</div>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="saveDrawer()">${ic('ic-rocket')} 保存并下发</button>
+    <div id="saveToast"></div>`;
+  $('#drawerMask').classList.add('open'); $('#drawer').classList.add('open');
+}
+function toggleSwitch(b){ b.classList.toggle('on'); }
+function saveDrawer(){
+  const t=$('#saveToast');
+  t.className='save-toast'; t.innerHTML=`${ic('ic-check2')} 已保存并下发：SaaS 租户即时生效；私有化租户进入更新包队列；变更已写入审计日志`;
+  clearTimeout(savedTimer); savedTimer=setTimeout(()=>{t.innerHTML='';t.className='';},2800);
+}
+function closeDrawer(){ $('#drawerMask').classList.remove('open'); $('#drawer').classList.remove('open'); }
+
+document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  const p=b.dataset.page;
+  $('#pageTitle').textContent=b.textContent.replace(/\d+$/,'').trim();
+  if(p!=='capabilities'){
+    $('#content').innerHTML=`<div class="card card-pad"><div class="empty">${ic('ic-dashboard','e-ico')}「${b.textContent.trim()}」模块为规划态，本次以能力目录为主交付页。</div></div>`;
+  } else { render(); }
+});
+</script>
+</body>
+</html>

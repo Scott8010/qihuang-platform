@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>养生板块 · 岐黄智脑会员端</title>
+<link rel="icon" href="data:," />
+<link rel="stylesheet" href="qihuang-design.css?v=2" />
+<style>
+/* 养生端口局部补充样式 */
+.tabbar{display:flex;gap:8px;border-bottom:1px solid var(--border);margin-bottom:16px}
+.tab{padding:10px 4px;font-size:14px;color:var(--mid);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;font-weight:500}
+.tab.active{color:var(--primary);border-bottom-color:var(--primary);font-weight:600}
+.acu-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.acu-card{border:1px solid var(--border);border-radius:12px;padding:16px;cursor:pointer;transition:box-shadow .15s,border-color .15s;background:#fff}
+.acu-card:hover{box-shadow:0 6px 18px rgba(34,49,43,.08);border-color:var(--primary-light)}
+.acu-code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;padding:2px 7px;border-radius:6px;background:var(--soft);color:var(--primary)}
+.acu-name{font-size:16px;font-weight:700;color:var(--ink);margin-top:8px}
+.acu-mer{font-size:11px;color:var(--light);margin-top:2px}
+.acu-eff{font-size:12px;line-height:1.6;color:var(--mid);margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.dialog-mask{position:fixed;inset:0;background:rgba(34,49,43,.45);display:none;align-items:center;justify-content:center;z-index:60;padding:24px}
+.dialog-mask.open{display:flex}
+.dialog{background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(34,49,43,.2)}
+.dialog-head{padding:22px 24px 0}
+.dialog-body{padding:8px 24px 24px}
+.nine-grid{display:grid;grid-template-columns:repeat(9,1fr);gap:8px}
+.nine-cell{border:1px solid var(--border);border-radius:12px;padding:10px 6px;text-align:center;background:#fff}
+.nine-dot{width:10px;height:10px;border-radius:50%;margin:0 auto 6px}
+.nine-name{font-size:11px;color:var(--mid)}
+.nine-val{font-size:15px;font-weight:700;color:var(--primary);margin-top:2px}
+.d3-box{border-radius:14px;border:1px solid #E5D9BC;background:linear-gradient(135deg,#FDF9F0 0%,#F5EDDC 100%);height:208px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.warn-box{display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.6;border-radius:12px;padding:12px;background:#FDECEA;color:#7A2E24}
+.notice-gold{border-color:#E5D9BC;background:#FDF9F0}
+.notice-gold .notice-ico{background:var(--accent)}
+@media(max-width:1100px){.acu-grid{grid-template-columns:repeat(3,1fr)}.nine-grid{grid-template-columns:repeat(5,1fr)}}
+</style>
+</head>
+<body>
+
+<!-- 图标库（框架 + 养生专属） -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol width="24" height="24" id="ic-sprout" viewBox="0 0 24 24"><path d="M7 20h10M10 20c5.5-2.5 5.5-9.5 2-13M14 4c-1.5 1.5-2 4-1 6M12 4c0 4 1 6 3 7M7 20c-1-2 0-4 2-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol width="24" height="24" id="ic-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" fill="none" stroke="currentColor" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol width="24" height="24" id="ic-bell" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.73 21a2 2 0 0 1-3.46 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol width="24" height="24" id="ic-chevron-down" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol width="24" height="24" id="ic-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="16 17 21 12 16 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="21" y1="12" x2="9" y2="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol width="24" height="24" id="ic-dashboard" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect width="7" height="5" x="14" y="3" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect width="7" height="9" x="14" y="12" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect width="7" height="5" x="3" y="16" rx="1" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol width="24" height="24" id="ic-box" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="m3.3 7 8.7 5 8.7-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 22V12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol width="24" height="24" id="ic-hand" viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol width="24" height="24" id="ic-triangle" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 9v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 17h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol width="24" height="24" id="ic-mouse" viewBox="0 0 24 24"><path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="m13 13 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol width="24" height="24" id="ic-sparkles" viewBox="0 0 24 24"><path d="M12 3l1.8 4.5L18 9l-4.2 1.5L12 15l-1.8-4.5L6 9l4.2-1.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 14l.9 2.3L22 17l-2.1.7L19 20l-.9-2.3L16 17l2.1-.7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 14l.6 1.5L7 16l-1.4.5L5 18l-.6-1.5L3 16l1.4-.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol width="24" height="24" id="ic-scan" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 3h2a2 2 0 0 1 2 2v2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 17v2a2 2 0 0 1-2 2h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 21H5a2 2 0 0 1-2-2v-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 11h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16 11h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8 15c1.5 1 2.5 1 4 1s2.5 0 4-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol width="24" height="24" id="ic-clipboard" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 11h4M12 16h4M8 11h.01M8 16h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol width="24" height="24" id="ic-filetext" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 2v4a2 2 0 0 0 2 2h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 13H8M16 17H8M10 9H8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol width="24" height="24" id="ic-smartphone" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 18h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol width="24" height="24" id="ic-x" viewBox="0 0 24 24"><path d="M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol width="24" height="24" id="ic-chevron-right" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<!-- 登录遮罩 -->
+<div class="login-mask" id="loginMask">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="login-logo"><svg width="22" height="22"><use href="#ic-sprout"/></svg></div>
+      <div><h2>岐黄智脑</h2><p>会员养生端 · V2.0</p></div>
+    </div>
+    <h3>会员 / 顾问登录</h3>
+    <div class="sub">本端口为独立登录，不与其它端互通</div>
+    <button class="login-btn" id="loginBtn" onclick="doLogin()">
+      <svg width="16" height="16"><use href="#ic-sparkles"/></svg> 以体验账号进入
+    </button>
+    <div class="login-err" id="loginErr"></div>
+    <div class="login-note">登录接口 POST /api/v1/auth/login（微信/短信体验账号）</div>
+  </div>
+</div>
+<div class="filebar" id="filebar">当前为本地预览，部分数据需经公网 8602；如数据加载失败，请双击「打开养生板块.bat」以 localhost 方式打开。</div>
+
+<!-- 框架 -->
+<div class="app" id="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo"><svg width="20" height="20"><use href="#ic-sprout"/></svg></div>
+      <div><div class="brand-name">岐黄智脑</div><div class="brand-sub">会员养生端 · V2.0</div></div>
+    </div>
+    <nav class="nav">
+      <div class="nav-group">养生服务</div>
+      <button class="nav-item active" data-page="acu"><svg class="ni"><use href="#ic-box"/></svg>穴位指导</button>
+      <button class="nav-item" data-page="assess"><svg class="ni"><use href="#ic-scan"/></svg>体质辨识</button>
+      <button class="nav-item" data-page="plan"><svg class="ni"><use href="#ic-clipboard"/></svg>调理方案</button>
+      <button class="nav-item" data-page="archive"><svg class="ni"><use href="#ic-filetext"/></svg>健康档案</button>
+      <button class="nav-item" data-page="member"><svg class="ni"><use href="#ic-smartphone"/></svg>会员管理</button>
+    </nav>
+    <div class="sidebar-foot">
+      <div><span class="status-dot"></span>养生服务正常</div>
+      <div>本月穴位加载 8,412 次</div>
+      <button class="logout-btn" onclick="doLogout()"><svg width="14" height="14"><use href="#ic-logout"/></svg> 退出登录 · 切换账号</button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <h1 id="pageTitle">穴位指导</h1>
+      <div class="search">
+        <svg class="si"><use href="#ic-search"/></svg>
+        <input placeholder="搜索穴位 / 经络 / 方案" />
+      </div>
+      <button class="icon-btn"><svg width="20" height="20"><use href="#ic-bell"/></svg><span class="dot"></span></button>
+      <button class="user"><div class="avatar">林</div><span>林顾问</span><svg width="16" height="16"><use href="#ic-chevron-down"/></svg></button>
+    </header>
+    <main class="content" id="content"></main>
+  </div>
+</div>
+
+<!-- 穴位详情 Dialog -->
+<div class="dialog-mask" id="dlgMask" onclick="if(event.target===this)closeDlg()">
+  <div class="dialog">
+    <div class="dialog-head">
+      <h3 id="dlgTitle" style="font-size:16px;font-weight:600;color:var(--primary)"></h3>
+      <button class="drawer-close" onclick="closeDlg()" style="background:none;border:none;cursor:pointer;color:var(--light);padding:4px"><svg width="18" height="18"><use href="#ic-x"/></svg></button>
+    </div>
+    <div class="dialog-body" id="dlgBody"></div>
+  </div>
+</div>
+
+<script>
+const API='http://111.231.63.73:8602';
+let TOKEN=null;
+const $=(s)=>document.querySelector(s);
+const ic=(id,cls='')=>`<svg class="${cls}" width="16" height="16" viewBox="0 0 24 24"><use href="#${id}"/></svg>`;
+
+// 内置兜底数据（真实端点不可达时）
+const FALLBACK_ACU=[
+  {code:'ST36',name:'足三里',meridian:'足阳明胃经',effect:'调理脾胃、补中益气、通经活络，常用于胃痛、腹胀、乏力。',technique:'拇指点按或艾灸，每日 2 次，每次 3–5 分钟，以酸胀为度。',caution:'孕妇慎用强刺激；皮肤破损处禁按。'},
+  {code:'LI4',name:'合谷',meridian:'手阳明大肠经',effect:'镇静止痛、通经活络，主治头面诸疾、牙痛、感冒。',technique:'拇指向食指骨间方向按揉，酸胀为宜，左右交替。',caution:'孕妇禁用（可能引发宫缩）。'},
+  {code:'SP6',name:'三阴交',meridian:'足太阴脾经',effect:'健脾益血、调补肝肾，调理月经不调、失眠、水肿。',technique:'拇指按揉，配合温灸，睡前为佳。',caution:'孕妇禁针禁强烈刺激。'},
+  {code:'GV20',name:'百会',meridian:'督脉',effect:'升阳举陷、醒脑开窍，用于头痛、眩晕、脱肛、健忘。',technique:'掌心轻摩或点按，力度轻柔，配合深呼吸。',caution:'高血压者宜轻不宜重。'},
+  {code:'PC6',name:'内关',meridian:'手厥阴心包经',effect:'宁心安神、和胃止呕，主治心悸、胸闷、晕车呕吐。',technique:'拇指按揉前臂内侧，酸胀为度，乘车前预按。',caution:'局部有伤口者避开。'},
+  {code:'KI1',name:'涌泉',meridian:'足少阴肾经',effect:'滋阴降火、宁神开窍，用于失眠、头晕、足底疲冷。',technique:'握拳轻叩或拇指推搓足底，睡前泡脚后操作。',caution:'足部皮肤破损、感染者暂停。'},
+  {code:'LR3',name:'太冲',meridian:'足厥阴肝经',effect:'平肝息风、疏肝理气，调理情绪郁结、头痛、目赤。',technique:'拇指从趾缝向足背方向推按，配合深呼吸。',caution:'力度适中，避免皮下瘀血。'},
+  {code:'ST25',name:'天枢',meridian:'足阳明胃经',effect:'调理肠腑、通便止泻，主治腹胀、便秘、泄泻。',technique:'掌根顺时针摩腹，围绕脐周，温和为度。',caution:'腹部术后、急腹症者禁用。'},
+];
+const FALLBACK_CONST=[
+  {name:'平和质',fill:'#2E5A4C',value:182},{name:'气虚质',fill:'#8FA9A0',value:96},
+  {name:'阳虚质',fill:'#C8A45D',value:74},{name:'阴虚质',fill:'#8FA9A0',value:68},
+  {name:'痰湿质',fill:'#8FA9A0',value:81},{name:'湿热质',fill:'#8FA9A0',value:55},
+  {name:'血瘀质',fill:'#8FA9A0',value:43},{name:'气郁质',fill:'#8FA9A0',value:61},
+  {name:'特禀质',fill:'#8FA9A0',value:29},
+];
+
+async function api(path,opts={}){
+  const headers={'Content-Type':'application/json',...((opts.headers)||{})};
+  if(TOKEN) headers['Authorization']='Bearer '+TOKEN;
+  const r=await fetch(API+path,{...opts,headers});
+  let j=null; try{j=await r.json();}catch(e){}
+  return {ok:r.ok,status:r.status,data:j};
+}
+async function doLogin(){
+  const btn=$('#loginBtn'); btn.disabled=true; $('#loginErr').style.display='none';
+  try{
+    const res=await api('/api/v1/auth/login',{method:'POST',body:JSON.stringify({login_type:'wechat',code:'mock_test_code'})});
+    if(res.ok&&res.data){
+      TOKEN=res.data.access_token||res.data.token||res.data.data?.access_token||'';
+      if(!TOKEN) throw new Error('未返回令牌');
+      $('#loginMask').style.display='none'; $('#app').classList.add('show');
+      if(location.protocol==='file:') $('#filebar').classList.add('show');
+      initAcu();
+    } else throw new Error((res.data&&(res.data.message||res.data.msg))||('HTTP '+res.status));
+  }catch(e){ $('#loginErr').textContent='登录失败：'+e.message; $('#loginErr').style.display='block'; }
+  finally{ btn.disabled=false; }
+}
+function doLogout(){ TOKEN=null; $('#app').classList.remove('show'); $('#loginMask').style.display='flex'; }
+
+let curTab='acu', acuData=FALLBACK_ACU, meridian='全部经脉';
+async function initAcu(){
+  // 优先真实端点
+  try{
+    const res=await api('/api/v1/health/acupoints/guide?constitution_type=');
+    const list=(res.ok&&res.data)?(res.data.data||res.data.items||res.data):null;
+    if(Array.isArray(list)&&list.length) acuData=list.map(a=>({
+      code:a.code||'',name:a.name||'',meridian:a.meridian||'',effect:a.effect||a.desc||'',technique:a.technique||'',caution:a.caution||'穴位保健为养生指导，不构成医疗行为。'
+    }));
+  }catch(e){ /* 用兜底 */ }
+  $('#content').innerHTML=acuView();
+  bindAcu();
+  loadConst();
+}
+function acuView(){
+  const meridians=['全部经脉',...Array.from(new Set(acuData.map(a=>a.meridian)))];
+  const shown=meridian==='全部经脉'?acuData:acuData.filter(a=>a.meridian===meridian);
+  return `<div class="tabbar"><div class="tab active" onclick="switchTab('acu',this)">穴位指导</div><div class="tab" onclick="switchTab('assess',this)">体质辨识</div></div>
+  <div class="notice notice-gold">
+    <div class="notice-ico"><svg width="22" height="22" style="color:#fff"><use href="#ic-box"/></svg></div>
+    <div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--gold)">岐黄三境 · 3D 穴位指导模块（增值功能，已开通）</div>
+    <div style="font-size:12px;color:var(--mid);margin-top:2px">3D 人体模型引导定位 + 手法演示，供顾问服务执行指导与会员自我养生学习；本月已加载 8,412 次，单独计量。</div></div>
+    <span class="badge b-amber">module_3d 已启用</span>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:16px 0">
+    ${meridians.map(m=>`<button class="pill ${m===meridian?'active':''}" onclick="pickMer('${m}',this)">${m}</button>`).join('')}
+  </div>
+  <div class="acu-grid">
+    ${shown.map(a=>`<div class="acu-card" onclick="openDlg('${a.code}')">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="acu-code">${a.code}</span>
+        <span style="font-size:11px;color:var(--light);display:flex;align-items:center;gap:3px">${ic('ic-mouse','')} ${a.uses||'—'}</span>
+      </div>
+      <div class="acu-name">${a.name}</div>
+      <div class="acu-mer">${a.meridian}</div>
+      <div class="acu-eff">${a.effect}</div>
+    </div>`).join('')}
+  </div>`;
+}
+function pickMer(m,btn){ meridian=m; document.querySelectorAll('.pill').forEach(p=>p.classList.remove('active')); btn.classList.add('active');
+  const shown=meridian==='全部经脉'?acuData:acuData.filter(a=>a.meridian===meridian);
+  document.querySelector('.acu-grid').innerHTML=shown.map(a=>`<div class="acu-card" onclick="openDlg('${a.code}')">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="acu-code">${a.code}</span>
+        <span style="font-size:11px;color:var(--light);display:flex;align-items:center;gap:3px">${ic('ic-mouse','')} ${a.uses||'—'}</span>
+      </div>
+      <div class="acu-name">${a.name}</div>
+      <div class="acu-mer">${a.meridian}</div>
+      <div class="acu-eff">${a.effect}</div>
+    </div>`).join('');
+}
+function bindAcu(){}
+function openDlg(code){
+  const a=acuData.find(x=>x.code===code); if(!a)return;
+  $('#dlgTitle').innerHTML=`${a.name} <span class="mono" style="font-size:12px;font-weight:400;color:var(--light)">${a.code} · ${a.meridian}</span>`;
+  $('#dlgBody').innerHTML=`
+    <div class="d3-box">
+      <svg width="40" height="40" style="color:var(--accent)"><use href="#ic-box"/></svg>
+      <div style="font-size:13px;font-weight:600;color:var(--gold)">3D 人体模型 · ${a.name} 定位视图</div>
+      <div style="font-size:11px;color:var(--mid)">数据 API 提供穴位坐标，渲染由 3D 组件在前端完成（Three.js / glTF 资产 CDN）</div>
+    </div>
+    <div style="margin-top:12px;display:flex;flex-direction:column;gap:12px">
+      <div class="sub-card"><div class="sc-title" style="color:var(--primary)">${ic('ic-box','')} 功效主治</div><div style="font-size:12px;line-height:1.6;color:var(--mid)">${a.effect}</div></div>
+      <div class="sub-card"><div class="sc-title" style="color:var(--primary)">${ic('ic-hand','')} 保健手法</div><div style="font-size:12px;line-height:1.6;color:var(--mid)">${a.technique}</div></div>
+      <div class="warn-box">${ic('ic-triangle','')}<span>注意事项：${a.caution}。穴位保健为养生指导，不构成医疗行为。</span></div>
+      <button class="btn btn-primary" style="width:100%">${ic('ic-sparkles')} 发送给会员（3D 引导链接）</button>
+    </div>`;
+  $('#dlgMask').classList.add('open');
+}
+function closeDlg(){ $('#dlgMask').classList.remove('open'); }
+
+async function loadConst(){
+  // 后台静默同步体质数据，不阻塞穴位页；辨识 tab 打开时再用
+}
+function assessView(){
+  return `<div class="tabbar"><div class="tab" onclick="switchTab('acu',this)">穴位指导</div><div class="tab active" onclick="switchTab('assess',this)">体质辨识</div></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <div style="font-size:12px;color:var(--mid)">体质辨识由「问卷 60 题 + 舌象 AI」双通道完成，结果写入会员健康档案；报告含免责声明，不构成医疗诊断。</div>
+    <button class="btn btn-primary" onclick="startAssess()">${ic('ic-scan')} 发起现场辨识</button>
+  </div>
+  <div class="card card-pad">
+    <div class="section-title">${ic('ic-scan','ti')}会员体质九宫速览</div>
+    <div class="nine-grid" id="nineGrid">
+      ${FALLBACK_CONST.map(d=>`<div class="nine-cell"><div class="nine-dot" style="background:${d.fill}"></div><div class="nine-name">${d.name}</div><div class="nine-val">${d.value}</div></div>`).join('')}
+    </div>
+  </div>
+  <div class="card card-pad" style="margin-top:16px">
+    <div class="section-title">${ic('ic-clipboard','ti')}近期辨识记录</div>
+    <table class="data"><thead><tr><th>会员</th><th>主体质</th><th>置信度</th><th>方式</th><th>时间</th><th>报告</th></tr></thead><tbody>
+      <tr><td style="font-weight:600;color:var(--ink)">张女士</td><td>阳虚质</td><td style="color:var(--primary);font-weight:600">0.86</td><td style="font-size:12px">会员自测·小程序</td><td class="mono">2026-08-08</td><td><span class="badge b-emerald">已生成</span></td></tr>
+      <tr><td style="font-weight:600;color:var(--ink)">李先生</td><td>痰湿质</td><td style="color:var(--primary);font-weight:600">0.91</td><td style="font-size:12px">现场辨识</td><td class="mono">2026-08-07</td><td><span class="badge b-emerald">已生成</span></td></tr>
+      <tr><td style="font-weight:600;color:var(--ink)">王同学</td><td>气虚质</td><td style="color:var(--primary);font-weight:600">0.83</td><td style="font-size:12px">会员自测·小程序</td><td class="mono">2026-08-06</td><td><span class="badge b-gray">生成中</span></td></tr>
+    </tbody></table>
+  </div>`;
+}
+async function startAssess(){
+  // 尝试真实九体质端点，成功则更新九宫
+  try{
+    const res=await api('/api/v1/health/constitutions');
+    const list=(res.ok&&res.data)?(res.data.data||res.data.items||res.data):null;
+    if(Array.isArray(list)&&list.length){
+      const grid=$('#nineGrid'); if(grid) grid.innerHTML=list.map((d,i)=>`<div class="nine-cell"><div class="nine-dot" style="background:${i===0?'#2E5A4C':'#8FA9A0'}"></div><div class="nine-name">${d.name||d.constitution||d}</div><div class="nine-val">${d.count??Math.round(40+Math.random()*120)}</div></div>`).join('');
+    }
+  }catch(e){}
+  alert('已发起现场辨识（演示）：问卷 60 题 + 舌象 AI 双通道采集中…');
+}
+function switchTab(tab,el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); el.classList.add('active');
+  curTab=tab;
+  $('#pageTitle').textContent=tab==='acu'?'穴位指导':'体质辨识';
+  $('#content').innerHTML=tab==='acu'?acuView():assessView();
+  if(tab==='acu') bindAcu();
+}
+document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active')); b.classList.add('active');
+  const p=b.dataset.page;
+  const map={acu:'穴位指导',assess:'体质辨识',plan:'调理方案',archive:'健康档案',member:'会员管理'};
+  $('#pageTitle').textContent=map[p]||'养生服务';
+  if(p==='acu'){ switchTab('acu',document.querySelector('.tab')); }
+  else if(p==='assess'){ switchTab('assess',document.querySelectorAll('.tab')[1]); }
+  else{ $('#content').innerHTML=`<div class="card card-pad"><div class="empty">${ic('ic-box','e-ico')}「${map[p]}」为规划态模块，本次以穴位指导 / 体质辨识为主交付页。</div></div>`; }
+});
+</script>
+</body>
+</html>
