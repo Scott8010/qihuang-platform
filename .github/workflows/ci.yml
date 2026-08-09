@@ -146,7 +146,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: 安装 linter
-        run: pip install ruff
+        run: pip install ruff==0.9.10
       - name: Ruff 检查
         run: |
           ruff check qihuang_platform/ tests/ \
