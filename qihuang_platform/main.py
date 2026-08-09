@@ -336,15 +336,15 @@ if LEGACY_ADMIN_DIR.exists():
     print(f"[Platform] 管理端(旧版HTML)已挂载 → /admin-static/ (目录: {LEGACY_ADMIN_DIR})")
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
 async def root_redirect():
-    """根路径重定向到管理端"""
+    """根路径重定向到新版 React 运营控制台（主入口）"""
     if ADMIN_DIR.exists():
         return RedirectResponse(url="/admin/")
     return RedirectResponse(url="/admin-static/admin.html")
 
 
-@app.get("/ops")
+@app.api_route("/ops", methods=["GET", "HEAD"], include_in_schema=False)
 async def ops_page():
     """运维端 → 统一控制台"""
     if ADMIN_DIR.exists():
@@ -352,7 +352,7 @@ async def ops_page():
     return JSONResponse({"detail": "请访问 /admin"}, status_code=404)
 
 
-@app.get("/business")
+@app.api_route("/business", methods=["GET", "HEAD"], include_in_schema=False)
 async def business_page():
     """运营端 → 统一控制台"""
     if ADMIN_DIR.exists():
