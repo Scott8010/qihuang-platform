@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from qihuang_platform.db.config import get_db, init_db
-from qihuang_platform.rbac.service import RBACService, validate_password, validate_password
+from qihuang_platform.rbac.service import RBACService, validate_password
 from qihuang_platform.gateway.deps import get_current_user, get_current_admin
 from qihuang_platform.gateway.response import success, error
 from qihuang_platform.db.models import seed_preset_data, Plan, UserRole, Role

@@ -62,7 +62,7 @@ class TestUserManagement:
     def test_create_user(self, client, admin_headers):
         resp = client.post("/admin/v1/users", json={
             "username": "testuser_ci",
-            "password": "Test123456",
+            "password": "Test@123456",
             "tenant_id": "tenant_default",
             "display_name": "CI测试用户",
         }, headers=admin_headers)
