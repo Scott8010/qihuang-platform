@@ -382,6 +382,11 @@ export default function Users() {
                   onChange={(e) => setNu({ ...nu, [k]: e.target.value })}
                   className="h-8 text-sm"
                 />
+                {k === "password" && (
+                  <div className="text-[11px] mt-1.5 leading-relaxed" style={{ color: C.light }}>
+                    至少 8 位，建议包含大小写字母、数字及特殊字符（如 !@#$%^&*）以提升安全性。
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -485,6 +490,11 @@ export default function Users() {
               <div className="text-xs mb-1" style={{ color: C.mid }}>新密码（选填）</div>
               <Input type="text" value={pwdInput} onChange={(e) => setPwdInput(e.target.value)}
                 placeholder="留空自动生成" className="h-8 text-sm" />
+              <div className="text-[11px] mt-1.5 leading-relaxed" style={{ color: pwdInput && pwdInput.length < 8 ? "#B03A2E" : C.light }}>
+                {pwdInput && pwdInput.length < 8
+                  ? `密码至少需 8 位，当前已输入 ${pwdInput.length} 位`
+                  : "留空则由系统生成随机强密码；自定义密码建议 8 位以上，并包含大小写字母、数字及特殊字符（如 !@#$%^&*）以提升安全性。"}
+              </div>
             </div>
           )}
           <DialogFooter>
