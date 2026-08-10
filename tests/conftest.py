@@ -16,6 +16,14 @@ if "QH_DATABASE_URL" not in os.environ:
 if "QH_REDIS_URL" not in os.environ:
     os.environ["QH_REDIS_URL"] = ""  # 空=降级到内存
 
+# ─── 管理员口令（正式登录通道，dev 后门已下线）───
+# 必须在 import app 之前设置，路由模块读取环境变量
+TEST_ADMIN_USER = os.environ.setdefault("QH_ADMIN_USER", "admin")
+TEST_ADMIN_PASS = os.environ.setdefault("QH_ADMIN_PASS", "test_admin_pass_2026")
+
+# dev 路由默认关闭（与生产一致）；需要时用 ENABLE_DEV_ROUTES=1 显式打开
+DEV_ROUTES_ENABLED = os.environ.setdefault("ENABLE_DEV_ROUTES", "0") == "1"
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -30,11 +38,13 @@ def client():
 
 @pytest.fixture(scope="session")
 def admin_token(client):
-    """获取管理员 JWT Token（会话级，所有测试复用）"""
-    resp = client.post("/dev/admin-login")
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    return data["access_token"]
+    """获取管理员 JWT Token（走正式登录通道 /admin/v1/login，会话级复用）"""
+    resp = client.post("/admin/v1/login", json={
+        "username": TEST_ADMIN_USER,
+        "password": TEST_ADMIN_PASS,
+    })
+    assert resp.status_code == 200, f"管理员登录失败: {resp.status_code} {resp.text[:200]}"
+    return resp.json()["data"]["access_token"]
 
 
 @pytest.fixture(scope="session")

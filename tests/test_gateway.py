@@ -1,8 +1,10 @@
 """
 tests/test_gateway.py — API Gateway 端点测试
-覆盖: /api/v1/auth/*, /api/v1/protected/*, /open/v1/*, /admin/v1/api-keys/*, /dev/*
+覆盖: /api/v1/auth/*, /api/v1/protected/*, /open/v1/*, /admin/v1/api-keys/*, /admin/v1/login
 """
 import pytest
+
+from tests.conftest import DEV_ROUTES_ENABLED, TEST_ADMIN_PASS, TEST_ADMIN_USER
 
 
 # ═══════════════════════════════════════════════════════════
@@ -240,33 +242,51 @@ class TestAPIKeyManagement:
 # 开发辅助 /dev/*
 # ═══════════════════════════════════════════════════════════
 
-class TestDevEndpoints:
-    """开发辅助端点"""
+class TestAdminLoginSecurity:
+    """管理员登录安全基线 —— dev 后门必须下线，只走正式账密通道"""
 
-    def test_admin_login(self, client):
+    def test_dev_backdoor_removed(self, client):
+        """/dev/admin-login 后门必须不存在（曾可无鉴权签发 super_admin token）"""
         resp = client.post("/dev/admin-login")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["code"] == 0
-        assert "admin" in data["data"]["roles"]
+        assert resp.status_code in (404, 405), (
+            f"开发后门未下线！status={resp.status_code}，任何人都能拿到 super_admin token"
+        )
 
-    def test_register_api_key(self, client):
-        resp = client.post("/dev/register-api-key", json={
-            "tenant_id": "dev_test",
-            "plan": "standard",
-            "note": "CI测试",
+    def test_login_rejects_wrong_password(self, client):
+        resp = client.post("/admin/v1/login", json={
+            "username": TEST_ADMIN_USER, "password": "__definitely_wrong__",
+        })
+        assert resp.status_code == 401
+
+    def test_login_rejects_unknown_user(self, client):
+        resp = client.post("/admin/v1/login", json={
+            "username": "__no_such_user__", "password": TEST_ADMIN_PASS,
+        })
+        assert resp.status_code == 401
+
+    def test_login_issues_admin_token(self, client):
+        resp = client.post("/admin/v1/login", json={
+            "username": TEST_ADMIN_USER, "password": TEST_ADMIN_PASS,
         })
         assert resp.status_code == 200
         data = resp.json()
         assert data["code"] == 0
-        assert data["data"]["app_key"]
+        assert data["data"]["access_token"]
 
-    def test_metering_stats(self, client, admin_headers):
+
+class TestDevRoutesGating:
+    """dev 路由挂载开关 —— 默认关闭，与生产一致"""
+
+    @pytest.mark.skipif(DEV_ROUTES_ENABLED, reason="ENABLE_DEV_ROUTES=1 时 dev 路由应可用")
+    def test_dev_routes_absent_by_default(self, client):
+        assert client.post("/dev/register-api-key", json={}).status_code in (404, 405)
+        assert client.get("/dev/metering/stats").status_code in (404, 405)
+
+    @pytest.mark.skipif(not DEV_ROUTES_ENABLED, reason="仅在 ENABLE_DEV_ROUTES=1 时校验")
+    def test_dev_routes_present_when_enabled(self, client):
         resp = client.get("/dev/metering/stats")
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["code"] == 0
-        assert "stats" in data["data"]
+        assert "stats" in resp.json()["data"]
 
 
 # ─── 端点计数校验 ───

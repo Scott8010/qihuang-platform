@@ -3,6 +3,8 @@ tests/test_platform.py — 平台基础端点 + 集成冒烟测试
 """
 import pytest
 
+from tests.conftest import TEST_ADMIN_PASS, TEST_ADMIN_USER
+
 
 class TestPlatformHealth:
     """GET /platform/health"""
@@ -90,8 +92,10 @@ class TestIntegrationSmoke:
     
     def test_admin_flow(self, client):
         """管理员流程：登录 → RBAC操作 → 控制端操作"""
-        # 管理员登录
-        r1 = client.post("/dev/admin-login")
+        # 管理员登录（正式账密通道，dev 后门已下线）
+        r1 = client.post("/admin/v1/login", json={
+            "username": TEST_ADMIN_USER, "password": TEST_ADMIN_PASS,
+        })
         assert r1.status_code == 200
         admin_token = r1.json()["data"]["access_token"]
         headers = {"Authorization": f"Bearer {admin_token}"}
