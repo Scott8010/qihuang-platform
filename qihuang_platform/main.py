@@ -56,6 +56,29 @@ async def lifespan(app: FastAPI):
             print("[Platform] 套餐预置数据已初始化 (4档套餐)")
         finally:
             db.close()
+
+        # API Key 冷启动加载：将 DB 中 active 的 key 恢复到内存鉴权表。
+        # 否则服务重启后 _api_keys_db 被清空、而 list 接口仍从 DB 读取 →
+        # 界面上看到的所有 key 实际鉴权全失败（空架子风险）。
+        try:
+            from qihuang_platform.gateway.auth import register_api_key
+            from qihuang_platform.db.models import ApiKey as DBApiKey
+            kdb = SessionLocal()
+            try:
+                active_keys = kdb.query(DBApiKey).filter_by(status="active").all()
+                for k in active_keys:
+                    register_api_key(
+                        app_key=k.app_key,
+                        app_secret=k.app_secret,
+                        tenant_id=k.tenant_id,
+                        plan="standard",
+                    )
+                print(f"[Platform] 已冷加载 {len(active_keys)} 个 active API Key 到内存鉴权表")
+            finally:
+                kdb.close()
+        except Exception as e:
+            print(f"[Platform] API Key 冷启动加载失败: {e}")
+
     except Exception as e:
         print(f"[Platform] 数据库初始化失败（可能已初始化）: {e}")
 
