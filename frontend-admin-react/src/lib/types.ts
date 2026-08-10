@@ -70,7 +70,10 @@ export interface RoleTpl {
 
 export interface ApiKey {
   id: string; tenant: string; appKey: string; purpose: string;
-  qps: number; used: number; quota: number; status: string; expires: string;
+  qps: number; used: number;
+  /** 后端未返回配额字段时为 null → 页面显示「不限」，不得假造数值 */
+  quota: number | null;
+  status: string; expires: string;
 }
 
 export interface CallTrendItem {
@@ -90,27 +93,95 @@ export interface TodoReviewItem {
 }
 
 export interface SceneUsageItem {
-  scene: string; calls: number; tokens: number; cost: number;
+  scene: string; sceneKey: string; calls: number; tokens: number; cost: number;
 }
 
 export interface BillItem {
-  id: string; tenant: string; period: string; calls: string; tokens: string; amount: number; status: string;
+  id: string; tenant: string; tenantId: string; period: string;
+  calls: string; tokens: string; amount: number; status: string;
+}
+
+/** 对应 GET /admin/v1/plans → {plan_name, display_name, features_json}
+ *  注意：后端不提供价格 / QPS / 配额，页面只能展示特性矩阵 */
+export interface PlanFeatures {
+  module_3d: boolean;
+  module_agent: boolean;
+  report_export: boolean;
+  priority_support: boolean;
+  custom_skin: boolean;
 }
 
 export interface PlanItem {
-  name: string; price: string; qps: number; calls: string; tokens: string; m3d: boolean; cur: boolean;
+  planName: string;      // trial / standard / professional / enterprise
+  name: string;          // 体验版 / 标准版 / ...
+  features: PlanFeatures;
 }
 
+/** 对应 GET /admin/v1/subscriptions → data.items[] */
+export interface SubscriptionItem {
+  id: string;
+  tenantId: string;
+  planId: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+  autoRenew: boolean;
+}
+
+/** 对应 GET /admin/v1/tenants/{id}/orgs → data.orgs[] */
+export interface OrgItem {
+  id: string; name: string; parentId: string | null; userCount: number; status: string;
+}
+
+/** 对应 GET /admin/v1/tenants/{id}/users → data.items[] */
+export interface TenantUserItem {
+  id: string; username: string; displayName: string;
+  phone: string; email: string; orgName: string;
+  status: string; roles: string[]; createdAt: string;
+}
+
+export const planFeatureLabels: { key: keyof PlanFeatures; label: string }[] = [
+  { key: "module_3d", label: "3D 经络模块" },
+  { key: "module_agent", label: "智能体能力" },
+  { key: "report_export", label: "报告导出" },
+  { key: "priority_support", label: "优先支持" },
+  { key: "custom_skin", label: "定制皮肤" },
+];
+
+/** 首页任务卡片 — 由真实待办信号（待审知识 / 逾期账单 / 系统告警）派生，不使用预设文案 */
+export interface DeckTask {
+  id: string;
+  type: string;
+  title: string;
+  desc: string;
+  page: string;
+  tone: "red" | "amber" | "blue" | "gold" | "green";
+  tag: string;
+}
+
+/** 对应 GET /admin/v1/content/words → {id, scene, word, level, replacement, created_at} */
 export interface SensitiveWordItem {
-  word: string; scene: string; cat: string; action: string; status: boolean;
+  id: string; word: string; scene: string;
+  /** 后端 level 字段原样透出 */
+  cat: string;
+  /** 有 replacement → 替换；否则 → 拦截 */
+  action: string;
+  replacement: string;
+  status: boolean;
 }
 
 export interface ServiceItem {
   name: string; status: string; latency: string; uptime: string; ok: boolean;
 }
 
-export interface LlmUsageItem {
-  model: string; tokens: number; cost: number;
+/** 对应 GET /admin/v1/monitor/llm-status → data.providers[]
+ *  后端提供的是「模型可用性」而非 token 计量，故按可用性口径展示 */
+export interface LlmProviderItem {
+  name: string;
+  available: boolean;
+  failCount: number;
+  lastError: string;
+  lastCheck: string;
 }
 
 export interface AuditLogItem {

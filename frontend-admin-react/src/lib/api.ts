@@ -5,8 +5,9 @@
 
 import type {
   Tenant, RoleTpl, ApiKey, CallTrendItem, SceneDistItem,
-  AlertItem, TodoReviewItem, SceneUsageItem, BillItem, PlanItem,
-  SensitiveWordItem, ServiceItem, LlmUsageItem, AuditLogItem, DashboardData,
+  AlertItem, TodoReviewItem, BillItem, PlanItem, SubscriptionItem, SceneUsageItem,
+  OrgItem, TenantUserItem,
+  SensitiveWordItem, ServiceItem, LlmProviderItem, AuditLogItem, DashboardData,
 } from "./types";
 
 // ═══ 基础 ═══
@@ -34,7 +35,7 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
 
 export async function login(username: string, password?: string) {
   const res = await post<{ code: number; data: { access_token: string; user?: unknown } }>(
-    "/dev/admin-login", { username, password }
+    "/admin/v1/login", { username, password }
   );
   if (res?.code === 0 && res.data?.access_token) {
     _token = res.data.access_token;
@@ -141,7 +142,8 @@ export async function fetchTenants(): Promise<Tenant[]> {
         orgs: t.orgs || t.org_count || 1,
         users: t.users || t.user_count || 0,
         usedCalls: t.used_calls || t.api_usage || 0,
-        quotaCalls: t.quota_calls || t.quota || 3000,
+        // 后端未下发配额时为 0 → 页面显示「不限」，不假造默认额度
+        quotaCalls: t.quota_calls ?? t.quota ?? 0,
         status: ["TRIAL", "ACTIVE", "READONLY", "EXPIRED", "CLOSED"].includes(statusUpper) ? statusUpper : "ACTIVE",
         expires: t.expires || t.expire_date || t.expired_at || "—",
         module3d: t.module_3d || t.module3d || false,
@@ -197,18 +199,19 @@ export async function fetchPermissions() {
 
 export async function fetchApiKeys(): Promise<ApiKey[]> {
   try {
-    const r = await get<{ code: number; data: any[] }>("/admin/v1/api-keys");
-    if (r?.code !== 0 || !r.data) return [];
-    return (r.data || []).map((k: any) => ({
-      id: k.id || "",
-      tenant: k.tenant || k.tenant_name || "",
+    const r = await get<{ code: number; data: { items?: any[] } }>("/admin/v1/api-keys/");
+    const items = r?.data?.items || [];
+    return items.map((k: any) => ({
+      id: k.id || k.app_key || "",
+      tenant: k.tenant_name || k.tenant_id || "",
       appKey: k.app_key || k.api_key || "",
       purpose: k.purpose || k.env || "PROD",
-      qps: k.qps || k.rate_limit || 10,
-      used: k.used || k.used_calls || 0,
-      quota: k.quota || k.quota_calls || 50000,
-      status: k.status || "ACTIVE",
-      expires: k.expires || k.expire_date || "",
+      qps: k.qps ?? k.rate_limit ?? 0,
+      used: k.used_calls ?? k.used ?? 0,
+      // 后端无配额字段 → null，页面显示「不限」，不假造 50000
+      quota: k.quota_calls ?? k.quota ?? null,
+      status: (k.status || "ACTIVE").toUpperCase(),
+      expires: k.expire_date || k.expires_at || k.expires || "",
     }));
   } catch { return []; }
 }
@@ -219,12 +222,12 @@ export async function fetchBillingStats(): Promise<{
   totalCalls: number; totalTokens: number; cost: number; revenue: number;
 }> {
   try {
-    const r = await get<{ code: number; data: any }>("/admin/v1/dashboard");
+    const r = await get<{ code: number; data: any }>("/admin/v1/billing/usage");
     const d = r?.data || {};
     return {
-      totalCalls: d.api?.total_calls || 0,
-      totalTokens: d.api?.total_tokens || 0,
-      cost: 0,
+      totalCalls: d.total_calls || 0,
+      totalTokens: d.total_tokens || 0,
+      cost: Math.round((d.total_cost_cents || 0) / 100),
       revenue: 0,
     };
   } catch { return { totalCalls: 0, totalTokens: 0, cost: 0, revenue: 0 }; }
@@ -233,44 +236,90 @@ export async function fetchBillingStats(): Promise<{
 export async function fetchPlans(): Promise<PlanItem[]> {
   try {
     const r = await get<{ code: number; data: any[] }>("/admin/v1/plans");
-    if (r?.code !== 0 || !r.data) return [];
-    return (r.data || []).map((p: any) => ({
-      name: p.name || "",
-      price: p.price ? `¥${p.price}/年` : "定制",
-      qps: p.max_qps || p.qps || 10,
-      calls: p.max_calls ? `${p.max_calls} 次/月` : "不限",
-      tokens: p.max_tokens ? `${p.max_tokens}` : "不限",
-      m3d: p.module_3d || p.features_json?.includes("module_3d") || false,
-      cur: p.is_default || false,
+    if (r?.code !== 0 || !Array.isArray(r.data)) return [];
+    return r.data.map((p: any) => {
+      const f = p.features_json || {};
+      return {
+        planName: p.plan_name || "",
+        name: p.display_name || p.plan_name || "",
+        features: {
+          module_3d: !!f.module_3d,
+          module_agent: !!f.module_agent,
+          report_export: !!f.report_export,
+          priority_support: !!f.priority_support,
+          custom_skin: !!f.custom_skin,
+        },
+      };
+    });
+  } catch { return []; }
+}
+
+/** GET /admin/v1/subscriptions — 真实返回的是订阅记录，不是分场景用量 */
+export async function fetchSubscriptions(): Promise<SubscriptionItem[]> {
+  try {
+    const r = await get<{ code: number; data: { items?: any[] } }>("/admin/v1/subscriptions");
+    const items = r?.data?.items || [];
+    return items.map((s: any) => ({
+      id: s.id || "",
+      tenantId: s.tenant_id || "",
+      planId: s.plan_id || "",
+      status: s.status || "",
+      startDate: s.start_date || "",
+      endDate: s.end_date || "",
+      autoRenew: !!s.auto_renew,
     }));
   } catch { return []; }
 }
 
-export async function fetchSceneUsage(): Promise<SceneUsageItem[]> {
+/** GET /admin/v1/tenants/{id}/orgs */
+export async function fetchTenantOrgs(tenantId: string): Promise<OrgItem[]> {
+  if (!tenantId) return [];
   try {
-    const r = await get<{ code: number; data: any[] }>("/admin/v1/subscriptions");
-    if (r?.code !== 0 || !r.data) return [];
-    return (r.data || []).map((s: any) => ({
-      scene: s.scene || s.plan_code || "—",
-      calls: s.api_usage || s.used_calls || 0,
-      tokens: s.token_usage || s.used_tokens || 0,
-      cost: s.cost || s.amount || 0,
+    const r = await get<{ code: number; data: { orgs?: any[] } }>(`/admin/v1/tenants/${tenantId}/orgs`);
+    const orgs = r?.data?.orgs || [];
+    return orgs.map((o: any) => ({
+      id: o.id || "",
+      name: o.name || o.display_name || "",
+      parentId: o.parent_id ?? null,
+      userCount: o.user_count ?? 0,
+      status: o.status || "active",
+    }));
+  } catch { return []; }
+}
+
+/** GET /admin/v1/tenants/{id}/users */
+export async function fetchTenantUsers(tenantId: string): Promise<TenantUserItem[]> {
+  if (!tenantId) return [];
+  try {
+    const r = await get<{ code: number; data: { items?: any[] } }>(`/admin/v1/tenants/${tenantId}/users`);
+    const items = r?.data?.items || [];
+    return items.map((u: any) => ({
+      id: u.id || "",
+      username: u.username || "",
+      displayName: u.display_name || u.username || "—",
+      phone: u.phone || "",
+      email: u.email || "",
+      orgName: u.org_name || "",
+      status: u.status || "active",
+      roles: Array.isArray(u.roles) ? u.roles.map((x: any) => x.display_name || x.name || "") : [],
+      createdAt: u.created_at || "",
     }));
   } catch { return []; }
 }
 
 export async function fetchBills(): Promise<BillItem[]> {
   try {
-    const r = await get<{ code: number; data: any[] }>("/admin/v1/subscriptions");
-    if (r?.code !== 0 || !r.data) return [];
-    return (r.data || []).slice(0, 10).map((s: any, i: number) => ({
-      id: s.id || s.bill_id || `B-${i}`,
-      tenant: s.tenant_name || s.tenant_id || "",
-      period: s.period || s.billing_period || "2026-07",
-      calls: String(s.api_usage || s.used_calls || 0),
-      tokens: String(s.token_usage || s.used_tokens || 0),
-      amount: s.amount || s.cost || 0,
-      status: s.bill_status || s.status || "ISSUED",
+    const r = await get<{ code: number; data: { items?: any[] } }>("/admin/v1/billing/bills");
+    const items = r?.data?.items || [];
+    return items.slice(0, 200).map((s: any) => ({
+      id: s.id || `B-${s.period}`,
+      tenant: s.extra?.plan_name || s.tenant_id || "",
+      tenantId: s.tenant_id || "",
+      period: s.period || "",
+      calls: String(s.total_calls || 0),
+      tokens: String(s.total_tokens || 0),
+      amount: Math.round((s.amount_cents || 0) / 100),
+      status: s.status || "DRAFT",
     }));
   } catch { return []; }
 }
@@ -279,33 +328,35 @@ export async function fetchBills(): Promise<BillItem[]> {
 
 export async function fetchReviews(): Promise<TodoReviewItem[]> {
   try {
-    const r = await get<{ code: number; data: any[] }>("/admin/v1/content/review");
-    if (r?.code !== 0 || !r.data) return [];
-    return (r.data || []).map((x: any) => ({
+    const r = await get<{ code: number; data: { items?: any[] } }>("/admin/v1/kg/review/pending");
+    const items = r?.data?.items || [];
+    return items.map((x: any) => ({
       id: x.id || "",
-      type: x.type || x.entry_type || "TCM",
-      name: x.name || x.title || "",
-      conf: x.conf || x.confidence || 0.5,
+      type: x.entry_type || x.type || "知识条目",
+      name: x.content || x.name || x.title || "",
+      conf: x.confidence ?? x.conf ?? 0,
       source: x.source || "",
-      reviewer: x.reviewer || x.assigned_to || "",
+      reviewer: x.reviewer_role || x.reviewer || "",
     }));
   } catch { return []; }
 }
 
 export async function reviewAction(id: string, action: "approve" | "reject") {
-  return post(`/admin/v1/content/review/${id}`, { action });
+  return post(`/admin/v1/kg/review/action`, { review_id: id, action, note: "" });
 }
 
 export async function fetchSensitiveWords(): Promise<SensitiveWordItem[]> {
   try {
-    const r = await get<{ code: number; data: any[] }>("/admin/v1/content/sensitive");
-    if (r?.code !== 0 || !r.data) return [];
-    return (r.data || []).map((w: any) => ({
-      word: w.word || w.keyword || "",
+    const r = await get<{ code: number; data: { items?: any[] } }>("/admin/v1/content/words");
+    const items = r?.data?.items || [];
+    return items.map((w: any) => ({
+      id: w.id || w.word || "",
+      word: w.word || "",
       scene: w.scene || "ALL",
-      cat: w.cat || w.category || "",
-      action: w.action || w.strategy || "BLOCK",
-      status: w.status !== undefined ? w.status : w.enabled !== undefined ? w.enabled : true,
+      cat: w.level || w.category || "—",
+      replacement: w.replacement || "",
+      action: w.replacement ? "替换" : "拦截",
+      status: w.enabled !== undefined ? !!w.enabled : true,
     }));
   } catch { return []; }
 }
@@ -314,38 +365,58 @@ export async function fetchSensitiveWords(): Promise<SensitiveWordItem[]> {
 
 export async function fetchServices(): Promise<ServiceItem[]> {
   try {
-    const r = await get<{ code: number; data: DashboardData }>("/admin/v1/dashboard");
-    const d = r?.data;
-    const statusMap: Record<string, string> = { normal: "运行正常", warning: "DeepSeek 备用切换中", error: "服务异常" };
-    return (d?.services || []).map((s: any) => ({
-      name: s.name || s.key || "",
-      status: statusMap[s.status] || s.status || "未知",
-      latency: s.latency || s.latency_ms ? `${s.latency_ms || s.latency}ms` : "—",
+    const r = await get<{ code: number; data: { services?: any[] } }>("/admin/v1/monitor/services");
+    const services = r?.data?.services || [];
+    return services.map((s: any) => ({
+      name: s.name || "",
+      status: s.status || "未知",
+      latency: s.latency || "—",
       uptime: s.uptime || "—",
-      ok: s.status === "normal",
+      ok: s.ok !== undefined ? s.ok : true,
     }));
   } catch { return []; }
 }
 
-export async function fetchLlmUsage(): Promise<LlmUsageItem[]> {
-  return [
-    { model: "DeepSeek", tokens: 3120, cost: 84.2 },
-    { model: "GLM-4", tokens: 980, cost: 39.6 },
-    { model: "Kimi", tokens: 720, cost: 33.5 },
-    { model: "通义千问", tokens: 600, cost: 25.1 },
-  ];
+/** GET /admin/v1/monitor/llm-status — 后端口径是「模型可用性」，不是 token 计量 */
+export async function fetchLlmProviders(): Promise<LlmProviderItem[]> {
+  try {
+    const r = await get<{ code: number; data: { providers?: any[] } }>("/admin/v1/monitor/llm-status");
+    const list = r?.data?.providers || [];
+    return list.map((m: any) => ({
+      name: m.name || "",
+      available: !!m.available,
+      failCount: m.fail_count ?? 0,
+      lastError: m.last_error || "",
+      lastCheck: m.last_check || "",
+    }));
+  } catch { return []; }
+}
+
+/** GET /admin/v1/billing/scene-usage — 真实分场景计量 */
+export async function fetchSceneUsage(): Promise<SceneUsageItem[]> {
+  try {
+    const r = await get<{ code: number; data: { scene_usage?: any[] } }>("/admin/v1/billing/scene-usage");
+    const list = r?.data?.scene_usage || [];
+    return list.map((s: any) => ({
+      scene: s.scene || s.scene_key || "",
+      sceneKey: s.scene_key || s.scene || "",
+      calls: s.calls ?? 0,
+      tokens: s.tokens ?? 0,
+      cost: s.cost ?? 0,
+    }));
+  } catch { return []; }
 }
 
 export async function fetchAuditLogs(): Promise<AuditLogItem[]> {
   try {
-    const r = await get<{ code: number; data: any[] }>("/admin/v1/audit");
-    if (r?.code !== 0 || !r.data) return [];
-    return (r.data || []).map((a: any) => ({
-      time: a.time || a.created_at || "",
-      op: a.op || a.user_id || a.operator || "系统",
+    const r = await get<{ code: number; data: { items?: any[] } }>("/admin/v1/audit-logs");
+    const items = r?.data?.items || [];
+    return items.map((a: any) => ({
+      time: a.created_at || a.time || "",
+      op: a.user_id || a.operator || a.op || "系统",
       action: a.action || a.operation || "",
-      target: a.target || a.target_id || "",
-      ip: a.ip || a.source_ip || "—",
+      target: a.target_id || a.target || "",
+      ip: a.source_ip || a.ip || "—",
     }));
   } catch { return []; }
 }

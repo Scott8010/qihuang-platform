@@ -3,41 +3,26 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Cpu, ScrollText, CheckCircle2, AlertTriangle } from "lucide-react";
 import { C } from "@/lib/types";
-import { fetchServices, fetchLlmUsage, fetchAuditLogs } from "@/lib/api";
-import type { ServiceItem, LlmUsageItem, AuditLogItem } from "@/lib/types";
+import { fetchServices, fetchLlmProviders, fetchAuditLogs } from "@/lib/api";
+import type { ServiceItem, LlmProviderItem, AuditLogItem } from "@/lib/types";
 
-const MOCK_SERVICES: ServiceItem[] = [
-  { name: "API 网关", status: "运行正常", latency: "42ms", uptime: "99.98%", ok: true },
-  { name: "中台应用 (FastAPI)", status: "运行正常", latency: "186ms", uptime: "99.95%", ok: true },
-  { name: "Neo4j 图谱库", status: "运行正常", latency: "12ms", uptime: "99.99%", ok: true },
-  { name: "PostgreSQL 业务库", status: "运行正常", latency: "8ms", uptime: "99.99%", ok: true },
-  { name: "LLM 共识集群", status: "DeepSeek 备用切换中", latency: "1240ms", uptime: "99.91%", ok: false },
-];
-
-const MOCK_LLM: LlmUsageItem[] = [
-  { model: "DeepSeek", tokens: 3120, cost: 84.2 },
-  { model: "GLM-4", tokens: 980, cost: 39.6 },
-  { model: "Kimi", tokens: 720, cost: 33.5 },
-  { model: "通义千问", tokens: 600, cost: 25.1 },
-];
-
-const MOCK_AUDIT: AuditLogItem[] = [
-  { time: "2026-07-26 14:32", op: "王运营", action: "api_key.rotate", target: "K-04（杏林在线）", ip: "10.8.0.12" },
-  { time: "2026-07-26 11:05", op: "李商务", action: "tenant.create", target: "天津颐和堂大药房连锁", ip: "10.8.0.15" },
-  { time: "2026-07-26 09:47", op: "张内容", action: "content.review.approve", target: "KR-8805 麸炒白术", ip: "10.8.0.21" },
-  { time: "2026-07-25 18:20", op: "王运营", action: "tenant.status.readonly", target: "杏林在线教育学院", ip: "10.8.0.12" },
-  { time: "2026-07-25 16:08", op: "系统", action: "billing.bill.generate", target: "2026-07 账期 × 5", ip: "—" },
-];
+/* 全量真实数据驱动：
+   - 服务健康 → GET /admin/v1/monitor/services
+   - 审计日志 → GET /admin/v1/audit-logs
+   - LLM 分模型计量：后端暂无端点，返回空 → 显示诚实空态（不再回落 mock） */
 
 export default function Monitor() {
   const [services, setServices] = useState<ServiceItem[]>([]);
-  const [llmUsage, setLlmUsage] = useState<LlmUsageItem[]>([]);
+  const [llmProviders, setLlmProviders] = useState<LlmProviderItem[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchServices().then(data => setServices(data.length ? data : MOCK_SERVICES));
-    fetchLlmUsage().then(data => setLlmUsage(data.length ? data : MOCK_LLM));
-    fetchAuditLogs().then(data => setAuditLogs(data.length ? data : MOCK_AUDIT));
+    Promise.all([
+      fetchServices().then(setServices),
+      fetchLlmProviders().then(setLlmProviders),
+      fetchAuditLogs().then(setAuditLogs),
+    ]).finally(() => setLoading(false));
   }, []);
 
   return (
@@ -66,7 +51,9 @@ export default function Monitor() {
           </Card>
         ))}
         {services.length === 0 && (
-          <div className="col-span-5 py-10 text-center text-[13px]" style={{ color: C.light }}>暂无服务数据</div>
+          <div className="col-span-5 py-10 text-center text-[13px]" style={{ color: C.light }}>
+            {loading ? "加载中…" : "暂无服务数据"}
+          </div>
         )}
       </div>
 
@@ -77,40 +64,48 @@ export default function Monitor() {
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <Cpu className="w-4 h-4" style={{ color: C.primary }} />
-              <span className="text-[14px] font-medium">LLM 共识集群用量（本月）</span>
+              <span className="text-[14px] font-medium">LLM 共识集群可用性</span>
             </div>
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="text-left text-[11px]" style={{ color: C.light }}>
                   <th className="pb-2 font-normal">模型</th>
-                  <th className="pb-2 font-normal text-right">Token（万）</th>
-                  <th className="pb-2 font-normal text-right">成本（¥）</th>
-                  <th className="pb-2 font-normal text-right">占比</th>
+                  <th className="pb-2 font-normal">状态</th>
+                  <th className="pb-2 font-normal text-right">连续失败</th>
+                  <th className="pb-2 font-normal text-right">最近检查</th>
                 </tr>
               </thead>
               <tbody>
-                {llmUsage.map((m) => {
-                  const total = llmUsage.reduce((a, b) => a + b.tokens, 1);
-                  return (
-                    <tr key={m.model} className="border-t" style={{ borderColor: C.border }}>
-                      <td className="py-2.5">{m.model}</td>
-                      <td className="py-2.5 text-right">{m.tokens.toLocaleString()}</td>
-                      <td className="py-2.5 text-right">{m.cost.toFixed(1)}</td>
-                      <td className="py-2.5 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="w-16 h-1.5 rounded-full" style={{ background: C.soft }}>
-                            <div className="h-1.5 rounded-full" style={{ width: `${(m.tokens / total) * 100}%`, background: C.primary }} />
-                          </div>
-                          <span className="text-[11px]" style={{ color: C.light }}>{Math.round((m.tokens / total) * 100)}%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {llmProviders.map((m) => (
+                  <tr key={m.name} className="border-t" style={{ borderColor: C.border }}>
+                    <td className="py-2.5 font-medium">{m.name}</td>
+                    <td className="py-2.5">
+                      <span
+                        className="text-[11px] px-2 py-0.5 rounded border"
+                        style={m.available
+                          ? { color: "#2E5A4C", background: "#EAF2EE", borderColor: "#CFE3DA" }
+                          : { color: "#B03A2E", background: "#FDECEA", borderColor: "#F3C9C3" }}
+                      >
+                        {m.available ? "可用" : "不可用"}
+                      </span>
+                    </td>
+                    <td className="py-2.5 text-right" style={{ color: m.failCount > 0 ? "#B03A2E" : C.mid }}>{m.failCount}</td>
+                    <td className="py-2.5 text-right text-[11.5px]" style={{ color: C.light }}>
+                      {m.lastCheck ? String(m.lastCheck).slice(0, 19).replace("T", " ") : "—"}
+                    </td>
+                  </tr>
+                ))}
+                {llmProviders.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-[12px]" style={{ color: C.light }}>
+                      {loading ? "加载中…" : "暂无模型状态数据"}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
             <div className="mt-3 p-2 rounded text-[11px] leading-relaxed" style={{ background: "#F8FAF9", color: C.mid }}>
-              四模型共识 + 规则引擎仲裁：单模型异常不中断服务；成本按租户维度归集，计入计量计费账期。
+              四模型共识 + 规则引擎仲裁：单模型异常自动降级不中断服务。后端当前仅上报可用性，分模型 token/成本计量口径尚未开放。
             </div>
           </CardContent>
         </Card>
@@ -148,7 +143,7 @@ export default function Monitor() {
                   </tr>
                 ))}
                 {auditLogs.length === 0 && (
-                  <tr><td colSpan={5} className="py-10 text-center text-[13px]" style={{ color: C.light }}>暂无审计日志</td></tr>
+                  <tr><td colSpan={5} className="py-10 text-center text-[13px]" style={{ color: C.light }}>{loading ? "加载中…" : "暂无审计日志"}</td></tr>
                 )}
               </tbody>
             </table>

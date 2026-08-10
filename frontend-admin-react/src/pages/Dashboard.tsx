@@ -7,9 +7,9 @@ import {
   PieChart, Pie, Cell, Legend,
 } from "recharts";
 import { Building2, Users, Zap, Banknote, ArrowRight, AlertTriangle, Clock, Info, Loader2 } from "lucide-react";
-import { C } from "@/lib/mock";
-import { fetchDashboard } from "@/lib/api";
-import type { CallTrendItem, SceneDistItem, AlertItem } from "@/lib/types";
+import { C } from "@/lib/types";
+import { fetchDashboard, fetchBills } from "@/lib/api";
+import type { CallTrendItem, SceneDistItem, AlertItem, TodoReviewItem, BillItem, DeckTask } from "@/lib/types";
 import TaskDeck from "@/components/TaskDeck";
 
 const levelIcon = { high: AlertTriangle, mid: Clock, low: Info };
@@ -30,11 +30,15 @@ export default function Dashboard({ go }: { go: (p: string) => void }) {
   const [callTrend, setCallTrend] = useState<CallTrendItem[]>([]);
   const [sceneDist, setSceneDist] = useState<SceneDistItem[]>([]);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
+  const [reviews, setReviews] = useState<TodoReviewItem[]>([]);
+  const [bills, setBills] = useState<BillItem[]>([]);
 
   useEffect(() => {
     let mounted = true;
+    fetchBills().then((b) => { if (mounted) setBills(b); });
     fetchDashboard().then((d) => {
       if (!mounted) return;
+      setReviews(d.reviews || []);
       setTotalTenants(d.totalTenants);
       setActiveTenants(d.activeTenants);
       setTotalUsers(d.totalUsers);
@@ -54,6 +58,38 @@ export default function Dashboard({ go }: { go: (p: string) => void }) {
     { label: "用户总数", value: fmtNumber(totalUsers), sub: "平台累计注册用户", icon: Users, delta: "" },
     { label: "今日调用量", value: fmtNumber(todayCalls), sub: `累计 ${fmtNumber(apiCalls)} 次`, icon: Zap, delta: "" },
     { label: "平台应收（元）", value: `¥${fmtNumber(Math.round(revenueYuan))}`, sub: "来自套餐订阅", icon: Banknote, delta: "" },
+  ];
+
+  // ── 待办任务：全部由真实信号派生（待审知识 / 逾期账单 / 系统告警），无信号则为空 ──
+  const overdueBills = bills.filter((b) => (b.status || "").toUpperCase() === "OVERDUE");
+  const deckTasks: DeckTask[] = [
+    ...reviews.slice(0, 4).map((r) => ({
+      id: `RV-${r.id}`,
+      type: "知识审核",
+      title: `${r.name} · ${r.type || "待审条目"}`,
+      desc: `置信度 ${r.conf ?? "—"}；来源 ${r.source || "未标注"}；建议审核人 ${r.reviewer || "未指派"}`,
+      page: "content",
+      tone: (Number(r.conf) < 0.6 ? "red" : "amber") as DeckTask["tone"],
+      tag: `${reviews.length} 条待审`,
+    })),
+    ...overdueBills.slice(0, 3).map((b) => ({
+      id: `BL-${b.id}`,
+      type: "账单逾期",
+      title: `${b.tenant || b.tenantId} · ¥${b.amount.toLocaleString()}`,
+      desc: `${b.period} 账期已逾期，请跟进催收或办理续费`,
+      page: "billing",
+      tone: "red" as DeckTask["tone"],
+      tag: `${overdueBills.length} 张逾期`,
+    })),
+    ...alerts.slice(0, 4).map((a, i) => ({
+      id: `AL-${i}`,
+      type: "系统告警",
+      title: a.text,
+      desc: `告警级别 ${a.level || "—"}，上报时间 ${a.time || "—"}`,
+      page: "monitor",
+      tone: (a.level === "high" ? "red" : a.level === "mid" ? "amber" : "green") as DeckTask["tone"],
+      tag: `${alerts.length} 条告警`,
+    })),
   ];
 
   return (
@@ -171,8 +207,8 @@ export default function Dashboard({ go }: { go: (p: string) => void }) {
           </CardContent>
         </Card>
 
-        {/* 多任务卡片堆 */}
-        <TaskDeck go={go} />
+        {/* 待办任务（真实信号派生） */}
+        <TaskDeck tasks={deckTasks} go={go} loading={loading} />
       </div>
     </div>
   );

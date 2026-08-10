@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,8 +7,10 @@ import { Input } from "@/components/ui/input";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { ShieldCheck, Save, UserPlus, Search, CheckCircle2 } from "lucide-react";
-import { C, roleTpls, sceneMap } from "@/lib/mock";
+import { ShieldCheck, Save, UserPlus, Search, CheckCircle2, Loader2 } from "lucide-react";
+import { C } from "@/lib/types";
+import { fetchRoles } from "@/lib/api";
+import type { RoleTpl } from "@/lib/types";
 
 const assignable = [
   { id: "U-90001", name: "林晚晴", org: "颐森汇·静安旗舰馆", current: "健康顾问" },
@@ -18,19 +20,26 @@ const assignable = [
   { id: "U-92001", name: "孟扶摇", org: "杏林在线·执业医师班", current: "未分配" },
 ];
 
-const permGroups = [
-  { title: "菜单权限", type: "MENU", items: ["辅助辨证", "处方审查", "医案管理", "报告中心", "体质辨识", "调理方案", "健康档案", "穴位指导（3D）", "经典学习", "AI陪练", "题库管理", "学情看板", "账号管理", "用量报表"] },
-  { title: "API 权限", type: "API", items: ["med:diagnose", "med:rx:review", "med:case:write", "med:report", "health:assess", "health:plan", "health:tongue", "health:archive", "edu:classic", "edu:coach", "edu:exam:write", "kg:review"] },
-  { title: "数据权限范围", type: "DATA", items: ["仅本人 SELF", "本机构 ORG", "本租户 TENANT"] },
-];
-
 export default function Roles() {
-  const [sel, setSel] = useState(roleTpls[4]);
-  const [checked, setChecked] = useState<Set<string>>(new Set(["体质辨识", "调理方案", "健康档案", "穴位指导（3D）", "health:assess", "health:plan", "health:archive", "仅本人 SELF"]));
+  const [roles, setRoles] = useState<RoleTpl[]>([]);
+  const [sel, setSel] = useState<RoleTpl | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
   const [assignOpen, setAssignOpen] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [kw, setKw] = useState("");
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    fetchRoles().then((data) => {
+      setRoles(data);
+      if (data.length) {
+        setSel(data[0]);
+        setChecked(new Set(data[0].permissions.map((p) => p.code)));
+      }
+      setLoading(false);
+    });
+  }, []);
 
   const saveTpl = () => {
     setSaved(true);
@@ -62,6 +71,14 @@ export default function Roles() {
     setChecked(s);
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-[13px]" style={{ color: C.light }}>
+        <Loader2 className="w-5 h-5 mr-2 animate-spin" /> 加载中…
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-[300px_1fr] gap-4 items-start">
       <Card className="border" style={{ borderColor: C.border }}>
@@ -69,69 +86,69 @@ export default function Roles() {
           <CardTitle className="text-[15px]" style={{ color: C.primary }}>角色模板（按场景）</CardTitle>
         </CardHeader>
         <CardContent className="p-2 space-y-1">
-          {roleTpls.map((r) => (
+          {roles.length === 0 && (
+            <div className="px-3 py-6 text-center text-[12px]" style={{ color: C.light }}>暂无角色数据</div>
+          )}
+          {roles.map((r) => (
             <button
-              key={r.code}
-              onClick={() => setSel(r)}
+              key={r.id || r.code}
+              onClick={() => { setSel(r); setChecked(new Set(r.permissions.map((p) => p.code))); }}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors"
-              style={{ background: sel.code === r.code ? C.soft : "transparent" }}
+              style={{ background: sel?.code === r.code ? C.soft : "transparent" }}
             >
-              <ShieldCheck className="w-4 h-4 shrink-0" style={{ color: sel.code === r.code ? C.primary : C.light }} />
+              <ShieldCheck className="w-4 h-4 shrink-0" style={{ color: sel?.code === r.code ? C.primary : C.light }} />
               <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-medium truncate" style={{ color: sel.code === r.code ? C.primary : C.ink }}>{r.name}</div>
+                <div className="text-[13px] font-medium truncate" style={{ color: sel?.code === r.code ? C.primary : C.ink }}>{r.name}</div>
                 <div className="text-[11px] font-mono" style={{ color: C.light }}>{r.code}</div>
               </div>
-              {r.scene !== "平台" && (
-                <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ color: sceneMap[r.scene].color, background: sceneMap[r.scene].bg }}>
-                  {sceneMap[r.scene].label}
-                </span>
-              )}
+              {r.is_system && <Badge variant="outline" className="text-[10px]" style={{ color: C.light }}>系统</Badge>}
             </button>
           ))}
         </CardContent>
       </Card>
 
-      <Card className="border" style={{ borderColor: C.border }}>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-[15px]" style={{ color: C.primary }}>
-                {sel.name} <span className="font-mono text-[12px] font-normal" style={{ color: C.light }}>{sel.code}</span>
-              </CardTitle>
-              <div className="text-[12px] mt-1" style={{ color: C.mid }}>
-                数据范围：{sel.scope} · 覆盖用户 {sel.users.toLocaleString()} 人 · 系统模板（租户可微调，不可越场景上限）
+      {sel && (
+        <Card className="border" style={{ borderColor: C.border }}>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-[15px]" style={{ color: C.primary }}>
+                  {sel.name} <span className="font-mono text-[12px] font-normal" style={{ color: C.light }}>{sel.code}</span>
+                </CardTitle>
+                <div className="text-[12px] mt-1" style={{ color: C.mid }}>
+                  {sel.description || "—"} · 覆盖用户 {sel.users.toLocaleString()} 人 {sel.is_system ? "· 系统角色" : ""}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {saved && (
+                  <span className="text-[12px] px-2.5 py-1 rounded-md inline-flex items-center gap-1" style={{ background: C.soft, color: C.primary }}>
+                    <CheckCircle2 className="w-3.5 h-3.5" /> 已保存并下发，变更已写入审计日志
+                  </span>
+                )}
+                <Button variant="outline" size="sm" style={{ borderColor: C.border, color: C.primary }} onClick={() => setAssignOpen(true)}>
+                  <UserPlus className="w-4 h-4 mr-1" /> 分配用户
+                </Button>
+                <Button style={{ background: C.primary }} size="sm" onClick={saveTpl}>
+                  <Save className="w-4 h-4 mr-1" /> 保存模板
+                </Button>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {saved && (
-                <span className="text-[12px] px-2.5 py-1 rounded-md inline-flex items-center gap-1" style={{ background: C.soft, color: C.primary }}>
-                  <CheckCircle2 className="w-3.5 h-3.5" /> 已保存并下发，变更已写入审计日志
-                </span>
-              )}
-              <Button variant="outline" size="sm" style={{ borderColor: C.border, color: C.primary }} onClick={() => setAssignOpen(true)}>
-                <UserPlus className="w-4 h-4 mr-1" /> 分配用户
-              </Button>
-              <Button style={{ background: C.primary }} size="sm" onClick={saveTpl}>
-                <Save className="w-4 h-4 mr-1" /> 保存模板
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {permGroups.map((g) => (
-            <div key={g.type}>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div>
               <div className="text-[13px] font-medium mb-2 flex items-center gap-2" style={{ color: C.primary }}>
-                {g.title}
-                <span className="text-[11px] font-normal" style={{ color: C.light }}>{g.type}</span>
+                已授权权限 <span className="text-[11px] font-normal" style={{ color: C.light }}>{sel.permissions.length} 项</span>
               </div>
               <div className="flex flex-wrap gap-2">
-                {g.items.map((item) => {
-                  const on = checked.has(item);
-                  const is3d = item.includes("3D") || item.includes("module");
+                {sel.permissions.length === 0 && (
+                  <span className="text-[12px]" style={{ color: C.light }}>该角色暂未配置权限</span>
+                )}
+                {sel.permissions.map((p) => {
+                  const on = checked.has(p.code);
                   return (
                     <button
-                      key={item}
-                      onClick={() => toggle(item)}
+                      key={p.code}
+                      onClick={() => toggle(p.code)}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[12px] transition-colors"
                       style={{
                         borderColor: on ? C.primary : C.border,
@@ -140,25 +157,25 @@ export default function Roles() {
                       }}
                     >
                       <Checkbox checked={on} className="pointer-events-none w-3.5 h-3.5" />
-                      {item}
-                      {is3d && <Badge variant="outline" className="text-[10px] px-1 py-0 border-amber-300" style={{ color: C.gold }}>增值</Badge>}
+                      <span className="font-mono">{p.code}</span>
+                      <span className="text-[11px]" style={{ color: C.light }}>{p.name}</span>
                     </button>
                   );
                 })}
               </div>
             </div>
-          ))}
-          <div className="rounded-lg p-3 text-[12px] leading-relaxed" style={{ background: C.bg, color: C.mid }}>
-            硬性规则：场景越权不可配置（大健康角色无法被授予 med:rx:review）；权限变更全程记录审计日志（操作人、对象、前后值）。
-            当前已授予 API：{sel.apis.join("、")}
-          </div>
-        </CardContent>
-      </Card>
+            <div className="rounded-lg p-3 text-[12px] leading-relaxed" style={{ background: C.bg, color: C.mid }}>
+              硬性规则：场景越权不可配置（大健康角色无法被授予 med:rx:review）；权限变更全程记录审计日志（操作人、对象、前后值）。
+              当前已授予 {sel.permissions.length} 项权限。
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
-            <DialogTitle style={{ color: C.primary }}>为「{sel.name}」分配用户</DialogTitle>
+            <DialogTitle style={{ color: C.primary }}>为「{sel?.name}」分配用户</DialogTitle>
           </DialogHeader>
           <div className="py-2 space-y-3">
             <div className="relative">
@@ -168,7 +185,7 @@ export default function Roles() {
             <div className="max-h-64 overflow-y-auto space-y-1">
               {shownUsers.map((u) => {
                 const on = picked.has(u.id);
-                const disabled = u.current === sel.name;
+                const disabled = u.current === sel?.name;
                 return (
                   <button
                     key={u.id}

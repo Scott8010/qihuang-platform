@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Plus, Search, Boxes, Loader2 } from "lucide-react";
-import { C, sceneMap, statusMap } from "@/lib/mock";
+import { C, sceneMap, statusMap } from "@/lib/types";
 import { fetchTenants, createTenant } from "@/lib/api";
 import type { Tenant } from "@/lib/types";
 import TenantDetail from "./TenantDetail";
@@ -181,8 +181,9 @@ export default function Tenants() {
             </thead>
             <tbody>
               {shown.map((t) => {
-                const pct = Math.min(100, Math.round((t.usedCalls / t.quotaCalls) * 100));
-                const over = pct >= 95;
+                const hasQuota = t.quotaCalls > 0;
+                const pct = hasQuota ? Math.min(100, Math.round((t.usedCalls / t.quotaCalls) * 100)) : 0;
+                const over = hasQuota && pct >= 95;
                 return (
                   <tr key={t.id} className="border-b last:border-0 hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
                     <td className="px-5 py-3.5">
@@ -198,8 +199,8 @@ export default function Tenants() {
                     <td className="px-3 py-3.5" style={{ color: C.mid }}>{t.orgs} / {t.users.toLocaleString()}</td>
                     <td className="px-3 py-3.5">
                       <div className="flex justify-between text-[11px] mb-1" style={{ color: over ? "#B03A2E" : C.light }}>
-                        <span>{(t.usedCalls / 10000).toFixed(1)}万 / {(t.quotaCalls / 10000).toFixed(0)}万</span>
-                        <span>{pct}%</span>
+                        <span>{t.usedCalls.toLocaleString()} / {hasQuota ? t.quotaCalls.toLocaleString() : "不限"}</span>
+                        <span>{hasQuota ? `${pct}%` : "—"}</span>
                       </div>
                       <Progress value={pct} className="h-1.5" />
                     </td>

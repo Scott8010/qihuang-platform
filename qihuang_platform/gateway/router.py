@@ -5,6 +5,7 @@ API Gateway - 路由层
 from fastapi import APIRouter, Depends, Request, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional, List
+import os
 
 from qihuang_platform.gateway.auth import (
     create_access_token, create_refresh_token, verify_token,
@@ -319,6 +320,41 @@ async def revoke_api_key(key_id: str, user: dict = Depends(get_current_admin)):
     raise HTTPException(404, detail=error("NOT_FOUND", "密钥不存在"))
 
 
+# ========== 管理端登录（生产环境正式账号） ==========
+
+admin_auth_router = APIRouter(prefix="/admin/v1", tags=["管理端认证"])
+
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
+
+@admin_auth_router.post("/login")
+async def admin_login(req: AdminLoginRequest):
+    """管理端登录：校验环境变量 QH_ADMIN_USER / QH_ADMIN_PASS，签发 super_admin JWT"""
+    admin_user = os.getenv("QH_ADMIN_USER", "")
+    admin_pass = os.getenv("QH_ADMIN_PASS", "")
+    if not admin_user or not admin_pass:
+        raise HTTPException(403, detail=error("ADMIN_AUTH_DISABLED", "管理端账号未配置"))
+    if req.username != admin_user or req.password != admin_pass:
+        raise HTTPException(401, detail=error("ADMIN_AUTH_FAILED", "账号或密码错误"))
+    user_id = "admin"
+    tenant_id = "tenant_default"
+    org_id = "org_default"
+    roles = ["user", "admin", "super_admin"]
+    register_user(user_id, tenant_id, org_id, roles)
+    access_token = create_access_token(user_id, tenant_id, org_id, roles)
+    refresh_token_str = create_refresh_token(user_id, "admin")
+    return success({
+        "access_token": access_token,
+        "refresh_token": refresh_token_str,
+        "token_type": "bearer",
+        "expires_in": 7200,
+        "user_id": user_id,
+        "tenant_id": tenant_id,
+        "roles": roles,
+    })
+
+
 # ========== 开发辅助端点（仅开发环境） ==========
 
 dev_router = APIRouter(prefix="/dev", tags=["开发辅助"])
@@ -354,30 +390,6 @@ async def dev_register_api_key(req: DevRegisterAPIKeyRequest):
         "plan": req.plan,
         "note": note,
         "status": key_info["status"],
-    })
-
-
-@dev_router.post("/admin-login")
-async def dev_admin_login():
-    """开发环境：直接获取管理员JWT（跳过OAuth）"""
-    user_id = "dev_admin"
-    tenant_id = "tenant_default"
-    org_id = "org_default"
-    roles = ["user", "admin", "super_admin"]
-
-    register_user(user_id, tenant_id, org_id, roles)
-
-    access_token = create_access_token(user_id, tenant_id, org_id, roles)
-    refresh_token_str = create_refresh_token(user_id, "dev_admin")
-
-    return success({
-        "access_token": access_token,
-        "refresh_token": refresh_token_str,
-        "token_type": "bearer",
-        "expires_in": 7200,
-        "user_id": user_id,
-        "tenant_id": tenant_id,
-        "roles": roles,
     })
 
 

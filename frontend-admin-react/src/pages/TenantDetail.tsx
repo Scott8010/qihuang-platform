@@ -1,47 +1,68 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ArrowLeft, KeyRound, Sparkles, Loader2, Check, Minus } from "lucide-react";
+import { C, sceneMap, statusMap, billStatus, planFeatureLabels } from "@/lib/types";
+import type {
+  Tenant, OrgItem, TenantUserItem, BillItem, SubscriptionItem, PlanItem, PlanFeatures,
+} from "@/lib/types";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { ArrowLeft, Plus, Boxes, KeyRound, RotateCcw, Ban, Sparkles } from "lucide-react";
-import {
-  C, sceneMap, statusMap, getOrgs, getUsers, userStatusMap,
-  tenantTrend, endpointUsage, featureFlags, bills, billStatus,
-} from "@/lib/mock";
-import type { Tenant } from "@/lib/mock";
+  fetchTenantOrgs, fetchTenantUsers, fetchBills, fetchSubscriptions, fetchPlans,
+} from "@/lib/api";
 
+/** 租户详情 — 全部数据来自后端真实接口
+ *  机构 → GET /admin/v1/tenants/{id}/orgs
+ *  用户 → GET /admin/v1/tenants/{id}/users
+ *  订阅 → GET /admin/v1/subscriptions（按 tenant_id 过滤）
+ *  账单 → GET /admin/v1/billing/bills（按 tenant_id 过滤）
+ *  套餐特性 → GET /admin/v1/plans
+ *  后端未提供的维度（分日趋势 / 端点级用量 / 单租户特性覆写）一律显示空态，不造假数据
+ */
 export default function TenantDetail({ tenant, onBack }: { tenant: Tenant; onBack: () => void }) {
   const t = tenant;
-  const pct = Math.min(100, Math.round((t.usedCalls / t.quotaCalls) * 100));
-  const [flags, setFlags] = useState(() => featureFlags(t));
-  const [users, setUsers] = useState(() => getUsers(t));
-  const [orgs] = useState(() => getOrgs(t));
-  const [userOpen, setUserOpen] = useState(false);
-  const [orgOpen, setOrgOpen] = useState(false);
-  const [nu, setNu] = useState({ name: "", phone: "", role: "健康顾问", org: "" });
-  const [saved, setSaved] = useState("");
+  const hasQuota = t.quotaCalls > 0;
+  const pct = hasQuota ? Math.min(100, Math.round((t.usedCalls / t.quotaCalls) * 100)) : 0;
 
-  const flash = (msg: string) => { setSaved(msg); setTimeout(() => setSaved(""), 2500); };
+  const [loading, setLoading] = useState(true);
+  const [orgs, setOrgs] = useState<OrgItem[]>([]);
+  const [users, setUsers] = useState<TenantUserItem[]>([]);
+  const [bills, setBills] = useState<BillItem[]>([]);
+  const [subs, setSubs] = useState<SubscriptionItem[]>([]);
+  const [plans, setPlans] = useState<PlanItem[]>([]);
 
-  const addUser = () => {
-    if (!nu.name.trim()) return;
-    setUsers([{ id: `U-9${Math.floor(Math.random() * 9000 + 1000)}`, name: nu.name, phone: nu.phone || "—", role: nu.role, org: nu.org || orgs[0]?.name || "总部", status: "ACTIVE", lastActive: "刚刚" }, ...users]);
-    setUserOpen(false);
-    setNu({ name: "", phone: "", role: "健康顾问", org: "" });
-    flash("账号已开设，初始密码已短信发送");
-  };
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      fetchTenantOrgs(t.id).then(setOrgs),
+      fetchTenantUsers(t.id).then(setUsers),
+      fetchBills().then((all) => setBills(all.filter((b) => b.tenantId === t.id))),
+      fetchSubscriptions().then((all) => setSubs(all.filter((s) => s.tenantId === t.id))),
+      fetchPlans().then(setPlans),
+    ]).finally(() => setLoading(false));
+  }, [t.id]);
 
-  const myBills = bills.filter((b) => t.name.includes(b.tenant.slice(0, 4)) || b.tenant.includes(t.name.slice(0, 4)));
+  const myPlan =
+    plans.find((p) => p.planName === t.plan) ||
+    plans.find((p) => p.name === t.plan) ||
+    null;
+
+  const sc = sceneMap[t.scene] || { label: t.scene, color: C.mid, bg: C.soft };
+  const st = statusMap[t.status] || { label: t.status, cls: "bg-gray-100 text-gray-600 border-gray-200" };
+
+  const empty = (text: string) => (
+    <div className="py-10 text-center text-[13px]" style={{ color: C.light }}>
+      {loading ? <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> 加载中…</span> : text}
+    </div>
+  );
+
+  const userStatusCls = (s: string) =>
+    /active|enabled|正常/i.test(s)
+      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+      : /disabled|locked|停用|禁用/i.test(s)
+        ? "bg-red-50 text-red-600 border-red-200"
+        : "bg-gray-100 text-gray-600 border-gray-200";
 
   return (
     <div className="space-y-4">
@@ -51,26 +72,31 @@ export default function TenantDetail({ tenant, onBack }: { tenant: Tenant; onBac
           <ArrowLeft className="w-4 h-4 mr-1" /> 返回列表
         </Button>
         <h2 className="text-[17px] font-semibold">{t.name}</h2>
-        <span className="px-2 py-0.5 rounded text-[11px]" style={{ color: sceneMap[t.scene].color, background: sceneMap[t.scene].bg }}>
-          {sceneMap[t.scene].label}场景
+        <span className="px-2 py-0.5 rounded text-[11px]" style={{ color: sc.color, background: sc.bg }}>
+          {sc.label}场景
         </span>
-        <span className={`px-2 py-0.5 rounded border text-[11px] ${statusMap[t.status].cls}`}>{statusMap[t.status].label}</span>
+        <span className={`px-2 py-0.5 rounded border text-[11px] ${st.cls}`}>{st.label}</span>
         {t.module3d && (
           <Badge variant="outline" className="border-amber-300 text-[11px]" style={{ color: C.gold }}>
             <Sparkles className="w-3 h-3 mr-1" /> 岐黄三境 3D
           </Badge>
         )}
         <div className="flex-1" />
-        {saved && <span className="text-[12px] px-3 py-1.5 rounded-md" style={{ background: C.soft, color: C.primary }}>{saved}</span>}
+        {loading && <Loader2 className="w-4 h-4 animate-spin" style={{ color: C.light }} />}
       </div>
 
       {/* 概要条 */}
       <div className="grid grid-cols-5 gap-3 text-[13px]">
         {[
-          { l: "租户 ID", v: t.id },
-          { l: "套餐", v: `${t.plan} · 到期 ${t.expires}` },
-          { l: "机构 / 用户", v: `${t.orgs} / ${t.users.toLocaleString()}` },
-          { l: "本月调用", v: `${(t.usedCalls / 10000).toFixed(1)} 万次（${pct}%）` },
+          { l: "租户 ID", v: t.id || "—" },
+          { l: "套餐", v: `${t.plan} · 到期 ${t.expires || "—"}` },
+          { l: "机构 / 用户", v: `${orgs.length || t.orgs} / ${(users.length || t.users).toLocaleString()}` },
+          {
+            l: "累计调用",
+            v: hasQuota
+              ? `${t.usedCalls.toLocaleString()} / ${t.quotaCalls.toLocaleString()}（${pct}%）`
+              : `${t.usedCalls.toLocaleString()} · 配额不限`,
+          },
           { l: "数据隔离", v: "tenant_id 行级" },
         ].map((x) => (
           <Card key={x.l} className="border shadow-none" style={{ borderColor: C.border }}>
@@ -84,50 +110,55 @@ export default function TenantDetail({ tenant, onBack }: { tenant: Tenant; onBac
 
       <Tabs defaultValue="overview">
         <TabsList>
-          <TabsTrigger value="overview">用量概览</TabsTrigger>
+          <TabsTrigger value="overview">订阅与用量</TabsTrigger>
           <TabsTrigger value="orgs">机构管理</TabsTrigger>
           <TabsTrigger value="users">用户账号</TabsTrigger>
-          <TabsTrigger value="features">功能开关</TabsTrigger>
+          <TabsTrigger value="features">套餐特性</TabsTrigger>
           <TabsTrigger value="bills">账单记录</TabsTrigger>
         </TabsList>
 
-        {/* ============ 用量概览 ============ */}
+        {/* ============ 订阅与用量 ============ */}
         <TabsContent value="overview" className="mt-4 space-y-4">
           <Card className="border shadow-none" style={{ borderColor: C.border }}>
             <CardContent className="p-4">
-              <div className="text-[14px] font-medium mb-2">近 30 天调用趋势</div>
-              <ResponsiveContainer width="100%" height={220}>
-                <AreaChart data={tenantTrend(t)} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                  <XAxis dataKey="day" tick={{ fontSize: 11, fill: C.light }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: C.light }} tickLine={false} axisLine={false} />
-                  <Tooltip />
-                  <Area dataKey="calls" name="调用量" stroke={C.primary} fill={C.primary} fillOpacity={0.2} strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
+              <div className="text-[14px] font-medium mb-3">订阅记录</div>
+              {subs.length === 0 ? empty("该租户暂无订阅记录") : (
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="text-left text-[11px]" style={{ color: C.light }}>
+                      {["订阅 ID", "套餐", "状态", "生效日", "到期日", "自动续订"].map((h) => (
+                        <th key={h} className="pb-2 font-normal">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {subs.map((s) => (
+                      <tr key={s.id} className="border-t" style={{ borderColor: C.border }}>
+                        <td className="py-2.5 font-mono text-[12px]">{s.id}</td>
+                        <td className="py-2.5">{s.planId || "—"}</td>
+                        <td className="py-2.5">
+                          <Badge variant="outline" className={userStatusCls(s.status)}>{s.status || "—"}</Badge>
+                        </td>
+                        <td className="py-2.5" style={{ color: C.mid }}>{s.startDate || "—"}</td>
+                        <td className="py-2.5" style={{ color: C.mid }}>{s.endDate || "—"}</td>
+                        <td className="py-2.5">{s.autoRenew ? "是" : "否"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </CardContent>
           </Card>
+
           <Card className="border shadow-none" style={{ borderColor: C.border }}>
             <CardContent className="p-4">
-              <div className="text-[14px] font-medium mb-3">端点级用量 TOP5</div>
-              <table className="w-full text-[13px]">
-                <thead>
-                  <tr className="text-left text-[11px]" style={{ color: C.light }}>
-                    {["端点", "功能", "调用量", "平均耗时", "错误率"].map((h) => <th key={h} className="pb-2 font-normal">{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {endpointUsage.map((e) => (
-                    <tr key={e.endpoint} className="border-t" style={{ borderColor: C.border }}>
-                      <td className="py-2.5 font-mono text-[12px]">{e.endpoint}</td>
-                      <td className="py-2.5">{e.name}</td>
-                      <td className="py-2.5">{e.calls.toLocaleString()}</td>
-                      <td className="py-2.5">{e.avg}</td>
-                      <td className="py-2.5" style={{ color: parseFloat(e.err) > 0.1 ? "#B03A2E" : C.mid }}>{e.err}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="text-[14px] font-medium mb-1">分日趋势 / 端点级用量</div>
+              <div className="py-8 text-center text-[13px]" style={{ color: C.light }}>
+                后端当前未提供单租户「分日趋势」与「端点级用量」明细接口
+                <div className="mt-1 text-[11.5px]">
+                  已上报的聚合口径见「计量计费」与「监控大盘」；明细接口开通后此处自动填充
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -136,57 +167,31 @@ export default function TenantDetail({ tenant, onBack }: { tenant: Tenant; onBac
         <TabsContent value="orgs" className="mt-4">
           <Card className="border shadow-none" style={{ borderColor: C.border }}>
             <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[14px] font-medium">下级机构（{t.orgs} 家，展示前 {orgs.length} 家）</span>
-                <Dialog open={orgOpen} onOpenChange={setOrgOpen}>
-                  <DialogTrigger asChild>
-                    <Button size="sm" style={{ background: C.primary }}><Plus className="w-3.5 h-3.5 mr-1" /> 新增机构</Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[400px]">
-                    <DialogHeader><DialogTitle style={{ color: C.primary }}>新增机构</DialogTitle></DialogHeader>
-                    <div className="space-y-3 py-2 text-[13px]">
-                      <div className="space-y-1.5"><Label>机构名称</Label><Input placeholder="如：某某分馆 / 某某班级" /></div>
-                      <div className="space-y-1.5">
-                        <Label>机构类型</Label>
-                        <Select defaultValue={t.scene === "EDU" ? "教学班级" : t.scene === "MED" ? "中医门诊" : "康养门店"}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {(t.scene === "EDU" ? ["教学班级", "教研组"] : t.scene === "MED" ? ["中医门诊", "住院部", "药房"] : ["康养门店", "线上渠道", "体验中心"]).map((x) => (
-                              <SelectItem key={x} value={x}>{x}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setOrgOpen(false)}>取消</Button>
-                      <Button style={{ background: C.primary }} onClick={() => { setOrgOpen(false); flash("机构已创建，可为其开设账号"); }}>创建</Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-              <table className="w-full text-[13px]">
-                <thead>
-                  <tr className="text-left text-[11px]" style={{ color: C.light }}>
-                    {["机构 ID", "名称", "类型", "用户数", "状态", "操作"].map((h) => <th key={h} className="pb-2 font-normal">{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {orgs.map((o) => (
-                    <tr key={o.id} className="border-t hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
-                      <td className="py-2.5 font-mono text-[12px]">{o.id}</td>
-                      <td className="py-2.5 font-medium">{o.name}</td>
-                      <td className="py-2.5" style={{ color: C.mid }}>{o.type}</td>
-                      <td className="py-2.5">{o.users}</td>
-                      <td className="py-2.5"><Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">正常</Badge></td>
-                      <td className="py-2.5">
-                        <button className="text-[12px] mr-3" style={{ color: C.primary }}>编辑</button>
-                        <button className="text-[12px]" style={{ color: C.light }}>停用</button>
-                      </td>
+              <div className="text-[14px] font-medium mb-3">下级机构（{orgs.length} 家）</div>
+              {orgs.length === 0 ? empty("该租户暂无下级机构") : (
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="text-left text-[11px]" style={{ color: C.light }}>
+                      {["机构 ID", "名称", "上级", "用户数", "状态"].map((h) => (
+                        <th key={h} className="pb-2 font-normal">{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {orgs.map((o) => (
+                      <tr key={o.id} className="border-t hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
+                        <td className="py-2.5 font-mono text-[12px]">{o.id}</td>
+                        <td className="py-2.5 font-medium">{o.name}</td>
+                        <td className="py-2.5 font-mono text-[12px]" style={{ color: C.mid }}>{o.parentId || "—"}</td>
+                        <td className="py-2.5">{o.userCount}</td>
+                        <td className="py-2.5">
+                          <Badge variant="outline" className={userStatusCls(o.status)}>{o.status || "—"}</Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -195,117 +200,81 @@ export default function TenantDetail({ tenant, onBack }: { tenant: Tenant; onBac
         <TabsContent value="users" className="mt-4">
           <Card className="border shadow-none" style={{ borderColor: C.border }}>
             <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[14px] font-medium">用户账号（共 {t.users.toLocaleString()} 个，展示前 {users.length} 个）</span>
-                <Dialog open={userOpen} onOpenChange={setUserOpen}>
-                  <DialogTrigger asChild>
-                    <Button size="sm" style={{ background: C.primary }}><Plus className="w-3.5 h-3.5 mr-1" /> 开设账号</Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[420px]">
-                    <DialogHeader><DialogTitle style={{ color: C.primary }}>开设用户账号</DialogTitle></DialogHeader>
-                    <div className="space-y-3 py-2 text-[13px]">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5"><Label>姓名</Label><Input value={nu.name} onChange={(e) => setNu({ ...nu, name: e.target.value })} /></div>
-                        <div className="space-y-1.5"><Label>手机号（登录账号）</Label><Input value={nu.phone} onChange={(e) => setNu({ ...nu, phone: e.target.value })} placeholder="138****" /></div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <Label>角色（受场景上限约束）</Label>
-                          <Select value={nu.role} onValueChange={(v) => setNu({ ...nu, role: v })}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              {(t.scene === "MED" ? ["执业医师", "科室主任", "机构管理员"]
-                                : t.scene === "EDU" ? ["教师", "学员", "教研专家"]
-                                : ["健康顾问", "C端用户", "机构管理员"]).map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label>所属机构</Label>
-                          <Select value={nu.org} onValueChange={(v) => setNu({ ...nu, org: v })}>
-                            <SelectTrigger><SelectValue placeholder="选择机构" /></SelectTrigger>
-                            <SelectContent>{orgs.map((o) => <SelectItem key={o.id} value={o.name}>{o.name}</SelectItem>)}</SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div className="text-[12px] rounded-lg p-3" style={{ background: C.bg, color: C.mid }}>
-                        初始密码通过短信下发，首次登录强制改密；账号创建写入审计日志（tenant.user.create）。
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setUserOpen(false)}>取消</Button>
-                      <Button style={{ background: C.primary }} onClick={addUser}>开设</Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-              <table className="w-full text-[13px]">
-                <thead>
-                  <tr className="text-left text-[11px]" style={{ color: C.light }}>
-                    {["用户", "手机号", "角色", "机构", "最近活跃", "状态", "操作"].map((h) => <th key={h} className="pb-2 font-normal">{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => (
-                    <tr key={u.id} className="border-t hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
-                      <td className="py-2.5">
-                        <div className="font-medium">{u.name}</div>
-                        <div className="text-[11px] font-mono" style={{ color: C.light }}>{u.id}</div>
-                      </td>
-                      <td className="py-2.5" style={{ color: C.mid }}>{u.phone}</td>
-                      <td className="py-2.5">{u.role}</td>
-                      <td className="py-2.5" style={{ color: C.mid }}>{u.org}</td>
-                      <td className="py-2.5" style={{ color: C.light }}>{u.lastActive}</td>
-                      <td className="py-2.5"><Badge variant="outline" className={userStatusMap[u.status].cls}>{userStatusMap[u.status].label}</Badge></td>
-                      <td className="py-2.5">
-                        <button className="text-[12px] mr-3 inline-flex items-center gap-0.5" style={{ color: C.primary }}>
-                          <RotateCcw className="w-3 h-3" /> 重置密码
-                        </button>
-                        <button
-                          className="text-[12px] inline-flex items-center gap-0.5"
-                          style={{ color: u.status === "ACTIVE" ? "#B03A2E" : C.primary }}
-                          onClick={() => setUsers(users.map((x) => x.id === u.id ? { ...x, status: x.status === "ACTIVE" ? "DISABLED" : "ACTIVE" } : x))}
-                        >
-                          <Ban className="w-3 h-3" /> {u.status === "ACTIVE" ? "禁用" : "启用"}
-                        </button>
-                      </td>
+              <div className="text-[14px] font-medium mb-3">用户账号（{users.length} 个）</div>
+              {users.length === 0 ? empty("该租户暂无用户账号") : (
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="text-left text-[11px]" style={{ color: C.light }}>
+                      {["用户", "手机号", "邮箱", "角色", "机构", "创建时间", "状态"].map((h) => (
+                        <th key={h} className="pb-2 font-normal">{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {users.map((u) => (
+                      <tr key={u.id} className="border-t hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
+                        <td className="py-2.5">
+                          <div className="font-medium">{u.displayName}</div>
+                          <div className="text-[11px] font-mono" style={{ color: C.light }}>{u.username || u.id}</div>
+                        </td>
+                        <td className="py-2.5" style={{ color: C.mid }}>{u.phone || "—"}</td>
+                        <td className="py-2.5" style={{ color: C.mid }}>{u.email || "—"}</td>
+                        <td className="py-2.5">{u.roles.length ? u.roles.join("、") : "—"}</td>
+                        <td className="py-2.5" style={{ color: C.mid }}>{u.orgName || "—"}</td>
+                        <td className="py-2.5 text-[12px]" style={{ color: C.light }}>{(u.createdAt || "—").slice(0, 19).replace("T", " ")}</td>
+                        <td className="py-2.5">
+                          <Badge variant="outline" className={userStatusCls(u.status)}>{u.status || "—"}</Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* ============ 功能开关 ============ */}
+        {/* ============ 套餐特性 ============ */}
         <TabsContent value="features" className="mt-4">
           <Card className="border shadow-none" style={{ borderColor: C.border }}>
             <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[14px] font-medium">features_json 功能开关</span>
-                <Button size="sm" style={{ background: C.primary }} onClick={() => flash("开关已下发，网关鉴权响应即时生效")}>保存并下发</Button>
+              <div className="text-[14px] font-medium mb-1">套餐特性（{myPlan ? myPlan.name : t.plan}）</div>
+              <div className="text-[12px] mb-3" style={{ color: C.light }}>
+                特性开关由套餐 features_json 统一下发（GET /admin/v1/plans）；后端当前未提供「单租户特性覆写」接口，此处为只读。
               </div>
-              <div className="text-[12px] mb-3" style={{ color: C.light }}>开关随 Token / 签名响应下发至租户前端，按开关渲染入口；增值项单独计量。</div>
-              <div className="space-y-2">
-                {flags.map((f) => (
-                  <div key={f.key} className="flex items-center justify-between rounded-lg border p-3.5" style={{ borderColor: C.border, background: f.addon ? "#FDF9F0" : "#fff" }}>
-                    <div className="flex items-center gap-3">
-                      {f.addon && <Boxes className="w-4 h-4" style={{ color: C.accent }} />}
-                      <div>
-                        <div className="text-[13px] font-medium flex items-center gap-2">
-                          {f.name}
-                          <span className="font-mono text-[11px]" style={{ color: C.light }}>{f.key}</span>
-                          {f.addon && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#FBF4E4", color: C.gold }}>增值·单独计费</span>}
+              {!myPlan ? empty(`未在套餐库中匹配到「${t.plan}」，无法展示特性明细`) : (
+                <div className="space-y-2">
+                  {planFeatureLabels.map((f) => {
+                    const on = !!myPlan.features[f.key as keyof PlanFeatures];
+                    return (
+                      <div
+                        key={f.key}
+                        className="flex items-center justify-between rounded-lg border p-3.5"
+                        style={{ borderColor: C.border, background: on ? "#F8FBFA" : "#fff" }}
+                      >
+                        <div>
+                          <div className="text-[13px] font-medium flex items-center gap-2">
+                            {f.label}
+                            <span className="font-mono text-[11px]" style={{ color: C.light }}>{f.key}</span>
+                          </div>
                         </div>
-                        <div className="text-[12px]" style={{ color: C.mid }}>{f.desc}</div>
+                        {on
+                          ? <span className="inline-flex items-center gap-1 text-[12px]" style={{ color: C.primary }}><Check className="w-4 h-4" /> 已包含</span>
+                          : <span className="inline-flex items-center gap-1 text-[12px]" style={{ color: C.light }}><Minus className="w-4 h-4" /> 不包含</span>}
                       </div>
+                    );
+                  })}
+                  <div className="flex items-center justify-between rounded-lg border p-3.5" style={{ borderColor: C.border, background: t.module3d ? "#FDF9F0" : "#fff" }}>
+                    <div className="text-[13px] font-medium flex items-center gap-2">
+                      岐黄三境 3D（租户级开通标记）
+                      <span className="font-mono text-[11px]" style={{ color: C.light }}>module_3d</span>
                     </div>
-                    {f.locked
-                      ? <span className="text-[12px]" style={{ color: C.light }}>当前套餐不可用</span>
-                      : <Switch checked={f.on} onCheckedChange={(v) => setFlags(flags.map((x) => x.key === f.key ? { ...x, on: v } : x))} />}
+                    {t.module3d
+                      ? <span className="inline-flex items-center gap-1 text-[12px]" style={{ color: C.gold }}><Check className="w-4 h-4" /> 已开通</span>
+                      : <span className="inline-flex items-center gap-1 text-[12px]" style={{ color: C.light }}><Minus className="w-4 h-4" /> 未开通</span>}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -315,31 +284,34 @@ export default function TenantDetail({ tenant, onBack }: { tenant: Tenant; onBac
           <Card className="border shadow-none" style={{ borderColor: C.border }}>
             <CardContent className="p-4">
               <div className="text-[14px] font-medium mb-3">历史账单</div>
-              {myBills.length === 0 ? (
-                <div className="py-10 text-center text-[13px]" style={{ color: C.light }}>该租户暂无出账记录（体验版或新建租户在首个账期末出账）</div>
-              ) : (
+              {bills.length === 0 ? empty("该租户暂无出账记录（新建租户在首个账期末出账）") : (
                 <table className="w-full text-[13px]">
                   <thead>
                     <tr className="text-left text-[11px]" style={{ color: C.light }}>
-                      {["账单号", "账期", "调用量", "Token", "金额", "状态"].map((h) => <th key={h} className="pb-2 font-normal">{h}</th>)}
+                      {["账单号", "账期", "调用量", "Token", "金额", "状态"].map((h) => (
+                        <th key={h} className="pb-2 font-normal">{h}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {myBills.map((b) => (
-                      <tr key={b.id} className="border-t" style={{ borderColor: C.border }}>
-                        <td className="py-2.5 font-mono text-[12px]">{b.id}</td>
-                        <td className="py-2.5">{b.period}</td>
-                        <td className="py-2.5">{b.calls}</td>
-                        <td className="py-2.5">{b.tokens}</td>
-                        <td className="py-2.5 font-medium">¥{b.amount.toLocaleString()}</td>
-                        <td className="py-2.5"><Badge variant="outline" className={billStatus[b.status].cls}>{billStatus[b.status].label}</Badge></td>
-                      </tr>
-                    ))}
+                    {bills.map((b) => {
+                      const s = billStatus[b.status] || { label: b.status, cls: "bg-gray-100 text-gray-600 border-gray-200" };
+                      return (
+                        <tr key={b.id} className="border-t" style={{ borderColor: C.border }}>
+                          <td className="py-2.5 font-mono text-[12px]">{b.id}</td>
+                          <td className="py-2.5">{b.period}</td>
+                          <td className="py-2.5">{Number(b.calls).toLocaleString()}</td>
+                          <td className="py-2.5">{Number(b.tokens).toLocaleString()}</td>
+                          <td className="py-2.5 font-medium">¥{b.amount.toLocaleString()}</td>
+                          <td className="py-2.5"><Badge variant="outline" className={s.cls}>{s.label}</Badge></td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
               <div className="mt-3 flex items-center gap-1.5 text-[11.5px]" style={{ color: C.light }}>
-                <KeyRound className="w-3.5 h-3.5" /> 续费与套餐变更在「计量计费」页操作；逾期 7 天自动只读降级。
+                <KeyRound className="w-3.5 h-3.5" /> 续费与套餐变更在「计量计费」页操作。
               </div>
             </CardContent>
           </Card>

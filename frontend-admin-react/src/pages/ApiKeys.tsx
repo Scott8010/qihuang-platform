@@ -1,52 +1,35 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, KeyRound, Copy, RefreshCw, Ban } from "lucide-react";
-import { C } from "@/lib/types";
+import { Plus, KeyRound, Copy, RefreshCw, Ban, Loader2 } from "lucide-react";
+import { C, keyStatus } from "@/lib/types";
+import type { ApiKey } from "@/lib/types";
+import { fetchApiKeys } from "@/lib/api";
 
 /* ═══════════════════════════════════════════
-   API 密钥管理 — 按 KIMI 截图设计
+   API 密钥管理 — 真实接口 GET /admin/v1/api-keys/
+   后端无配额字段时显示「不限」，不假造数值
    ═══════════════════════════════════════════ */
 
-interface KeyRow {
-  keyId: string; keyMasked: string; tenant: string;
-  purpose: string; purposeBg: string; purposeColor: string;
-  qps: number; used: number; quota: number;
-  status: string; statusColor: string; statusBg: string;
+function maskKey(k: string) {
+  if (!k) return "—";
+  if (k.length <= 12) return k;
+  return `${k.slice(0, 8)}****${k.slice(-4)}`;
 }
 
-const KEYS: KeyRow[] = [
-  {
-    keyId: "qh_9f2k****8d1x", keyMasked: "qh_9f2k****8d1x", tenant: "颐森汇健康集团",
-    purpose: "PROD", purposeBg: "#EAF2EE", purposeColor: "#2E5A4C",
-    qps: 50, used: 386200, quota: 500000, status: "正常", statusColor: "#2E5A4C", statusBg: "#EAF2EE",
-  },
-  {
-    keyId: "qh_test****3c7a", keyMasked: "qh_test****3c7a", tenant: "颐森汇健康集团",
-    purpose: "TEST", purposeBg: "#F5F5F5", purposeColor: "#888",
-    qps: 5, used: 1240, quota: 10000, status: "正常", statusColor: "#2E5A4C", statusBg: "#EAF2EE",
-  },
-  {
-    keyId: "qh_7h4m****2f9e", keyMasked: "qh_7h4m****2f9e", tenant: "沪上云杉中医馆",
-    purpose: "PROD", purposeBg: "#EAF2EE", purposeColor: "#2E5A4C",
-    qps: 10, used: 42100, quota: 50000, status: "正常", statusColor: "#2E5A4C", statusBg: "#EAF2EE",
-  },
-  {
-    keyId: "qh_3j8p****6k2b", keyMasked: "qh_3j8p****6k2b", tenant: "杏林在线教育学院",
-    purpose: "PROD", purposeBg: "#EAF2EE", purposeColor: "#2E5A4C",
-    qps: 50, used: 610400, quota: 500000, status: "轮换中", statusColor: "#2E5A4C", statusBg: "#EAF2EE",
-  },
-  {
-    keyId: "qh_new5****9q4w", keyMasked: "qh_new5****9q4w", tenant: "杏林在线教育学院",
-    purpose: "PROD", purposeBg: "#EAF2EE", purposeColor: "#2E5A4C",
-    qps: 50, used: 0, quota: 500000, status: "正常", statusColor: "#2E5A4C", statusBg: "#EAF2EE",
-  },
-  {
-    keyId: "qh_5tky****128c", keyMasked: "qh_5tky****128c", tenant: "天津颐和堂大药房",
-    purpose: "PROD", purposeBg: "#EAF2EE", purposeColor: "#2E5A4C",
-    qps: 10, used: 33800, quota: 50000, status: "已吊销", statusColor: "#B03A2E", statusBg: "#FDECEA",
-  },
-];
+function purposeStyle(p: string) {
+  const up = (p || "").toUpperCase();
+  if (up === "TEST" || up === "DEV") return { color: "#888", background: "#F5F5F5" };
+  return { color: "#2E5A4C", background: "#EAF2EE" };
+}
+
+function statusStyle(s: string) {
+  const up = (s || "ACTIVE").toUpperCase();
+  if (up === "REVOKED") return { label: "已吊销", color: "#B03A2E", background: "#FDECEA" };
+  if (up === "EXPIRED") return { label: "已过期", color: "#888", background: "#F5F5F5" };
+  if (up === "ROTATING") return { label: "轮换中", color: "#8A6A1F", background: "#FBF4E4" };
+  return { label: keyStatus[up]?.label || "正常", color: "#2E5A4C", background: "#EAF2EE" };
+}
 
 function ProgressBar({ pct }: { pct: number }) {
   const color = pct >= 100 ? "#B03A2E" : pct >= 80 ? "#8A6A1F" : "#2E5A4C";
@@ -61,7 +44,21 @@ function ProgressBar({ pct }: { pct: number }) {
 }
 
 export default function ApiKeys() {
-  const [list] = useState<KeyRow[]>(KEYS);
+  const [list, setList] = useState<ApiKey[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState<string>("");
+
+  useEffect(() => {
+    fetchApiKeys()
+      .then((d) => setList(d))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const copy = (v: string) => {
+    navigator.clipboard?.writeText(v);
+    setCopied(v);
+    setTimeout(() => setCopied(""), 1500);
+  };
 
   return (
     <div className="space-y-4">
@@ -91,33 +88,62 @@ export default function ApiKeys() {
               </tr>
             </thead>
             <tbody>
-              {list.map((k) => {
-                const pct = Math.min(100, Math.round((k.used / k.quota) * 100));
+              {loading && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-10 text-center" style={{ color: C.light }}>
+                    <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> 加载中…
+                  </td>
+                </tr>
+              )}
+
+              {!loading && list.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-12 text-center" style={{ color: C.light }}>
+                    <KeyRound className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                    <div className="text-[13px]">暂无 API 密钥</div>
+                    <div className="text-[11px] mt-1">点击右上角「签发新密钥」为租户创建第一个 Key</div>
+                  </td>
+                </tr>
+              )}
+
+              {!loading && list.map((k) => {
+                const st = statusStyle(k.status);
+                const ps = purposeStyle(k.purpose);
+                const hasQuota = k.quota !== null && k.quota > 0;
+                const pct = hasQuota ? Math.min(100, Math.round((k.used / (k.quota as number)) * 100)) : 0;
                 return (
-                  <tr key={k.keyId} className="border-b last:border-0 hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
+                  <tr key={k.id || k.appKey} className="border-b last:border-0 hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">
                         <KeyRound className="w-4 h-4" style={{ color: C.light }} />
-                        <span className="font-mono text-[12px]" style={{ color: C.ink }}>{k.keyMasked}</span>
-                        <button className="hover:opacity-70"><Copy className="w-3.5 h-3.5" style={{ color: C.light }} /></button>
+                        <span className="font-mono text-[12px]" style={{ color: C.ink }}>{maskKey(k.appKey)}</span>
+                        <button className="hover:opacity-70" onClick={() => copy(k.appKey)} title="复制完整 Key">
+                          <Copy className="w-3.5 h-3.5" style={{ color: copied === k.appKey ? C.primary : C.light }} />
+                        </button>
                       </div>
                     </td>
-                    <td className="px-3 py-3.5" style={{ color: C.mid }}>{k.tenant}</td>
+                    <td className="px-3 py-3.5" style={{ color: C.mid }}>{k.tenant || "—"}</td>
                     <td className="px-3 py-3.5">
-                      <span className="text-[11px] px-2 py-0.5 rounded" style={{ color: k.purposeColor, background: k.purposeBg }}>
-                        {k.purpose}
-                      </span>
+                      <span className="text-[11px] px-2 py-0.5 rounded" style={ps}>{k.purpose}</span>
                     </td>
-                    <td className="px-3 py-3.5" style={{ color: C.mid }}>{k.qps}</td>
+                    <td className="px-3 py-3.5" style={{ color: C.mid }}>{k.qps || "—"}</td>
                     <td className="px-3 py-3.5">
-                      <div className="flex justify-between text-[11px] mb-1" style={{ color: pct >= 100 ? "#B03A2E" : C.mid }}>
-                        <span>{k.used.toLocaleString()} / {k.quota.toLocaleString()}</span>
-                      </div>
-                      <ProgressBar pct={pct} />
+                      {hasQuota ? (
+                        <>
+                          <div className="flex justify-between text-[11px] mb-1" style={{ color: pct >= 100 ? "#B03A2E" : C.mid }}>
+                            <span>{k.used.toLocaleString()} / {(k.quota as number).toLocaleString()}</span>
+                          </div>
+                          <ProgressBar pct={pct} />
+                        </>
+                      ) : (
+                        <span className="text-[12px]" style={{ color: C.mid }}>
+                          {k.used.toLocaleString()} / <span style={{ color: C.light }}>不限</span>
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-3.5">
-                      <span className="text-[11px] px-2 py-0.5 rounded" style={{ color: k.statusColor, background: k.statusBg }}>
-                        {k.status}
+                      <span className="text-[11px] px-2 py-0.5 rounded" style={{ color: st.color, background: st.background }}>
+                        {st.label}
                       </span>
                     </td>
                     <td className="px-5 py-3.5 text-right">

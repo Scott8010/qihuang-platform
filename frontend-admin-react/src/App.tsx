@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Building2, ShieldCheck, KeyRound, BarChart3,
   BookOpenCheck, Activity, Search, Bell, Sprout, ChevronDown, LogOut,
 } from "lucide-react";
-import { C } from "@/lib/mock";
+import { C } from "@/lib/types";
 import { login, logout, getToken } from "@/lib/api";
 import Dashboard from "@/pages/Dashboard";
 import Tenants from "@/pages/Tenants";

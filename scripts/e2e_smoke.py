@@ -3,9 +3,13 @@ E2E 冒烟测试 — 启动8602平台后验证核心流程
 用法: python scripts/e2e_smoke.py
 """
 import httpx
+import os
 import sys
 
-BASE = "http://localhost:8602"
+# 支持环境变量覆盖，便于对生产实例冒烟：E2E_BASE=http://111.231.63.73:8602
+BASE = os.getenv("E2E_BASE", "http://localhost:8602")
+ADMIN_USER = os.getenv("QH_ADMIN_USER", "admin")
+ADMIN_PASS = os.getenv("QH_ADMIN_PASS", "QhAdmin@2026")
 PASS = 0
 FAIL = 0
 
@@ -45,18 +49,35 @@ check("GET /platform/docs", client.get(f"{BASE}/platform/docs"), [200])
 check("GET /platform/openapi.json", client.get(f"{BASE}/platform/openapi.json"), [200])
 
 # ═══════════════════════════════════════════════════
-# 2. 认证 — dev admin login
+# 2. 认证 — 正式管理员登录（dev 后门已下线）
 # ═══════════════════════════════════════════════════
 print("\n🔐 2. 认证流程")
 
-r = client.post(f"{BASE}/dev/admin-login")
-data = check("POST /dev/admin-login", r, [200])
+# 2.1 开发后门必须已关闭
+check(
+    "POST /dev/admin-login 已下线",
+    client.post(f"{BASE}/dev/admin-login"),
+    [404, 405],
+    parse_json=False,
+)
+
+# 2.2 错误口令必须被拒
+check(
+    "POST /admin/v1/login 错误口令拒绝",
+    client.post(f"{BASE}/admin/v1/login", json={"username": ADMIN_USER, "password": "__wrong__"}),
+    [401],
+    parse_json=False,
+)
+
+# 2.3 正确口令签发 super_admin token
+r = client.post(f"{BASE}/admin/v1/login", json={"username": ADMIN_USER, "password": ADMIN_PASS})
+data = check("POST /admin/v1/login", r, [200])
 admin_token = token_from(data)
 admin_headers = {"Authorization": f"Bearer {admin_token}"} if admin_token else {}
 if admin_token:
     print(f"     admin_token: {admin_token[:30]}...")
 
-# 用户token（复用admin token，因为dev没有单独user login）
+# 用户token（复用admin token，平台侧无独立 user login 入口）
 user_headers = admin_headers
 
 # ═══════════════════════════════════════════════════
@@ -159,13 +180,16 @@ check("GET /admin/v1/sync/status", r, [200, 404, 500])
 print("\n🚦 7. 网关与Mock")
 check("POST /mock/auth/wechat-login", client.post(f"{BASE}/mock/auth/wechat-login", json={"code": "test_123"}), [200, 404])
 
-# 计量统计
-r = client.get(f"{BASE}/dev/metering/stats")
-check("GET /dev/metering/stats", r, [200])
+# dev 路由仅在 ENABLE_DEV_ROUTES=1 时挂载；生产环境应为 404（安全基线）
+_DEV_ON = os.getenv("ENABLE_DEV_ROUTES", "0") == "1"
+_dev_codes = [200] if _DEV_ON else [404]
+_dev_hint = "可用" if _DEV_ON else "已下线"
 
-# 注册APIKey
+r = client.get(f"{BASE}/dev/metering/stats")
+check(f"GET /dev/metering/stats（{_dev_hint}）", r, _dev_codes, parse_json=_DEV_ON)
+
 r = client.post(f"{BASE}/dev/register-api-key", json={"plan": "standard", "note": "E2E smoke test"})
-check("POST /dev/register-api-key", r, [200])
+check(f"POST /dev/register-api-key（{_dev_hint}）", r, _dev_codes, parse_json=_DEV_ON)
 
 # ═══════════════════════════════════════════════════
 # 总计

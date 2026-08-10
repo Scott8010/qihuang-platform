@@ -298,6 +298,7 @@ try:
         rate_limit_test as ratelimit_router,
         open_router,
         api_key_router,
+        admin_auth_router,
         dev_router,
     )
     app.include_router(auth_router)          # /api/v1/auth/*
@@ -305,8 +306,14 @@ try:
     app.include_router(ratelimit_router)     # /api/v1/test/*
     app.include_router(open_router)          # /open/v1/*
     app.include_router(api_key_router)       # /admin/v1/api-keys/*
-    app.include_router(dev_router)           # /dev/* (仅开发环境)
-    print("[Platform] 网关路由已挂载 → /api/v1/auth, /api/v1/protected, /open/v1, /admin/v1, /dev")
+    app.include_router(admin_auth_router)    # /admin/v1/login (生产正式登录)
+    print("[Platform] 网关路由已挂载 → /api/v1/auth, /api/v1/protected, /open/v1, /admin/v1")
+    # 开发辅助端点：仅当 ENABLE_DEV_ROUTES=1 时挂载（生产默认关闭，堵住 /dev/admin-login 后门）
+    if os.getenv("ENABLE_DEV_ROUTES") == "1":
+        app.include_router(dev_router)       # /dev/* (仅开发环境)
+        print("[Platform] 开发辅助路由已挂载 → /dev (ENABLE_DEV_ROUTES=1)")
+    else:
+        print("[Platform] 开发辅助路由未挂载（生产模式，ENABLE_DEV_ROUTES 未开启）")
 except ImportError as e:
     print(f"[Platform] 网关模块未就绪: {e}")
 
