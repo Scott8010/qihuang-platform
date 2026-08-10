@@ -19,7 +19,18 @@ import {
 } from "@/lib/api";
 import type { PlatformUser, RoleTpl } from "@/lib/types";
 
-const EMPTY_NEW = { username: "", password: "", display_name: "", phone: "", email: "" };
+const EMPTY_NEW = { username: '', password: '', display_name: '', phone: '', email: '' };
+
+function validatePassword(pwd: string): string | null {
+  if (!pwd) return '密码不能为空';
+  if (pwd.length < 8 || pwd.length > 64) return '密码长度需为 8-64 位';
+  if (!/[a-z]/.test(pwd)) return '密码须包含小写字母';
+  if (!/[A-Z]/.test(pwd)) return '密码须包含大写字母';
+  if (!/\d/.test(pwd)) return '密码须包含数字';
+  const SPECIAL = '!@#$%^&*()_+-=[]{}|;:,.<>?/`~';
+  if (![...pwd].some(c => SPECIAL.includes(c))) return '密码须包含特殊字符（如 !@#$%^&*）';
+  return null;
+}
 
 export default function Users() {
   const [users, setUsers] = useState<PlatformUser[]>([]);
@@ -88,8 +99,9 @@ export default function Users() {
       toast.error("用户名需 3-32 位，字母开头，仅含字母数字下划线");
       return;
     }
-    if (nu.password.length < 8) {
-      toast.error("密码至少 8 位");
+    const perr = validatePassword(nu.password);
+    if (perr) {
+      toast.error(perr);
       return;
     }
     setCreating(true);
@@ -166,9 +178,12 @@ export default function Users() {
   // ── 重置密码 ──
   async function doResetPwd() {
     if (!pwdUser) return;
-    if (pwdInput && pwdInput.length < 8) {
-      toast.error("密码至少 8 位，或留空由系统随机生成");
-      return;
+    if (pwdInput) {
+      const perr = validatePassword(pwdInput);
+      if (perr) {
+        toast.error(perr);
+        return;
+      }
     }
     setPwdBusy(true);
     const r = await resetUserPassword(pwdUser.id, pwdInput || undefined);
@@ -382,9 +397,9 @@ export default function Users() {
                   onChange={(e) => setNu({ ...nu, [k]: e.target.value })}
                   className="h-8 text-sm"
                 />
-                {k === "password" && (
-                  <div className="text-[11px] mt-1.5 leading-relaxed" style={{ color: C.light }}>
-                    至少 8 位，建议包含大小写字母、数字及特殊字符（如 !@#$%^&*）以提升安全性。
+                {k === 'password' && (
+                  <div className='text-[11px] mt-1.5 leading-relaxed' style={{ color: C.light }}>
+                    需 8-64 位，且必须同时包含大小写字母、数字及特殊字符（如 !@#$%^&*）；留空由系统生成随机强密码。
                   </div>
                 )}
               </div>
@@ -490,10 +505,12 @@ export default function Users() {
               <div className="text-xs mb-1" style={{ color: C.mid }}>新密码（选填）</div>
               <Input type="text" value={pwdInput} onChange={(e) => setPwdInput(e.target.value)}
                 placeholder="留空自动生成" className="h-8 text-sm" />
-              <div className="text-[11px] mt-1.5 leading-relaxed" style={{ color: pwdInput && pwdInput.length < 8 ? "#B03A2E" : C.light }}>
-                {pwdInput && pwdInput.length < 8
-                  ? `密码至少需 8 位，当前已输入 ${pwdInput.length} 位`
-                  : "留空则由系统生成随机强密码；自定义密码建议 8 位以上，并包含大小写字母、数字及特殊字符（如 !@#$%^&*）以提升安全性。"}
+              <div className="text-[11px] mt-1.5 leading-relaxed" style={{ color: pwdInput && validatePassword(pwdInput) ? "#B03A2E" : C.light }}>
+                {!pwdInput
+                  ? '留空则由系统生成随机强密码；自定义需 8-64 位，且必须同时含大小写字母、数字及特殊字符（如 !@#$%^&*）。'
+                  : (validatePassword(pwdInput)
+                      ? validatePassword(pwdInput)
+                      : '✓ 密码强度符合要求（留空则由系统生成随机强密码）')}
               </div>
             </div>
           )}

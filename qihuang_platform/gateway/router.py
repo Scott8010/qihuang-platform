@@ -313,9 +313,33 @@ async def list_api_keys_endpoint(
 
 @api_key_router.delete("/{key_id}")
 async def revoke_api_key(key_id: str, user: dict = Depends(get_current_admin)):
-    """吊销 API Key（需要管理员）"""
+    """吊销 API Key（需要管理员）—— 双删: 数据库软吊销 + 内存同步"""
     from qihuang_platform.gateway.auth import delete_api_key
-    if delete_api_key(key_id):
+    from qihuang_platform.db.config import SessionLocal
+    from qihuang_platform.db.models import ApiKey as DBApiKey
+
+    # 1) 数据库软吊销（按 id 或 app_key 回退）
+    db_revoked = False
+    app_key_of = None
+    db = SessionLocal()
+    try:
+        k = db.query(DBApiKey).filter_by(id=key_id).first()
+        if not k:
+            k = db.query(DBApiKey).filter_by(app_key=key_id).first()
+        if k:
+            k.status = "revoked"
+            app_key_of = k.app_key
+            db.commit()
+            db_revoked = True
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+    # 2) 内存同步吊销（按 app_key；兜底按 key_id 直接试）
+    mem_revoked = delete_api_key(app_key_of) if app_key_of else delete_api_key(key_id)
+
+    if db_revoked or mem_revoked:
         return success({"message": "已吊销", "key_id": key_id})
     raise HTTPException(404, detail=error("NOT_FOUND", "密钥不存在"))
 

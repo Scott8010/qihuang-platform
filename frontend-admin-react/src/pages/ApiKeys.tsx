@@ -4,7 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Plus, KeyRound, Copy, RefreshCw, Ban, Loader2 } from "lucide-react";
 import { C, keyStatus } from "@/lib/types";
 import type { ApiKey } from "@/lib/types";
-import { fetchApiKeys } from "@/lib/api";
+import { fetchApiKeys, createApiKey, rotateApiKey, revokeApiKey } from "@/lib/api";
+import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
 
 /* ═══════════════════════════════════════════
    API 密钥管理 — 真实接口 GET /admin/v1/api-keys/
@@ -46,7 +51,18 @@ function ProgressBar({ pct }: { pct: number }) {
 export default function ApiKeys() {
   const [list, setList] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState<string>("");
+  const [copied, setCopied] = useState<string>('');
+
+  // 签发
+  const [issueOpen, setIssueOpen] = useState(false);
+  const [tenantInput, setTenantInput] = useState('');
+  const [issuing, setIssuing] = useState(false);
+  const [issued, setIssued] = useState<{ app_key: string; app_secret: string } | null>(null);
+  // 轮换 / 吊销 二次确认
+  const [confirm, setConfirm] = useState<{ type: 'rotate' | 'revoke'; key?: ApiKey } | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+
+  const reload = () => { fetchApiKeys().then(setList); };
 
   useEffect(() => {
     fetchApiKeys()
@@ -60,6 +76,50 @@ export default function ApiKeys() {
     setTimeout(() => setCopied(""), 1500);
   };
 
+  async function doIssue() {
+    if (!tenantInput.trim()) { toast.error('请填写租户ID'); return; }
+    setIssuing(true);
+    const r = await createApiKey(tenantInput.trim());
+    setIssuing(false);
+    if (r.ok) {
+      setIssued({ app_key: r.data?.app_key || '', app_secret: r.data?.app_secret || '' });
+      toast.success('API 密钥已签发');
+      reload();
+    } else {
+      toast.error(r.msg || '签发失败');
+    }
+  }
+
+  async function doRotate() {
+    if (!confirm?.key) return;
+    const kid = confirm.key.id || confirm.key.appKey;
+    setConfirmBusy(true);
+    const r = await rotateApiKey(kid);
+    setConfirmBusy(false);
+    if (r.ok) {
+      toast.success('密钥已轮换，旧密钥 72 小时内仍有效');
+      setConfirm(null);
+      reload();
+    } else {
+      toast.error(r.msg || '轮换失败');
+    }
+  }
+
+  async function doRevoke() {
+    if (!confirm?.key) return;
+    const kid = confirm.key.id || confirm.key.appKey;
+    setConfirmBusy(true);
+    const r = await revokeApiKey(kid);
+    setConfirmBusy(false);
+    if (r.ok) {
+      toast.success('密钥已吊销');
+      setConfirm(null);
+      reload();
+    } else {
+      toast.error(r.msg || '吊销失败');
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* 顶部 */}
@@ -67,7 +127,8 @@ export default function ApiKeys() {
         <div className="text-[12px]" style={{ color: C.mid }}>
           API Key 绑定租户与配额，签名验签（HMAC-SHA256 + 时间窗 ±5min + nonce 防重放）在网关完成；轮换提供 72 小时新旧并行期。
         </div>
-        <Button size="sm" style={{ background: C.primary }}>
+        <Button size="sm" style={{ background: C.primary }}
+          onClick={() => { setIssued(null); setTenantInput(''); setIssueOpen(true); }}>
           <Plus className="w-4 h-4 mr-1" /> 签发新密钥
         </Button>
       </div>
@@ -148,11 +209,13 @@ export default function ApiKeys() {
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       <div className="flex items-center justify-end gap-3">
-                        <button className="flex items-center gap-1 text-[12px] hover:opacity-70" style={{ color: C.mid }}>
-                          <RefreshCw className="w-3.5 h-3.5" /> 轮换
+                        <button className='flex items-center gap-1 text-[12px] hover:opacity-70' style={{ color: C.mid }}
+                          onClick={() => setConfirm({ type: 'rotate', key: k })}>
+                          <RefreshCw className='w-3.5 h-3.5' /> 轮换
                         </button>
-                        <button className="flex items-center gap-1 text-[12px] hover:opacity-70" style={{ color: "#B03A2E" }}>
-                          <Ban className="w-3.5 h-3.5" /> 吊销
+                        <button className='flex items-center gap-1 text-[12px] hover:opacity-70' style={{ color: '#B03A2E' }}
+                          onClick={() => setConfirm({ type: 'revoke', key: k })}>
+                          <Ban className='w-3.5 h-3.5' /> 吊销
                         </button>
                       </div>
                     </td>
@@ -167,6 +230,70 @@ export default function ApiKeys() {
       <div className="text-[11px]" style={{ color: C.light }}>
         轮换说明：新 Key 签发后旧 Key 进入 72h 并行期（状态"轮换中"），到期自动失效；吊销即时生效并记录审计日志。
       </div>
+
+      {/* 签发新密钥 */}
+      <Dialog open={issueOpen} onOpenChange={(o) => { if (!o) { setIssueOpen(false); setIssued(null); setTenantInput(''); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>签发新密钥</DialogTitle>
+            <DialogDescription>为指定租户创建一对 API Key（app_key + app_secret），请妥善保存 secret。</DialogDescription>
+          </DialogHeader>
+          {issued ? (
+            <div className='space-y-3'>
+              <div className='text-[12px]' style={{ color: C.mid }}>密钥已签发，secret 仅展示一次：</div>
+              <div className='rounded p-3 bg-[#F8FAF9] text-[12px] font-mono break-all'>
+                <div>app_key: {issued.app_key}</div>
+                <div>app_secret: {issued.app_secret}</div>
+              </div>
+              <Button size='sm' variant='outline' onClick={() => copy(issued.app_secret)}>
+                <Copy className='w-3.5 h-3.5 mr-1' /> 复制 secret
+              </Button>
+            </div>
+          ) : (
+            <div className='space-y-2'>
+              <div className='text-[12px]' style={{ color: C.mid }}>租户ID（tenant_id）*</div>
+              <Input value={tenantInput} onChange={(e) => setTenantInput(e.target.value)} placeholder='如 tenant_default' className='h-8 text-sm' />
+              <div className='text-[11px]' style={{ color: C.light }}>套餐默认 standard，可填 enterprise / free 等。</div>
+            </div>
+          )}
+          <DialogFooter>
+            {issued ? (
+              <Button size='sm' style={{ background: C.primary }} onClick={() => { setIssueOpen(false); setIssued(null); setTenantInput(''); }}>完成</Button>
+            ) : (
+              <>
+                <Button size='sm' variant='outline' onClick={() => { setIssueOpen(false); setTenantInput(''); }}>取消</Button>
+                <Button size='sm' style={{ background: C.primary }} disabled={issuing} onClick={doIssue}>
+                  {issuing && <Loader2 className='w-3.5 h-3.5 mr-1 animate-spin' />}确认签发
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 轮换 / 吊销 二次确认 */}
+      <Dialog open={!!confirm} onOpenChange={(o) => { if (!o) setConfirm(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{confirm?.type === 'revoke' ? '吊销密钥' : '轮换密钥'}</DialogTitle>
+            <DialogDescription>
+              {confirm?.type === 'revoke'
+                ? `确认吊销密钥 ${maskKey(confirm.key?.appKey || '')}？吊销后即时失效且不可恢复。`
+                : `确认轮换密钥 ${maskKey(confirm?.key?.appKey || '')}？旧密钥 72 小时内仍有效。`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button size='sm' variant='outline' onClick={() => setConfirm(null)}>取消</Button>
+            <Button size='sm'
+              style={{ background: confirm?.type === 'revoke' ? '#B03A2E' : C.primary }}
+              disabled={confirmBusy}
+              onClick={confirm?.type === 'revoke' ? doRevoke : doRotate}>
+              {confirmBusy && <Loader2 className='w-3.5 h-3.5 mr-1 animate-spin' />}
+              {confirm?.type === 'revoke' ? '确认吊销' : '确认轮换'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -351,6 +351,18 @@ export async function fetchApiKeys(): Promise<ApiKey[]> {
   } catch { return []; }
 }
 
+export async function createApiKey(tenantId: string, plan = 'standard'): Promise<MutateResult> {
+  return mutate('POST', '/admin/v1/api-keys/', { tenant_id: tenantId, plan });
+}
+
+export async function rotateApiKey(keyId: string): Promise<MutateResult> {
+  return mutate('POST', `/admin/v1/api-keys/${encodeURIComponent(keyId)}/rotate`);
+}
+
+export async function revokeApiKey(keyId: string): Promise<MutateResult> {
+  return mutate('DELETE', `/admin/v1/api-keys/${encodeURIComponent(keyId)}`);
+}
+
 // ═══ 计费 ═══
 
 export async function fetchBillingStats(): Promise<{

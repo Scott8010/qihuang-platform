@@ -27,6 +27,7 @@ from qihuang_platform.db.models import (
     EduCoachSession, EduExamRecord,
 )
 import bcrypt
+from qihuang_platform.rbac.service import validate_password
 from qihuang_platform.gateway.monitor import monitor
 from qihuang_platform.gateway.llm_fallback import llm_fallback
 from qihuang_platform.control.container_mgr import container_mgr
@@ -1137,6 +1138,10 @@ async def onboard_user(req: UserOnboardRequest, admin: dict = Depends(get_curren
         if existing:
             return error("DUPLICATE", message=f"用户 {req.username} 已存在")
 
+        if req.password:
+            ok, msg = validate_password(req.password)
+            if not ok:
+                return error("INVALID_PASSWORD", message=msg)
         password = req.password or secrets.token_urlsafe(10)
         pwd_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
@@ -1208,6 +1213,10 @@ async def reset_user_password(
         if not u:
             return error("NOT_FOUND", message="用户不存在")
 
+        if req.new_password:
+            ok, msg = validate_password(req.new_password)
+            if not ok:
+                return error("INVALID_PASSWORD", message=msg)
         new_password = req.new_password or secrets.token_urlsafe(10)
         pwd_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
         u.password_hash = pwd_hash

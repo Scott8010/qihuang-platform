@@ -5,11 +5,53 @@ RBAC 权限服务层
 from typing import Optional, List
 from sqlalchemy.orm import Session
 import bcrypt
+import re
 
 from qihuang_platform.db.models import (
     Tenant, Org, User, Role, Permission,
     UserRole, RolePermission, AuditLog, _uid, _now
 )
+
+
+def validate_password(pwd: str) -> tuple[bool, str]:
+    """校验密码强度（长度 8-64，且必须同时含大小写字母、数字、特殊字符）。
+
+    返回 (是否通过, 错误说明)；通过时说明为空串。
+    空密码直接判否（调用方对"留空随机生成"场景应自行跳过校验）。
+    """
+    if not pwd:
+        return False, "密码不能为空"
+    if len(pwd) < 8 or len(pwd) > 64:
+        return False, "密码长度需为 8-64 位"
+    if not re.search(r"[a-z]", pwd):
+        return False, "密码须包含小写字母"
+    if not re.search(r"[A-Z]", pwd):
+        return False, "密码须包含大写字母"
+    if not re.search(r"\d", pwd):
+        return False, "密码须包含数字"
+    if not re.search(r"[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/`~]", pwd):
+        return False, "密码须包含特殊字符（如 !@#$%^&*）"
+    return True, ""
+
+
+def validate_password(pwd: str) -> tuple[bool, str]:
+    """校验密码强度（长度 8-64，且必须同时含大小写字母、数字、特殊字符）。
+
+    返回 (是否通过, 错误说明)；通过时说明为空串。
+    """
+    if not pwd:
+        return False, "密码不能为空"
+    if len(pwd) < 8 or len(pwd) > 64:
+        return False, "密码长度需为 8-64 位"
+    if not re.search(r"[a-z]", pwd):
+        return False, "密码须包含小写字母"
+    if not re.search(r"[A-Z]", pwd):
+        return False, "密码须包含大写字母"
+    if not re.search(r"\d", pwd):
+        return False, "密码须包含数字"
+    if not re.search(r"[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/`~]", pwd):
+        return False, "密码须包含特殊字符（如 !@#$%^&*）"
+    return True, ""
 
 
 class RBACService:

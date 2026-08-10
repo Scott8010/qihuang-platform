@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from qihuang_platform.db.config import get_db, init_db
-from qihuang_platform.rbac.service import RBACService
+from qihuang_platform.rbac.service import RBACService, validate_password, validate_password
 from qihuang_platform.gateway.deps import get_current_user, get_current_admin
 from qihuang_platform.gateway.response import success, error
 from qihuang_platform.db.models import seed_preset_data, Plan, UserRole, Role
@@ -139,6 +139,9 @@ async def create_user(
     else:
         tenant_id = user.get("tenant_id", "tenant_default")
     try:
+        ok, msg = validate_password(req.password)
+        if not ok:
+            raise HTTPException(400, detail=error("INVALID_PASSWORD", msg))
         u = rbac.create_user(
             tenant_id=tenant_id, username=req.username,
             password=req.password, org_id=req.org_id,
@@ -250,6 +253,10 @@ async def reset_password(
     target = rbac.get_user(user_id)
     if not target:
         raise HTTPException(404, detail=error("NOT_FOUND", "用户不存在"))
+    if req.password is not None:
+        ok, msg = validate_password(req.password)
+        if not ok:
+            raise HTTPException(400, detail=error("INVALID_PASSWORD", msg))
     new_pwd = rbac.reset_password(user_id, req.password)
     if new_pwd is None:
         raise HTTPException(400, detail=error("RESET_FAILED", "密码重置失败"))
