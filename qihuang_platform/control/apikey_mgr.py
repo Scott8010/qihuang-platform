@@ -12,6 +12,7 @@ from sqlalchemy import func
 
 from qihuang_platform.gateway.deps import get_current_admin
 from qihuang_platform.gateway.response import success, error, paginated
+from qihuang_platform.gateway.auth import update_api_key_secret
 from qihuang_platform.db.config import SessionLocal
 from qihuang_platform.db.models import ApiKey, CallLog, Tenant
 
@@ -133,6 +134,15 @@ async def rotate_api_key(
         k.extra = extra
         k.updated_at = datetime.now(timezone.utc)
         db.commit()
+
+        # 同步内存鉴权表，避免轮换后密钥立即失效（旧实现只改 DB、
+        # 需重启服务才恢复的"空架子"bug）。新密钥即刻生效，旧密钥在
+        # 72h 并行期内仍可用（prev_secrets 已维护）。
+        try:
+            update_api_key_secret(old_key, new_secret, prev_secret=old_secret)
+        except Exception as e:
+            # 内存未命中（极少见，如冷启动前）不影响 DB 落库；下次重启恢复。
+            print(f"[APIKey] 内存同步跳过: {e}")
 
         return success(data={
             "old_app_key": old_key,

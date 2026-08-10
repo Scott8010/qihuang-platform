@@ -151,15 +151,22 @@ def verify_api_key(app_key: str, signature: str, method: str,
     except (ValueError, TypeError):
         return None
 
-    # 验证签名
+    # 验证签名（优先主密钥）
     expected = generate_api_signature(
         app_key, key_info["app_secret"], method, path, timestamp, nonce, body
     )
-    # 常量时间比较防时序攻击
-    if not hmac.compare_digest(expected, signature):
-        return None
+    if hmac.compare_digest(expected, signature):
+        return key_info
 
-    return key_info
+    # 密钥轮换并行期：旧密钥在 72h 内仍可被接受
+    for old_secret in key_info.get("prev_secrets", []):
+        old_expected = generate_api_signature(
+            app_key, old_secret, method, path, timestamp, nonce, body
+        )
+        if hmac.compare_digest(old_expected, signature):
+            return key_info
+
+    return None
 
 
 def get_api_key_info(app_key: str) -> Optional[dict]:
@@ -183,6 +190,33 @@ def delete_api_key(app_key: str) -> bool:
         _api_keys_db[app_key]["status"] = "revoked"
         return True
     return False
+
+
+def update_api_key_secret(app_key: str, new_secret: str,
+                           prev_secret: Optional[str] = None,
+                           status: Optional[str] = None) -> bool:
+    """原地更新内存中的 API Key secret（用于密钥轮换）。
+
+    - new_secret: 新密钥，立即在内存鉴权表生效（无需重启服务）。
+    - prev_secret: 旧密钥原文，记入 prev_secrets 以支持轮换后 72h 并行期
+      （旧密钥仍可被 verify_api_key 接受）。
+    - status: 可选，更新状态（如 'revoked'）。
+    返回是否找到该 key 并更新成功。
+    """
+    key_info = _api_keys_db.get(app_key)
+    if not key_info:
+        return False
+    if prev_secret:
+        prev_list = key_info.setdefault("prev_secrets", [])
+        if prev_secret not in prev_list:
+            prev_list.append(prev_secret)
+            if len(prev_list) > 3:
+                key_info["prev_secrets"] = prev_list[-3:]
+    key_info["app_secret"] = new_secret
+    if status:
+        key_info["status"] = status
+    key_info["updated_at"] = datetime.now(timezone.utc).isoformat()
+    return True
 
 
 # ========== 工具函数 ==========
