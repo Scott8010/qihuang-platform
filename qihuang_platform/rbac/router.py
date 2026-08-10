@@ -157,12 +157,21 @@ async def create_user(
 
 @rbac_router.get("/users")
 async def list_users(
+    tenant_id: Optional[str] = None,
     user: dict = Depends(get_current_admin),
     rbac: RBACService = Depends(get_rbac),
     db: Session = Depends(get_db),
 ):
-    tenant_id = user.get("tenant_id", "tenant_default")
-    users = rbac.list_users(tenant_id)
+    """用户列表。
+
+    super_admin 默认跨租户查看全平台用户（可用 tenant_id 参数收窄）；
+    其余管理员一律锁定在自己所属租户内，忽略传入的 tenant_id。
+    """
+    is_super = "super_admin" in (user.get("roles") or [])
+    if is_super:
+        users = rbac.list_users(tenant_id) if tenant_id else rbac.list_users_all()
+    else:
+        users = rbac.list_users(user.get("tenant_id", "tenant_default"))
     user_ids = [u.id for u in users]
     # 批量拉取用户角色（避免 N+1）
     role_map = {}
@@ -176,7 +185,9 @@ async def list_users(
             })
     return success([{
         "id": u.id, "username": u.username, "display_name": u.display_name,
-        "phone": u.phone, "status": u.status,
+        "phone": u.phone, "email": getattr(u, "email", None), "status": u.status,
+        "tenant_id": u.tenant_id, "org_id": u.org_id,
+        "created_at": u.created_at.isoformat() if getattr(u, "created_at", None) else None,
         "roles": role_map.get(u.id, []),
     } for u in users])
 

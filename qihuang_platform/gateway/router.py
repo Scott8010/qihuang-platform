@@ -328,9 +328,78 @@ class AdminLoginRequest(BaseModel):
     username: str
     password: str
 
+ADMIN_ROLE_WHITELIST = {"super_admin", "tenant_admin", "org_admin", "admin"}
+
+
+def _db_admin_login(username: str, password: str):
+    """通道一：数据库账号。命中返回 (user, role_names)，未命中返回 None。
+
+    命中但口令/状态/角色不合法时直接抛 HTTPException（不再回退环境变量，
+    否则库里禁用的账号还能靠应急口令进来）。
+    """
+    from qihuang_platform.db.config import get_db
+    from qihuang_platform.rbac.service import RBACService
+
+    db = next(get_db())
+    try:
+        rbac = RBACService(db)
+        u = rbac.get_user_by_username("tenant_default", username)
+        if not u:
+            return None
+        if (u.status or "active") != "active":
+            raise HTTPException(403, detail=error("ADMIN_DISABLED", "账号已停用"))
+        try:
+            pwd_ok = rbac.verify_password(u, password)
+        except Exception:
+            pwd_ok = False
+        if not pwd_ok:
+            raise HTTPException(401, detail=error("ADMIN_AUTH_FAILED", "账号或密码错误"))
+        role_names = rbac.get_user_effective_roles(u.id)
+        if not (ADMIN_ROLE_WHITELIST & set(role_names)):
+            raise HTTPException(403, detail=error("ADMIN_FORBIDDEN", "该账号无管理端访问权限"))
+        return u, role_names
+    finally:
+        db.close()
+
+
 @admin_auth_router.post("/login")
 async def admin_login(req: AdminLoginRequest):
-    """管理端登录：校验环境变量 QH_ADMIN_USER / QH_ADMIN_PASS，签发 super_admin JWT"""
+    """管理端登录（双通道）
+
+    1. **数据库账号（正式）**：users 表命中即走真 RBAC，角色由 user_roles 决定，
+       改密/停用/调角色在控制台即时生效。
+    2. **环境变量（应急）**：仅当库里查无此人时才回退 QH_ADMIN_USER/QH_ADMIN_PASS，
+       用于数据库故障或首次初始化时的破门通道。
+    """
+    # ── 通道一：数据库账号 ──
+    hit = None
+    try:
+        hit = _db_admin_login(req.username, req.password)
+    except HTTPException:
+        raise
+    except Exception:
+        hit = None  # 库不可用 → 落到应急通道
+
+    if hit:
+        u, role_names = hit
+        org_id = u.org_id or "org_default"
+        register_user(u.id, u.tenant_id, org_id, role_names)
+        access_token = create_access_token(u.id, u.tenant_id, org_id, role_names)
+        refresh_token_str = create_refresh_token(u.id, "admin")
+        return success({
+            "access_token": access_token,
+            "refresh_token": refresh_token_str,
+            "token_type": "bearer",
+            "expires_in": 7200,
+            "user_id": u.id,
+            "username": u.username,
+            "display_name": u.display_name or u.username,
+            "tenant_id": u.tenant_id,
+            "roles": role_names,
+            "auth_source": "database",
+        })
+
+    # ── 通道二：环境变量应急口令 ──
     admin_user = os.getenv("QH_ADMIN_USER", "")
     admin_pass = os.getenv("QH_ADMIN_PASS", "")
     if not admin_user or not admin_pass:
@@ -350,8 +419,11 @@ async def admin_login(req: AdminLoginRequest):
         "token_type": "bearer",
         "expires_in": 7200,
         "user_id": user_id,
+        "username": user_id,
+        "display_name": "应急管理员",
         "tenant_id": tenant_id,
         "roles": roles,
+        "auth_source": "env_fallback",
     })
 
 

@@ -2,12 +2,14 @@ import { useState, useEffect } from "react";
 import {
   LayoutDashboard, Building2, ShieldCheck, KeyRound, BarChart3,
   BookOpenCheck, Activity, Search, Bell, Sprout, ChevronDown, LogOut,
+  Users as UsersIcon,
 } from "lucide-react";
 import { C } from "@/lib/types";
 import { login, logout, getToken } from "@/lib/api";
 import Dashboard from "@/pages/Dashboard";
 import Tenants from "@/pages/Tenants";
 import Roles from "@/pages/Roles";
+import Users from "@/pages/Users";
 import ApiKeys from "@/pages/ApiKeys";
 import Billing from "@/pages/Billing";
 import Content from "@/pages/Content";
@@ -16,6 +18,7 @@ import Monitor from "@/pages/Monitor";
 const nav = [
   { id: "dashboard", label: "工作台", icon: LayoutDashboard },
   { id: "tenants", label: "租户管理", icon: Building2 },
+  { id: "users", label: "用户管理", icon: UsersIcon },
   { id: "roles", label: "权限管理", icon: ShieldCheck },
   { id: "keys", label: "密钥配额", icon: KeyRound },
   { id: "billing", label: "计量计费", icon: BarChart3 },
@@ -159,6 +162,7 @@ export default function App() {
         <main className="flex-1 overflow-y-auto p-6">
           {page === "dashboard" && <Dashboard go={setPage} />}
           {page === "tenants" && <Tenants />}
+          {page === "users" && <Users />}
           {page === "roles" && <Roles />}
           {page === "keys" && <ApiKeys />}
           {page === "billing" && <Billing />}

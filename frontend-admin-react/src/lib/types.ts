@@ -68,6 +68,50 @@ export interface RoleTpl {
   permissions: RolePermission[];
 }
 
+/** GET /admin/v1/permissions 的单项（全量权限池） */
+export interface PermissionItem {
+  code: string;
+  name: string;
+  perm_type: string;
+  scene: string;
+}
+
+/** GET /admin/v1/users 的单项（平台级用户，非租户下钻） */
+export interface PlatformUser {
+  id: string;
+  username: string;
+  displayName: string;
+  phone: string;
+  email: string;
+  status: string;                                   // active / disabled
+  orgId: string;
+  tenantId: string;
+  createdAt: string;
+  roles: { id: string; name: string; displayName: string }[];
+}
+
+/** 权限按场景分组时的展示口径 */
+export const permSceneMap: Record<string, { label: string; color: string; bg: string }> = {
+  all: { label: "通用", color: "#4A5B54", bg: "#F3F6F4" },
+  medical: { label: "医疗", color: "#B03A2E", bg: "#FDECEA" },
+  health: { label: "大健康", color: "#2E5A4C", bg: "#EAF2EE" },
+  edu: { label: "培训", color: "#8A6A1F", bg: "#FBF4E4" },
+};
+
+/** 权限按前缀分组的中文段名 */
+export const permGroupMap: Record<string, string> = {
+  admin: "平台管理",
+  core: "核心能力",
+  health: "大健康场景",
+  edu: "培训场景",
+  module: "增值模块",
+};
+
+export const userStatusMap: Record<string, { label: string; cls: string }> = {
+  active: { label: "正常", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  disabled: { label: "已停用", cls: "bg-gray-100 text-gray-500 border-gray-200" },
+};
+
 export interface ApiKey {
   id: string; tenant: string; appKey: string; purpose: string;
   qps: number; used: number;

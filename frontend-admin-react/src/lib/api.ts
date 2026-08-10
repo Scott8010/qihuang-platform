@@ -6,7 +6,7 @@
 import type {
   Tenant, RoleTpl, ApiKey, CallTrendItem, SceneDistItem,
   AlertItem, TodoReviewItem, BillItem, PlanItem, SubscriptionItem, SceneUsageItem,
-  OrgItem, TenantUserItem,
+  OrgItem, TenantUserItem, PermissionItem, PlatformUser,
   SensitiveWordItem, ServiceItem, LlmProviderItem, AuditLogItem, DashboardData,
 } from "./types";
 
@@ -29,6 +29,35 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 async function get<T>(path: string): Promise<T> { return request<T>(path); }
 async function post<T>(path: string, body?: unknown): Promise<T> {
   return request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined });
+}
+
+/** 写操作统一返回体：成功与否 + 后端原话 + 数据，页面据此弹提示，不再假装成功 */
+export interface MutateResult<T = any> { ok: boolean; msg: string; data?: T }
+
+async function mutate<T = any>(
+  method: "POST" | "PUT" | "PATCH" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<MutateResult<T>> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (_token) headers["Authorization"] = `Bearer ${_token}`;
+  try {
+    const res = await fetch(path, {
+      method, headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    if (res.status === 401) { _token = ""; localStorage.removeItem("qh_admin_token"); }
+    let j: any = {};
+    try { j = await res.json(); } catch { /* 空响应体 */ }
+    if (res.ok && (j?.code === 0 || j?.code === undefined)) {
+      return { ok: true, msg: j?.msg || "操作成功", data: j?.data };
+    }
+    const msg = j?.detail?.msg || j?.detail?.message || j?.msg
+      || (typeof j?.detail === "string" ? j.detail : "") || `请求失败（HTTP ${res.status}）`;
+    return { ok: false, msg };
+  } catch (e: any) {
+    return { ok: false, msg: e?.message || "网络异常" };
+  }
 }
 
 // ═══ 认证 ═══
@@ -188,11 +217,117 @@ export async function fetchRoles(): Promise<RoleTpl[]> {
   } catch { return []; }
 }
 
-export async function fetchPermissions() {
+export async function fetchPermissions(): Promise<PermissionItem[]> {
   try {
     const r = await get<{ code: number; data: any[] }>("/admin/v1/permissions");
-    return r?.data || [];
+    return (r?.data || []).map((p: any) => ({
+      code: p.code || "",
+      name: p.name || p.code || "",
+      perm_type: p.perm_type || "api",
+      scene: p.scene || "all",
+    }));
   } catch { return []; }
+}
+
+/** PUT /admin/v1/roles/{id}/permissions — 整体替换角色权限（勾选即最终态） */
+export async function updateRolePermissions(roleId: string, permCodes: string[]) {
+  return mutate<{ role_id: string; name: string; perm_count: number }>(
+    "PUT", `/admin/v1/roles/${roleId}/permissions`, { perm_codes: permCodes },
+  );
+}
+
+/** POST /admin/v1/roles — 新建自定义角色（is_system=false，可删可改） */
+export async function createRole(body: {
+  name: string; display_name?: string; description?: string; perm_codes?: string[];
+}) {
+  return mutate<{ id: string; name: string }>("POST", "/admin/v1/roles", {
+    name: body.name,
+    display_name: body.display_name || body.name,
+    description: body.description || "",
+    perm_codes: body.perm_codes || [],
+  });
+}
+
+/** DELETE /admin/v1/roles/{id} — 系统预置角色后端会拒绝 */
+export async function deleteRole(roleId: string) {
+  return mutate("DELETE", `/admin/v1/roles/${roleId}`);
+}
+
+/** POST /admin/v1/roles/assign — 给用户加一个角色 */
+export async function assignRole(userId: string, roleName: string) {
+  return mutate("POST", "/admin/v1/roles/assign", { user_id: userId, role_name: roleName });
+}
+
+/** DELETE /admin/v1/roles/revoke — 摘掉用户的某个角色 */
+export async function revokeRole(userId: string, roleName: string) {
+  return mutate("DELETE", "/admin/v1/roles/revoke", { user_id: userId, role_name: roleName });
+}
+
+// ═══ 用户管理（平台级） ═══
+
+function mapUser(u: any): PlatformUser {
+  return {
+    id: u.id || "",
+    username: u.username || "",
+    displayName: u.display_name || u.username || "",
+    phone: u.phone || "",
+    email: u.email || "",
+    status: u.status || "active",
+    orgId: u.org_id || "",
+    tenantId: u.tenant_id || "",
+    createdAt: u.created_at || "",
+    roles: Array.isArray(u.roles)
+      ? u.roles.map((r: any) => ({
+          id: r.id || "", name: r.name || "", displayName: r.display_name || r.name || "",
+        }))
+      : [],
+  };
+}
+
+/** GET /admin/v1/users — 当前租户下全部用户（含角色） */
+export async function fetchUsers(): Promise<PlatformUser[]> {
+  try {
+    const r = await get<{ code: number; data: any[] }>("/admin/v1/users");
+    if (r?.code !== 0 || !Array.isArray(r.data)) return [];
+    return r.data.map(mapUser);
+  } catch { return []; }
+}
+
+/** GET /admin/v1/users/{id} — 用户详情（含完整角色与机构） */
+export async function fetchUserDetail(userId: string): Promise<PlatformUser | null> {
+  try {
+    const r = await get<{ code: number; data: any }>(`/admin/v1/users/${userId}`);
+    if (r?.code !== 0 || !r.data) return null;
+    return mapUser(r.data);
+  } catch { return null; }
+}
+
+/** POST /admin/v1/users — 新建用户（后端会自动挂 health_user 默认角色） */
+export async function createUser(body: {
+  username: string; password: string;
+  display_name?: string; phone?: string; email?: string;
+}) {
+  return mutate<{ id: string; username: string }>("POST", "/admin/v1/users", body);
+}
+
+/** PATCH /admin/v1/users/{id} — 改资料或改状态（active / disabled） */
+export async function updateUser(userId: string, body: {
+  display_name?: string; phone?: string; email?: string; org_id?: string; status?: string;
+}) {
+  return mutate("PATCH", `/admin/v1/users/${userId}`, body);
+}
+
+/** DELETE /admin/v1/users/{id} — 删除用户并清理角色关联 */
+export async function deleteUser(userId: string) {
+  return mutate("DELETE", `/admin/v1/users/${userId}`);
+}
+
+/** POST /admin/v1/users/{id}/reset-password — 不传密码则后端随机生成并回显 */
+export async function resetUserPassword(userId: string, password?: string) {
+  return mutate<{ user_id: string; new_password: string }>(
+    "POST", `/admin/v1/users/${userId}/reset-password`,
+    { password: password || null },
+  );
 }
 
 // ═══ API 密钥 ═══

@@ -59,3 +59,9 @@ frontend-admin-react/dist/
 
 # 前端 UI 验证截图（开发产物，不入库）
 qihuang_platform/frontend-admin/verify_shots/
+
+# Frontend build artifacts
+frontend-admin-react/dist/
+frontend-admin-react/dist_prev_*/
+frontend-admin-react/dist_old_*/
+frontend-admin-react/admin_dist.tgz
