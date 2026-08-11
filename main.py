@@ -178,6 +178,17 @@ except ImportError as e:
 
 
 # ═══════════════════════════════════════════════════════════════
+# Agent 中台路由挂载（内容合规审核 = 第一个能力；横向隔离知识库范式）
+# ═══════════════════════════════════════════════════════════════
+try:
+    from qihuang_platform.agent import agent_router
+    app.include_router(agent_router)  # /api/v1/agent/compliance/*
+    print("[Platform] Agent 中台路由已挂载 → /api/v1/agent/compliance (内容合规审核)")
+except ImportError as e:
+    print(f"[Platform] Agent 中台模块未就绪: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════
 # Phase 0: Mock 路由挂载（契约冻结后，前端并行开发用）
 # ═══════════════════════════════════════════════════════════════
 try:

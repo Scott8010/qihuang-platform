@@ -220,6 +220,17 @@ except ImportError as e:
 
 
 # ═══════════════════════════════════════════════════════════════
+# Agent 中台路由挂载（第一个能力：内容合规审核 compliance）
+# ═══════════════════════════════════════════════════════════════
+try:
+    from qihuang_platform.agent import agent_router
+    app.include_router(agent_router)  # /api/v1/agent/compliance/*
+    print("[Platform] Agent 中台路由已挂载 → /api/v1/agent")
+except ImportError as e:
+    print(f"[Platform] Agent 中台模块未就绪: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════
 # Phase 1: RBAC 路由挂载（数据库租户/用户/角色/权限管理）
 # ═══════════════════════════════════════════════════════════════
 try:
