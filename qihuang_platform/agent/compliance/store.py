@@ -12,6 +12,7 @@
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -31,6 +32,23 @@ _DECISION_STATE = {
     "override": STATE_BLOCKED,
     "escalate": STATE_REVIEW,
 }
+
+
+@contextlib.contextmanager
+def _file_lock(path: str):
+    """跨平台文件锁，保护 JSONL 全量重写不被并发覆盖。"""
+    lock_path = path + ".lock"
+    f = open(lock_path, "w")
+    try:
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        yield
+    finally:
+        f.close()
 
 
 def make_material_id(text: str, institution_id: str, material_key: str | None = None) -> str:
@@ -72,16 +90,20 @@ class ComplianceStore:
         with open(self.path, "a", encoding="utf-8") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
+    def _flush(self):
+        """全量重写 JSONL（加文件锁，防并发覆盖）。"""
+        self._ensure_dir()
+        with _file_lock(self.path):
+            with open(self.path, "w", encoding="utf-8") as f:
+                for r in self._materials.values():
+                    f.write(json.dumps(r, ensure_ascii=False) + "\n")
+
     def upsert(self, material_id: str, record: dict) -> dict:
         """写入/覆盖一条物料（幂等：同 material_id 始终覆盖同一条）。"""
         record["material_id"] = material_id
         record["updated_at"] = now_iso()
         self._materials[material_id] = record
-        # 重新整写（保持 jsonl 单条即最新语义，且便于审计全量历史留痕）
-        self._ensure_dir()
-        with open(self.path, "w", encoding="utf-8") as f:
-            for r in self._materials.values():
-                f.write(json.dumps(r, ensure_ascii=False) + "\n")
+        self._flush()
         return record
 
     def get(self, material_id: str) -> Optional[dict]:
@@ -113,10 +135,7 @@ class ComplianceStore:
         })
         rec["updated_at"] = now_iso()
         self._materials[material_id] = rec
-        self._ensure_dir()
-        with open(self.path, "w", encoding="utf-8") as f:
-            for r in self._materials.values():
-                f.write(json.dumps(r, ensure_ascii=False) + "\n")
+        self._flush()
         return rec
 
     def dashboard(self, institution_id: str | None = None,

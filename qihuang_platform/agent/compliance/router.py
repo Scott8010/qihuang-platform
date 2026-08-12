@@ -18,12 +18,12 @@
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
-from qihuang_platform.gateway.deps import get_current_user
+from qihuang_platform.gateway.deps import get_current_user, get_current_admin
 from qihuang_platform.gateway.response import success, error
 from qihuang_platform.agent.compliance.engine_l2 import compliance_engine
 
@@ -47,8 +47,12 @@ class ComplianceScanRequest(BaseModel):
 
 class ComplianceFeedbackRequest(BaseModel):
     material_id: str = Field(..., description="物料 ID（scan 返回的 MAT-XXXX）")
-    decision: str = Field(..., description="keep/override/remediated/ignore/escalate")
-    action_taken: str = Field(..., description="none/released/replaced/removed/ticket_created")
+    decision: Literal["keep", "override", "remediated", "ignore", "escalate"] = Field(
+        ..., description="人工结论：keep保留/override强制拦截/remediated已整改/ignore忽略/escalate升级"
+    )
+    action_taken: Literal["none", "released", "replaced", "removed", "ticket_created"] = Field(
+        ..., description="执行动作：none无/released放行/replaced已替换/removed已移除/ticket_created已建工单"
+    )
     note: Optional[str] = Field(None, description="人工备注")
     operator: Optional[str] = Field(None, description="操作员标识（缺省取当前登录用户）")
 
@@ -83,7 +87,7 @@ async def compliance_scan(
 async def compliance_feedback(
     req: ComplianceFeedbackRequest,
     request: Request,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(get_current_admin),
 ):
     """人工结论回写：钉在 scan 返回的 material_id 上，客观真实，不替门店改文案。"""
     tenant_id = getattr(request.state, "tenant_id", None)
@@ -105,7 +109,7 @@ async def compliance_dashboard(
     store_id: Optional[str] = None,
     port: Optional[str] = None,
     request: Request = None,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(get_current_admin),
 ):
     """四态看板：按门店 institution_id 行级隔离；附 tenant 视角标注。"""
     tenant_id = getattr(request.state, "tenant_id", None) if request else None

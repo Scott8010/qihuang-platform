@@ -75,6 +75,19 @@ def test_kb_retrieve_recall(tmp_env):
     assert "HC-B-011" in ids  # 包治百病/药到病除/根治 关键词命中
 
 
+def test_kb_b012_b015_keywords_recall(tmp_env):
+    """验证 HC-B-012(量化疗效) 和 HC-B-015(时效承诺) 补齐 keywords 后能被 L1 召回。"""
+    kb = ComplianceKB(JsonlBackend(tmp_env["seed"]))
+    # HC-B-012：量化疗效数据
+    hits = asyncio.run(kb.retrieve("本品有效率达95%，治愈率超过80%", top_k=8))
+    ids = [c.clause_id for c in hits]
+    assert "HC-B-012" in ids, f"HC-B-012 未被召回，实际召回: {ids}"
+    # HC-B-015：具体时间承诺
+    hits2 = asyncio.run(kb.retrieve("一个疗程见效，三天就能改善", top_k=8))
+    ids2 = [c.clause_id for c in hits2]
+    assert "HC-B-015" in ids2, f"HC-B-015 未被召回，实际召回: {ids2}"
+
+
 def test_kb_source_ref(tmp_env):
     kb = ComplianceKB(JsonlBackend(tmp_env["seed"]))
     c = asyncio.run(kb.get("HC-F-052"))
@@ -208,7 +221,7 @@ def test_neo4j_backend_lazy():
 def test_router_scan_and_feedback(tmp_env):
     from qihuang_platform.agent.compliance import engine_l2
     from qihuang_platform.agent.compliance.router import router as compliance_router
-    from qihuang_platform.gateway.deps import get_current_user
+    from qihuang_platform.gateway.deps import get_current_user, get_current_admin
 
     # 让单例用临时存储，避免污染种子目录
     engine_l2.compliance_engine.store = ComplianceStore(tmp_env["store"])
@@ -221,6 +234,7 @@ def test_router_scan_and_feedback(tmp_env):
     def fake_user():
         return {"sub": "u1"}
     app.dependency_overrides[get_current_user] = fake_user
+    app.dependency_overrides[get_current_admin] = fake_user  # 测试环境模拟管理员
 
     client = TestClient(app)
     r = client.post("/api/v1/agent/compliance/scan", json={
@@ -240,6 +254,39 @@ def test_router_scan_and_feedback(tmp_env):
     })
     assert r2.status_code == 200
     assert r2.json()["data"]["state"] == "已通过"
+
+
+def test_router_feedback_requires_admin(tmp_env):
+    """非管理员调 feedback 应返回 403（RBAC 权限分级验证）。"""
+    from qihuang_platform.agent.compliance import engine_l2
+    from qihuang_platform.agent.compliance.router import router as compliance_router
+    from qihuang_platform.gateway.deps import get_current_user, get_current_admin
+    from qihuang_platform.gateway.deps import get_current_admin as real_admin
+
+    engine_l2.compliance_engine.store = ComplianceStore(tmp_env["store"])
+    os.environ["COMPLIANCE_RULES_PATH"] = _RULES_PATH
+
+    app = FastAPI()
+    app.middleware("http")(_set_tenant)
+    app.include_router(compliance_router, prefix="/api/v1/agent")
+
+    # 只 override get_current_user（模拟普通用户），不 override get_current_admin
+    # → get_current_admin 走真实逻辑，但 request.state.roles 未设 → 403
+    app.dependency_overrides[get_current_user] = lambda: {"sub": "u1"}
+    # get_current_admin 不 override，走真实逻辑
+    # 但因为 get_current_user 被 override，不会设 request.state.roles
+    # 需要在中间件里模拟设 roles 为空
+    async def _set_tenant_no_admin(request, call_next):
+        request.state.tenant_id = "t1"
+        request.state.roles = []  # 普通用户无 admin 角色
+        return await call_next(request)
+    app.middleware("http")(_set_tenant_no_admin)
+
+    client = TestClient(app)
+    r = client.post("/api/v1/agent/compliance/feedback", json={
+        "material_id": "MAT-FAKE", "decision": "keep", "action_taken": "released",
+    })
+    assert r.status_code == 403
 
 
 async def _set_tenant(request, call_next):

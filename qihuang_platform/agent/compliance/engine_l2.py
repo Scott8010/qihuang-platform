@@ -45,11 +45,34 @@ from qihuang_platform.agent.compliance.store import (
 _HERE = os.path.dirname(__file__)
 DEFAULT_SEED = os.path.join(_HERE, "seed", "compliance_clauses.jsonl")
 DEFAULT_STORE = os.path.join(_HERE, "seed", "materials.jsonl")
-# L0 规则引擎路径（默认指向 HealthBridge guard；生产迁移后改 env 指 8602 内规则）
-DEFAULT_RULES_PATH = os.getenv(
-    "COMPLIANCE_RULES_PATH",
-    r"C:/Users/Administrator/WorkBuddy/HealthBridge/hb-compliance-guard/rules.py",
-)
+
+
+def _find_rules_dir() -> str | None:
+    """搜索 L0 规则引擎目录，按优先级返回第一个包含 rules.py 的路径。
+
+    搜索顺序：
+    1. 环境变量 COMPLIANCE_RULES_PATH（最高优先级）
+    2. 项目根目录 hb-compliance-guard/
+    3. 服务器部署路径 /root/qihuang_platform/hb-compliance-guard/
+    4. 本地开发路径（兜底）
+    """
+    env_path = os.getenv("COMPLIANCE_RULES_PATH")
+    candidates: list[str] = []
+    if env_path:
+        candidates.append(env_path)
+    candidates.extend([
+        os.path.join(_HERE, "..", "..", "..", "hb-compliance-guard"),       # 项目根
+        "/root/qihuang_platform/hb-compliance-guard",                        # 服务器
+        r"C:/Users/Administrator/WorkBuddy/HealthBridge/hb-compliance-guard", # 本地开发
+    ])
+    for d in candidates:
+        if d and os.path.isfile(os.path.join(d, "rules.py")):
+            return d
+    return None
+
+
+# L0 规则引擎目录（自动搜索；env 覆盖；找不到则 None → 降级模式）
+RULES_DIR = _find_rules_dir()
 
 _SEVERITY_RANK = {SEVERITY_RED: 0, SEVERITY_ORANGE: 1, SEVERITY_YELLOW: 2}
 
@@ -73,14 +96,16 @@ class ComplianceEngineL2:
     # ───────── L0 规则引擎（懒加载） ─────────
     def _load_l0(self):
         if self._rules_mod is None:
+            if RULES_DIR is None:
+                raise FileNotFoundError(
+                    "L0 规则引擎未找到（COMPLIANCE_RULES_PATH 未设置且候选路径均无 rules.py）"
+                )
             # engine.py 含 scan_text/judge_state，其顶部 `from rules import ...`
             # 自引用 —— 必须先以 "rules" 为名加载并注册 rules.py，再加载 engine.py，
             # 顺序不可颠倒，否则自导入失败导致 L0 静默降级（所有文本都判「已通过」）。
             import sys
-            l0_dir = DEFAULT_RULES_PATH if os.path.isdir(DEFAULT_RULES_PATH) \
-                else os.path.dirname(DEFAULT_RULES_PATH)
-            rules_path = os.path.join(l0_dir, "rules.py")
-            engine_path = os.path.join(l0_dir, "engine.py")
+            rules_path = os.path.join(RULES_DIR, "rules.py")
+            engine_path = os.path.join(RULES_DIR, "engine.py")
             # 1) 先加载 rules.py 并注册为 "rules"
             r_spec = importlib.util.spec_from_file_location("rules", rules_path)
             r_mod = importlib.util.module_from_spec(r_spec)
@@ -165,7 +190,10 @@ class ComplianceEngineL2:
             if asyncio.iscoroutinefunction(llm):
                 res = await llm(prompt, SYSTEM_PROMPT)
             else:
-                res = llm(prompt, SYSTEM_PROMPT)
+                loop = asyncio.get_running_loop()
+                res = await loop.run_in_executor(
+                    None, lambda: llm(prompt, SYSTEM_PROMPT)
+                )
         except Exception:
             return []
         if not res:
