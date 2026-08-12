@@ -15,6 +15,22 @@ import type {
 let _token = localStorage.getItem("qh_admin_token") || "";
 export function getToken() { return _token; }
 
+/** 登录成功后保留的基础身份（后端 /admin/v1/login data 字段），供改密等端点使用 */
+export interface AdminIdentity {
+  user_id: string;
+  username: string;
+  display_name: string;
+  tenant_id: string;
+  roles: string[];
+  auth_source: string;
+}
+let _identity: AdminIdentity | null = (() => {
+  try { const s = localStorage.getItem("qh_admin_user"); return s ? (JSON.parse(s) as AdminIdentity) : null; }
+  catch { return null; }
+})();
+export function getIdentity(): AdminIdentity | null { return _identity; }
+export function getUserId(): string { return _identity?.user_id || ""; }
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -63,18 +79,47 @@ async function mutate<T = any>(
 // ═══ 认证 ═══
 
 export async function login(username: string, password?: string) {
-  const res = await post<{ code: number; data: { access_token: string; user?: unknown } }>(
-    "/admin/v1/login", { username, password }
-  );
+  const res = await post<{
+    code: number;
+    data: {
+      access_token: string; user_id: string; username: string;
+      display_name: string; tenant_id: string; roles: string[]; auth_source: string;
+    };
+  }>("/admin/v1/login", { username, password });
   if (res?.code === 0 && res.data?.access_token) {
     _token = res.data.access_token;
     localStorage.setItem("qh_admin_token", _token);
+    _identity = {
+      user_id: res.data.user_id,
+      username: res.data.username,
+      display_name: res.data.display_name || res.data.username,
+      tenant_id: res.data.tenant_id,
+      roles: res.data.roles || [],
+      auth_source: res.data.auth_source,
+    };
+    localStorage.setItem("qh_admin_user", JSON.stringify(_identity));
     return true;
   }
   return false;
 }
 
-export function logout() { _token = ""; localStorage.removeItem("qh_admin_token"); }
+export function logout() {
+  _token = "";
+  localStorage.removeItem("qh_admin_token");
+  localStorage.removeItem("qh_admin_user");
+  _identity = null;
+}
+
+/**
+ * POST /admin/v1/me/change-password — 当前登录用户自助改密（后端验原密码）。
+ * 返回 { ok, msg }，页面据此弹提示。
+ */
+export async function changePassword(old_password: string, new_password: string): Promise<{ ok: boolean; msg: string }> {
+  const r = await mutate<{ user_id: string; changed: boolean }>(
+    "POST", "/admin/v1/me/change-password", { old_password, new_password }
+  );
+  return { ok: r.ok, msg: r.msg };
+}
 
 // ═══ 仪表盘 ═══
 

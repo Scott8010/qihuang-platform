@@ -3,7 +3,7 @@ RBAC API 路由（管理端）
 租户开户 / 用户管理 / 角色权限 / 权限检查
 """
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -261,6 +261,34 @@ async def reset_password(
     if new_pwd is None:
         raise HTTPException(400, detail=error("RESET_FAILED", "密码重置失败"))
     return success({"user_id": user_id, "new_password": new_pwd})
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+
+@rbac_router.post("/me/change-password")
+async def change_my_password(
+    req: ChangePasswordRequest,
+    request: Request,
+    user: dict = Depends(get_current_admin),
+    rbac: RBACService = Depends(get_rbac),
+):
+    """当前登录用户自助修改密码（必须验证原密码，不依赖短信）"""
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        raise HTTPException(401, detail=error("UNAUTHORIZED", "未登录"))
+    target = rbac.get_user(user_id)
+    if not target:
+        raise HTTPException(404, detail=error("NOT_FOUND", "用户不存在"))
+    if not rbac.verify_password(target, req.old_password):
+        raise HTTPException(401, detail=error("OLD_PASSWORD_WRONG", "原密码错误"))
+    ok, msg = validate_password(req.new_password)
+    if not ok:
+        raise HTTPException(400, detail=error("INVALID_PASSWORD", msg))
+    rbac.reset_password(user_id, req.new_password)
+    return success({"user_id": user_id, "changed": True})
 
 
 @rbac_router.delete("/users/{user_id}")

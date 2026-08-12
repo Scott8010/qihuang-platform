@@ -274,8 +274,56 @@ class TestAdminLoginSecurity:
         assert data["data"]["access_token"]
 
 
-class TestDevRoutesGating:
-    """dev 路由挂载开关 —— 默认关闭，与生产一致"""
+class TestChangeMyPassword:
+    """POST /admin/v1/me/change-password — 当前用户自助改密（验证原密码）"""
+
+    def test_change_password_requires_old(self, client, ensure_admin_in_db):
+        """原密码错误应 401"""
+        token = client.post("/admin/v1/login", json={
+            "username": TEST_ADMIN_USER, "password": TEST_ADMIN_PASS,
+        }).json()["data"]["access_token"]
+        r = client.post("/admin/v1/me/change-password", json={
+            "old_password": "__wrong_old__", "new_password": "NewPass@2026",
+        }, headers={"Authorization": f"Bearer {token}"})
+        assert r.status_code == 401
+
+    def test_change_password_ok_and_relogin(self, client, ensure_admin_in_db):
+        """改密成功 → 新密码可登录、旧密码失效；测试后改回避免污染"""
+        token = client.post("/admin/v1/login", json={
+            "username": TEST_ADMIN_USER, "password": TEST_ADMIN_PASS,
+        }).json()["data"]["access_token"]
+        H = {"Authorization": f"Bearer {token}"}
+        # 改密
+        r = client.post("/admin/v1/me/change-password", json={
+            "old_password": TEST_ADMIN_PASS, "new_password": "NewPass@2026",
+        }, headers=H)
+        assert r.status_code == 200
+        # 新密码可登录
+        r2 = client.post("/admin/v1/login", json={
+            "username": TEST_ADMIN_USER, "password": "NewPass@2026",
+        })
+        assert r2.status_code == 200
+        # 旧密码失效
+        r3 = client.post("/admin/v1/login", json={
+            "username": TEST_ADMIN_USER, "password": TEST_ADMIN_PASS,
+        })
+        assert r3.status_code == 401
+        # 改回原密码，恢复测试环境
+        token2 = r2.json()["data"]["access_token"]
+        client.post("/admin/v1/me/change-password", json={
+            "old_password": "NewPass@2026", "new_password": TEST_ADMIN_PASS,
+        }, headers={"Authorization": f"Bearer {token2}"})
+
+    def test_change_password_rejects_weak(self, client, ensure_admin_in_db):
+        """弱密码应 400"""
+        token = client.post("/admin/v1/login", json={
+            "username": TEST_ADMIN_USER, "password": TEST_ADMIN_PASS,
+        }).json()["data"]["access_token"]
+        r = client.post("/admin/v1/me/change-password", json={
+            "old_password": TEST_ADMIN_PASS, "new_password": "123",
+        }, headers={"Authorization": f"Bearer {token}"})
+        assert r.status_code == 400
+
 
     @pytest.mark.skipif(DEV_ROUTES_ENABLED, reason="ENABLE_DEV_ROUTES=1 时 dev 路由应可用")
     def test_dev_routes_absent_by_default(self, client):

@@ -2,10 +2,10 @@ import { useState, useEffect } from "react";
 import {
   LayoutDashboard, Building2, ShieldCheck, KeyRound, BarChart3,
   BookOpenCheck, Activity, Search, Bell, Sprout, ChevronDown, LogOut,
-  Users as UsersIcon,
+  Users as UsersIcon, Eye, EyeOff, Lock,
 } from "lucide-react";
 import { C } from "@/lib/types";
-import { login, logout, getToken } from "@/lib/api";
+import { login, logout, getToken, changePassword, getIdentity } from "@/lib/api";
 import Dashboard from "@/pages/Dashboard";
 import Tenants from "@/pages/Tenants";
 import Roles from "@/pages/Roles";
@@ -33,6 +33,18 @@ export default function App() {
   const [loginUser, setLoginUser] = useState("");
   const [loginPass, setLoginPass] = useState("");
   const [loginErr, setLoginErr] = useState("");
+  const [showPass, setShowPass] = useState(false);
+
+  // 修改密码弹窗状态
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [showPwdModal, setShowPwdModal] = useState(false);
+  const [cpOld, setCpOld] = useState("");
+  const [cpNew, setCpNew] = useState("");
+  const [cpConfirm, setCpConfirm] = useState("");
+  const [cpShowNew, setCpShowNew] = useState(false);
+  const [cpErr, setCpErr] = useState("");
+  const [cpOk, setCpOk] = useState("");
+  const [cpBusy, setCpBusy] = useState(false);
 
   useEffect(() => {
     if (getToken()) setAuthed(true);
@@ -42,10 +54,38 @@ export default function App() {
   const doLogin = async () => {
     setLoginErr("");
     const ok = await login(loginUser, loginPass || undefined);
-    if (ok) { setAuthed(true); } else { setLoginErr("登录失败，请检查账号"); }
+    if (ok) { setAuthed(true); } else { setLoginErr("登录失败，请检查账号或密码"); }
   };
 
-  const doLogout = () => { logout(); setAuthed(false); setPage("dashboard"); };
+  const doLogout = () => {
+    logout();
+    setAuthed(false);
+    setPage("dashboard");
+    setMenuOpen(false);
+  };
+
+  const onForgot = () => {
+    // P1 手机+短信找回暂缓，当前仅支持管理员后台重置
+    setLoginErr("暂未开通短信找回，请联系系统管理员为您重置密码");
+  };
+
+  const submitChangePwd = async () => {
+    setCpErr(""); setCpOk("");
+    if (!cpOld || !cpNew) { setCpErr("请填写原密码与新密码"); return; }
+    if (cpNew.length < 8) { setCpErr("新密码至少 8 位"); return; }
+    if (cpNew !== cpConfirm) { setCpErr("两次输入的新密码不一致"); return; }
+    setCpBusy(true);
+    const r = await changePassword(cpOld, cpNew);
+    setCpBusy(false);
+    if (r.ok) {
+      setCpOk("密码修改成功，请使用新密码重新登录");
+      setCpOld(""); setCpNew(""); setCpConfirm("");
+      // 改密后当前 token 仍有效但建议重登，1.2s 后自动退出
+      setTimeout(() => { setShowPwdModal(false); setMenuOpen(false); doLogout(); }, 1200);
+    } else {
+      setCpErr(r.msg || "修改失败，请重试");
+    }
+  };
 
   // 登录页
   if (checking) return <div className="flex h-screen items-center justify-center" style={{ background: C.bg }}><span style={{ color: C.light }}>加载中...</span></div>;
@@ -70,13 +110,28 @@ export default function App() {
               className="w-full px-4 py-3 rounded-lg border text-[14px] outline-none"
               style={{ borderColor: C.border }}
             />
-            <input
-              type="password" value={loginPass} onChange={(e) => setLoginPass(e.target.value)}
-              placeholder="密码（可选）"
-              onKeyDown={(e) => e.key === "Enter" && doLogin()}
-              className="w-full px-4 py-3 rounded-lg border text-[14px] outline-none"
-              style={{ borderColor: C.border }}
-            />
+            <div className="relative">
+              <input
+                type={showPass ? "text" : "password"} value={loginPass}
+                onChange={(e) => setLoginPass(e.target.value)}
+                placeholder="密码（可选）"
+                onKeyDown={(e) => e.key === "Enter" && doLogin()}
+                className="w-full px-4 py-3 pr-11 rounded-lg border text-[14px] outline-none"
+                style={{ borderColor: C.border }}
+              />
+              <button
+                type="button" onClick={() => setShowPass((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-50"
+                aria-label={showPass ? "隐藏密码" : "显示密码"}
+              >
+                {showPass ? <EyeOff className="w-4 h-4" style={{ color: C.light }} /> : <Eye className="w-4 h-4" style={{ color: C.light }} />}
+              </button>
+            </div>
+            <div className="flex justify-end -mt-1">
+              <button type="button" onClick={onForgot} className="text-[12px] hover:underline" style={{ color: C.light }}>
+                忘记密码？
+              </button>
+            </div>
             {loginErr && <div className="text-[13px] text-red-600">{loginErr}</div>}
             <button
               onClick={doLogin}
@@ -89,6 +144,7 @@ export default function App() {
     );
   }
 
+  const identity = getIdentity();
   const current = nav.find((n) => n.id === page)!;
 
   return (
@@ -152,11 +208,38 @@ export default function App() {
           <button className="relative p-2 rounded-lg hover:bg-gray-50">
             <Bell className="w-5 h-5" style={{ color: C.mid }} />
           </button>
-          <button className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-lg hover:bg-gray-50">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[13px] font-medium" style={{ background: C.primary }}>管</div>
-            <span className="text-[13px]" style={{ color: C.mid }}>管理员</span>
-            <ChevronDown className="w-4 h-4" style={{ color: C.light }} />
-          </button>
+          <div className="relative">
+            <button
+              className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-lg hover:bg-gray-50"
+              onClick={() => setMenuOpen((v) => !v)}
+            >
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[13px] font-medium" style={{ background: C.primary }}>管</div>
+              <span className="text-[13px]" style={{ color: C.mid }}>{identity?.display_name || identity?.username || "管理员"}</span>
+              <ChevronDown className="w-4 h-4" style={{ color: C.light }} />
+            </button>
+            {menuOpen && (
+              <div
+                className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border py-1 z-40"
+                style={{ borderColor: C.border }}
+                onMouseLeave={() => setMenuOpen(false)}
+              >
+                <button
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] text-left hover:bg-gray-50"
+                  style={{ color: C.mid }}
+                  onClick={() => { setMenuOpen(false); setCpErr(""); setCpOk(""); setCpOld(""); setCpNew(""); setCpConfirm(""); setShowPwdModal(true); }}
+                >
+                  <Lock className="w-4 h-4" style={{ color: C.light }} /> 修改密码
+                </button>
+                <button
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] text-left hover:bg-gray-50"
+                  style={{ color: C.mid }}
+                  onClick={doLogout}
+                >
+                  <LogOut className="w-4 h-4" style={{ color: C.light }} /> 退出登录
+                </button>
+              </div>
+            )}
+          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto p-6">
@@ -170,6 +253,70 @@ export default function App() {
           {page === "monitor" && <Monitor />}
         </main>
       </div>
+
+      {/* 修改密码弹窗 */}
+      {showPwdModal && (
+        <div
+          className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
+          onClick={() => { setShowPwdModal(false); setMenuOpen(false); }}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl p-8 w-[420px]"
+            style={{ border: `1px solid ${C.border}` }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <Lock className="w-5 h-5" style={{ color: C.primary }} />
+              <div className="font-bold text-[16px]" style={{ color: C.primary }}>修改密码</div>
+            </div>
+            <div className="text-[12px] mb-5" style={{ color: C.light }}>
+              需验证原密码；修改成功后其他设备将重新登录
+            </div>
+            <div className="space-y-3">
+              <input
+                type="password" placeholder="原密码" value={cpOld}
+                onChange={(e) => setCpOld(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg border text-[14px] outline-none"
+                style={{ borderColor: C.border }}
+              />
+              <input
+                type={cpShowNew ? "text" : "password"} placeholder="新密码（8-64位，含大小写+数字+特殊字符）"
+                value={cpNew} onChange={(e) => setCpNew(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg border text-[14px] outline-none"
+                style={{ borderColor: C.border }}
+              />
+              <input
+                type={cpShowNew ? "text" : "password"} placeholder="确认新密码"
+                value={cpConfirm} onChange={(e) => setCpConfirm(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg border text-[14px] outline-none"
+                style={{ borderColor: C.border }}
+              />
+              <button
+                type="button" onClick={() => setCpShowNew((v) => !v)}
+                className="text-[12px] hover:underline -mt-1" style={{ color: C.light }}
+              >
+                {cpShowNew ? "隐藏密码" : "显示密码"}
+              </button>
+              {cpErr && <div className="text-[13px] text-red-600">{cpErr}</div>}
+              {cpOk && <div className="text-[13px] text-emerald-600">{cpOk}</div>}
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={submitChangePwd} disabled={cpBusy}
+                  className="flex-1 py-2.5 rounded-lg text-white text-[14px] font-medium disabled:opacity-60"
+                  style={{ background: C.primary }}
+                >
+                  {cpBusy ? "提交中..." : "确认修改"}
+                </button>
+                <button
+                  onClick={() => { setShowPwdModal(false); setMenuOpen(false); }}
+                  className="flex-1 py-2.5 rounded-lg border text-[14px]"
+                  style={{ borderColor: C.border, color: C.mid }}
+                >取消</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
