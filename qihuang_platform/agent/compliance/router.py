@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 
 from qihuang_platform.gateway.deps import get_current_user, get_current_admin
 from qihuang_platform.gateway.response import success, error
+from qihuang_platform.agent.deps import require_agent_in_plan
 from qihuang_platform.agent.compliance.engine_l2 import compliance_engine
 from qihuang_platform.agent.compliance.audit import (
     AuditStore, make_scan_audit, make_feedback_audit,
@@ -77,6 +78,7 @@ async def compliance_scan(
     req: ComplianceScanRequest,
     request: Request,
     user: dict = Depends(get_current_user),
+    _agent=Depends(require_agent_in_plan("compliance")),
 ):
     """门店送审：L0 硬红线 + L1 检索 + L2 推理三轨融合，回写钉业务实体。"""
     tenant_id = getattr(request.state, "tenant_id", None)
@@ -109,6 +111,7 @@ async def compliance_feedback(
     req: ComplianceFeedbackRequest,
     request: Request,
     user: dict = Depends(get_current_admin),
+    _agent=Depends(require_agent_in_plan("compliance")),
 ):
     """人工结论回写：钉在 scan 返回的 material_id 上，客观真实，不替门店改文案。"""
     tenant_id = getattr(request.state, "tenant_id", None)
@@ -145,6 +148,7 @@ async def compliance_dashboard(
     port: Optional[str] = None,
     request: Request = None,
     user: dict = Depends(get_current_admin),
+    _agent=Depends(require_agent_in_plan("compliance")),
 ):
     """四态看板：按门店 institution_id 行级隔离；附 tenant 视角标注。"""
     tenant_id = getattr(request.state, "tenant_id", None) if request else None
@@ -162,6 +166,7 @@ async def compliance_audit(
     offset: int = 0,
     request: Request = None,
     user: dict = Depends(get_current_admin),
+    _agent=Depends(require_agent_in_plan("compliance")),
 ):
     """审计日志查询（仅管理员）：合规操作留痕，支持按操作类型/物料/操作人过滤。"""
     records = _audit_store.query(

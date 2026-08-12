@@ -417,6 +417,29 @@ class KgVersion(Base):
 # 初始化预置角色与权限
 # ═══════════════════════════════════════════════════════════
 
+class AgentDef(Base):
+    """Agent 能力定义表 — Agent 中台的资源池（注册表落库）。
+
+    与套餐/密钥/计量同级，是一等可分配资源：
+    - 部署期注册（register_agent），运营态热插拔（启停/编辑，控制端可读写）；
+    - 套餐通过 features_json.agents 组合若干 agent_key 形成「专家团」。
+    """
+    __tablename__ = "agent_def"
+    id = Column(String(36), primary_key=True, default=_uid)
+    agent_key = Column(String(100), unique=True, nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    kind = Column(String(50), default="business_embedded")  # business_embedded / conversational
+    engine = Column(String(100))          # 驱动引擎标识，如 hb-compliance-guard
+    category = Column(String(50), default="general")  # 分组（中台面板用）
+    router_prefix = Column(String(200))   # 挂载路径前缀
+    capabilities = Column(JSON, default=list)  # 能力点列表，如 ["scan","feedback","dashboard"]
+    status = Column(String(20), default="active")  # active / inactive
+    desc = Column(Text)
+    features_json = Column(JSON, default=dict)  # 扩展元数据
+    created_at = Column(DateTime, default=_now)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+
 PRESET_ROLES = [
     {"name": "super_admin", "display_name": "超级管理员", "description": "平台全局管理"},
     {"name": "tenant_admin", "display_name": "租户管理员", "description": "租户级管理"},

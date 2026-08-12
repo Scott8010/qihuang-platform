@@ -239,6 +239,8 @@ def test_router_scan_and_feedback(tmp_env):
         return {"sub": "u1"}
     app.dependency_overrides[get_current_user] = fake_user
     app.dependency_overrides[get_current_admin] = fake_user  # 测试环境模拟管理员
+    from qihuang_platform.agent.deps import require_agent_in_plan
+    app.dependency_overrides[require_agent_in_plan("compliance")] = lambda: {"sub": "u1"}
 
     client = TestClient(app)
     r = client.post("/api/v1/agent/compliance/scan", json={
@@ -277,6 +279,8 @@ def test_router_feedback_requires_admin(tmp_env):
     # 只 override get_current_user（模拟普通用户），不 override get_current_admin
     # → get_current_admin 走真实逻辑，但 request.state.roles 未设 → 403
     app.dependency_overrides[get_current_user] = lambda: {"sub": "u1"}
+    from qihuang_platform.agent.deps import require_agent_in_plan
+    app.dependency_overrides[require_agent_in_plan("compliance")] = lambda: {"sub": "u1"}
     # get_current_admin 不 override，走真实逻辑
     # 但因为 get_current_user 被 override，不会设 request.state.roles
     # 需要在中间件里模拟设 roles 为空
@@ -319,6 +323,8 @@ def test_audit_scan_and_feedback(tmp_env):
     app.include_router(compliance_router, prefix="/api/v1/agent")
     app.dependency_overrides[get_current_user] = lambda: {"sub": "auditor1"}
     app.dependency_overrides[get_current_admin] = lambda: {"sub": "auditor1"}
+    from qihuang_platform.agent.deps import require_agent_in_plan
+    app.dependency_overrides[require_agent_in_plan("compliance")] = lambda: {"sub": "auditor1"}
 
     client = TestClient(app)
     # scan
@@ -374,6 +380,8 @@ def test_audit_filter_by_material_id(tmp_env):
     app.include_router(compliance_router, prefix="/api/v1/agent")
     app.dependency_overrides[get_current_user] = lambda: {"sub": "u1"}
     app.dependency_overrides[get_current_admin] = lambda: {"sub": "u1"}
+    from qihuang_platform.agent.deps import require_agent_in_plan
+    app.dependency_overrides[require_agent_in_plan("compliance")] = lambda: {"sub": "u1"}
 
     client = TestClient(app)
     # 两次 scan 不同门店

@@ -23,6 +23,7 @@ ERROR_CODES = {
     "SIGNATURE_MISMATCH":     {"code": 2006, "message": "签名验证失败"},
     "TIMESTAMP_EXPIRED":      {"code": 2007, "message": "时间戳过期"},
     "FORBIDDEN":              {"code": 2008, "message": "权限不足"},
+    "AGENT_FORBIDDEN":       {"code": 2008, "message": "Agent 能力未授权（套餐未包含）"},
     "IP_NOT_ALLOWED":         {"code": 2009, "message": "IP不在白名单"},
 
     # 限流 3xxx

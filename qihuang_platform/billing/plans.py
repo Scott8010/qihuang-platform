@@ -53,12 +53,13 @@ DEFAULT_PLANS = [
         "price_cents": 29900,
         "features_json": {
             "module_3d": True,
-            "module_agent": False,
+            "module_agent": True,
             "report_export": True,
             "priority_support": True,
             "custom_skin": False,
+            "agents": ["compliance"],
         },
-        "description": "专业健康服务，含3D经络穴位可视化+优先支持",
+        "description": "专业健康服务，含3D经络穴位可视化+优先支持+内容合规审核Agent",
     },
     {
         "plan_name": "enterprise",
@@ -74,8 +75,9 @@ DEFAULT_PLANS = [
             "report_export": True,
             "priority_support": True,
             "custom_skin": True,
+            "agents": ["compliance"],
         },
-        "description": "企业级全功能，含3D穴位+名医智能体+品牌定制+专属支持",
+        "description": "企业级全功能，含3D穴位+名医智能体+品牌定制+专属支持+内容合规审核Agent",
     },
 ]
 
@@ -118,8 +120,15 @@ def seed_plans(session):
         plan_name = pdata_copy.pop("plan_name")
         display_name = pdata_copy.pop("display_name")
         description = pdata_copy.pop("description")
+        default_agents = (pdata.get("features_json") or {}).get("agents", [])
         existing = session.query(Plan).filter_by(plan_name=plan_name).first()
         if existing:
+            # 幂等合并：已存在套餐补 agents 字段（不覆盖运营端已定制的组合）
+            fj = existing.features_json or {}
+            if "agents" not in fj and default_agents:
+                fj["agents"] = list(default_agents)
+                existing.features_json = fj
+                session.flush()
             created[plan_name] = existing
             continue
         plan = Plan(plan_name=plan_name, display_name=display_name, **pdata_copy)

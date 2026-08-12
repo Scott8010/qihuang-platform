@@ -187,7 +187,15 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: SSH 部署
+      - name: 构建前端运营控制台
+        working-directory: frontend-admin-react
+        env:
+          CI: "false"
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: SSH 部署（后端 8602 包）
         uses: easingthemes/ssh-deploy@main
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -196,6 +204,16 @@ jobs:
           REMOTE_HOST: ${{ secrets.SSH_HOST }}
           REMOTE_USER: ${{ secrets.SSH_USER }}
           TARGET: "/root/qihuang_platform/qihuang_platform/"
+
+      - name: SSH 部署（前端 dist）
+        uses: easingthemes/ssh-deploy@main
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          ARGS: "-rlgoDzvc -i --exclude='.git/'"
+          SOURCE: "frontend-admin-react/dist/"
+          REMOTE_HOST: ${{ secrets.SSH_HOST }}
+          REMOTE_USER: ${{ secrets.SSH_USER }}
+          TARGET: "/root/qihuang_platform/frontend-admin-react/dist/"
 
       - name: 重启服务（systemd 单一真源，避免与 nohup/pkill 冲突）
         run: |

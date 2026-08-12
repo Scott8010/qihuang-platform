@@ -11,7 +11,7 @@
 """
 from typing import Optional
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, Depends, Query, Body
+from fastapi import APIRouter, Depends, Query, Body, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 
@@ -22,7 +22,7 @@ from qihuang_platform.db.models import (
     Plan, Subscription, Bill, CallLog, AuditLog,
     SensitiveWord, KgReviewItem, KgVersion,
     Tenant, User, Role, UserRole, RolePermission, Permission,
-    Org, ApiKey,
+    Org, ApiKey, AgentDef,
     MedCase, MedReport, HealthAssessment, HealthPlan,
     EduCoachSession, EduExamRecord,
 )
@@ -33,6 +33,8 @@ from qihuang_platform.gateway.llm_fallback import llm_fallback
 from qihuang_platform.control.container_mgr import container_mgr
 from qihuang_platform.control.cost_mgr import router as cost_router
 from qihuang_platform.billing.billing import get_bill_detail
+from qihuang_platform.agent.registry import list_agents, get_agent, set_agent_status
+from qihuang_platform.agent import dashboard as agent_dashboard
 
 router = APIRouter(prefix="/admin/v1", tags=["管理端-全功能"])
 
@@ -1772,3 +1774,110 @@ async def send_dunning_notice(
         return error("INTERNAL_ERROR", message=str(e))
     finally:
         db.close()
+
+
+# ═══════════════════════════════════════════════
+# 8. Agent 中台（资源池 + 调配层 + 各能力看板）  [老黄 2026-08-12 拍板]
+# ═══════════════════════════════════════════════
+
+@router.get("/agents", summary="Agent 中台-能力资源池列表")
+async def list_agent_center(admin: dict = Depends(get_current_admin)):
+    """列出全部已注册 Agent 能力（含启用态 + 被哪些套餐纳入「专家团」）。"""
+    agents = list_agents()
+    db = SessionLocal()
+    try:
+        plans = db.query(Plan).all()
+        plan_agents = {p.id: (p.features_json or {}).get("agents", []) for p in plans}
+    finally:
+        db.close()
+    items = []
+    for key, spec in agents.items():
+        included_in = [pid for pid, al in plan_agents.items() if key in al]
+        items.append({**spec, "included_in_plans": included_in})
+    return success(data={"total": len(items), "agents": items})
+
+
+@router.get("/agents/{agent_key}", summary="Agent 能力详情")
+async def get_agent_detail(agent_key: str, admin: dict = Depends(get_current_admin)):
+    spec = get_agent(agent_key)
+    if not spec:
+        return error("NOT_FOUND", message=f"Agent 能力不存在：{agent_key}")
+    db = SessionLocal()
+    try:
+        plans = db.query(Plan).all()
+        included_in = [p.id for p in plans if agent_key in (p.features_json or {}).get("agents", [])]
+    finally:
+        db.close()
+    return success(data={**spec, "included_in_plans": included_in})
+
+
+@router.post("/agents/{agent_key}/toggle", summary="启停 Agent 能力(运营态热插拔)")
+async def toggle_agent(
+    agent_key: str,
+    status: str = Body(..., embed=True, description="active / inactive"),
+    admin: dict = Depends(get_current_admin),
+):
+    """运营态热插拔：启用/停用某 Agent 能力（写 DB + 缓存双写）。"""
+    if status not in ("active", "inactive"):
+        return error("INVALID_PARAM", message="status 必须为 active / inactive")
+    ok = set_agent_status(agent_key, status)
+    if not ok:
+        return error("NOT_FOUND", message=f"Agent 能力不存在：{agent_key}")
+    return success(data={"agent_key": agent_key, "status": status},
+                   message=f"Agent「{agent_key}」已设为 {status}")
+
+
+@router.get("/agents/{agent_key}/dashboard", summary="Agent 能力运营看板(中台聚合)")
+async def agent_center_dashboard(
+    agent_key: str,
+    store_id: Optional[str] = Query(None, description="门店维度下钻（合规审核用）"),
+    port: Optional[str] = Query(None, description="来源端下钻"),
+    admin: dict = Depends(get_current_admin),
+):
+    """构件 C：按 agent_key 拉取对应能力的运营看板（内核在底层实现，中台只派发）。"""
+    spec = get_agent(agent_key)
+    if not spec:
+        return error("NOT_FOUND", message=f"Agent 能力不存在：{agent_key}")
+    try:
+        data = await agent_dashboard.get_agent_dashboard(agent_key, store_id=store_id, port=port)
+    except KeyError:
+        return error("NOT_FOUND", message=f"Agent 能力无看板：{agent_key}")
+    except Exception as e:
+        return error("INTERNAL_ERROR", message=f"看板拉取失败：{e}")
+    return success(data={"agent_key": agent_key, "dashboard": data})
+
+
+@router.get("/plans/{plan_id}/agents", summary="套餐的 Agent 专家团组合")
+async def get_plan_agents(plan_id: str, admin: dict = Depends(get_current_admin)):
+    """构件 B：读取某套餐打包了哪些 Agent 能力（专家团）。"""
+    db = SessionLocal()
+    try:
+        plan = db.query(Plan).filter_by(id=plan_id).first()
+        if not plan:
+            return error("NOT_FOUND", message="套餐不存在")
+        agents = (plan.features_json or {}).get("agents", [])
+    finally:
+        db.close()
+    return success(data={"plan_id": plan_id, "agents": agents})
+
+
+@router.put("/plans/{plan_id}/agents", summary="设置套餐的 Agent 专家团组合")
+async def set_plan_agents(
+    plan_id: str,
+    agents: list = Body(..., embed=True, description="agent_key 列表，如 [\"compliance\"]"),
+    admin: dict = Depends(get_current_admin),
+):
+    """构件 B：运营态编辑某套餐的 Agent 组合（写 features_json.agents）。"""
+    db = SessionLocal()
+    try:
+        plan = db.query(Plan).filter_by(id=plan_id).first()
+        if not plan:
+            return error("NOT_FOUND", message="套餐不存在")
+        fj = plan.features_json or {}
+        fj["agents"] = list(agents)
+        plan.features_json = fj
+        db.commit()
+    finally:
+        db.close()
+    return success(data={"plan_id": plan_id, "agents": list(agents)},
+                   message="套餐 Agent 组合已更新")

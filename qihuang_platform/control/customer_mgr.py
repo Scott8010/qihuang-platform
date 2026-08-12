@@ -90,10 +90,10 @@ async def customer_list(
             CallLog.tenant_id == t.id,
             CallLog.timestamp >= cutoff
         ).count()
-        # 剩余天数
+        # 剩余天数（模型字段为 end_date，对外沿用 expires_at 契约名）
         days_left = None
-        if sub and sub.expires_at:
-            days_left = (sub.expires_at - datetime.utcnow()).days
+        if sub and sub.end_date:
+            days_left = (sub.end_date - datetime.utcnow()).days
 
         items.append({
             "id": t.id,
@@ -166,8 +166,8 @@ async def customer_detail(
             "subscription": {
                 "plan": sub.plan_id if sub else None,
                 "status": sub.status if sub else "无订阅",
-                "started_at": sub.started_at.isoformat() if sub and sub.started_at else None,
-                "expires_at": sub.expires_at.isoformat() if sub and sub.expires_at else None,
+                "started_at": sub.start_date.isoformat() if sub and sub.start_date else None,
+                "expires_at": sub.end_date.isoformat() if sub and sub.end_date else None,
             } if sub else None,
             "calls_trend": calls_trend,
             "recent_bills": [

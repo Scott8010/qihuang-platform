@@ -612,3 +612,92 @@ export async function fetchAuditLogs(): Promise<AuditLogItem[]> {
     }));
   } catch { return []; }
 }
+
+// ═══ Agent 中台（智能控制面）═══
+// 构件 A 资源池 / 构件 B 套餐专家团组合 / 构件 C 各 Agent 看板
+// 后端契约见 qihuang_platform/control/router.py（/admin/v1/agents*, /admin/v1/plans/{id}/agents）
+
+export interface AgentDef {
+  agent_key: string;
+  name: string;
+  kind: string;
+  engine: string | null;
+  category: string;
+  router_prefix: string | null;
+  capabilities: string[];
+  status: string;          // active / inactive
+  desc: string | null;
+  features_json: Record<string, any>;
+  included_in_plans: string[];
+}
+
+/** GET /admin/v1/agents — 能力资源池（含被哪些套餐纳入专家团） */
+export async function fetchAgentCenter(): Promise<{ total: number; agents: AgentDef[] }> {
+  try {
+    const r = await get<{ code: number; data: { total?: number; agents?: any[] } }>("/admin/v1/agents");
+    if (r?.code !== 0 || !r.data) return { total: 0, agents: [] };
+    const agents = (r.data.agents || []).map((a: any) => ({
+      agent_key: a.agent_key || "",
+      name: a.name || a.agent_key || "",
+      kind: a.kind || "business_embedded",
+      engine: a.engine ?? null,
+      category: a.category || "general",
+      router_prefix: a.router_prefix ?? null,
+      capabilities: a.capabilities || [],
+      status: a.status || "active",
+      desc: a.desc ?? null,
+      features_json: a.features_json || {},
+      included_in_plans: a.included_in_plans || [],
+    }));
+    return { total: r.data.total ?? agents.length, agents };
+  } catch (e) { console.error("fetchAgentCenter error", e); return { total: 0, agents: [] }; }
+}
+
+/** POST /admin/v1/agents/{agent_key}/toggle — 运营态热插拔启停 */
+export async function toggleAgent(agentKey: string, status: "active" | "inactive"): Promise<MutateResult> {
+  return mutate("POST", `/admin/v1/agents/${encodeURIComponent(agentKey)}/toggle`, { status });
+}
+
+/** GET /admin/v1/agents/{agent_key}/dashboard — 各 Agent 运营看板（中台派发，内核在底层） */
+export async function fetchAgentDashboard(
+  agentKey: string, opts?: { storeId?: string; port?: string },
+): Promise<{ ok: boolean; dashboard?: any; msg?: string }> {
+  try {
+    const qs = new URLSearchParams();
+    if (opts?.storeId) qs.set("store_id", opts.storeId);
+    if (opts?.port) qs.set("port", opts.port);
+    const q = qs.toString();
+    const r = await get<{ code: number; data?: any; msg?: string }>(
+      `/admin/v1/agents/${encodeURIComponent(agentKey)}/dashboard${q ? `?${q}` : ""}`,
+    );
+    if (r?.code === 0 && r.data) return { ok: true, dashboard: r.data.dashboard };
+    return { ok: false, msg: r?.msg || "看板拉取失败" };
+  } catch (e: any) { return { ok: false, msg: e?.message || "看板拉取异常" }; }
+}
+
+export interface PlanAgentRow { planId: string; planName: string; agents: string[]; }
+
+/** GET /admin/v1/plans + 每个套餐的 agents — 套餐专家团矩阵（构件 B 编排用） */
+export async function fetchPlanAgentMatrix(): Promise<PlanAgentRow[]> {
+  try {
+    const r = await get<{ code: number; data?: any }>("/admin/v1/plans");
+    const plans = Array.isArray(r?.data) ? r.data : (r?.data?.items || []);
+    const rows: PlanAgentRow[] = [];
+    for (const p of plans) {
+      const planId = p.id || p.plan_id || "";
+      if (!planId) continue;
+      let agents: string[] = [];
+      try {
+        const pr = await get<{ code: number; data?: any }>(`/admin/v1/plans/${encodeURIComponent(planId)}/agents`);
+        agents = pr?.data?.agents || [];
+      } catch { agents = []; }
+      rows.push({ planId, planName: p.display_name || p.plan_name || planId, agents });
+    }
+    return rows;
+  } catch (e) { console.error("fetchPlanAgentMatrix error", e); return []; }
+}
+
+/** PUT /admin/v1/plans/{plan_id}/agents — 设置套餐的 Agent 专家团组合 */
+export async function setPlanAgents(planId: string, agents: string[]): Promise<MutateResult> {
+  return mutate("PUT", `/admin/v1/plans/${encodeURIComponent(planId)}/agents`, { agents });
+}

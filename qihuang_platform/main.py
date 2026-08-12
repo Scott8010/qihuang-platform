@@ -47,13 +47,53 @@ async def lifespan(app: FastAPI):
         from qihuang_platform.db.models import seed_preset_data
         from qihuang_platform.billing.plans import seed_plans
         from qihuang_platform.db.config import SessionLocal
+        # 1) RBAC 预置（幂等，失败不阻断后续步骤）
         db = SessionLocal()
         try:
             seed_preset_data(db)
             db.commit()
             print("[Platform] RBAC预置数据已初始化 (9角色+18权限)")
+        except Exception as e:
+            db.rollback()
+            print(f"[Platform] RBAC预置跳过（可能已存在）: {e}")
+        finally:
+            db.close()
+
+        # 2) 套餐预置（含 Agent 专家团组合合并）
+        db = SessionLocal()
+        try:
             seed_plans(db)
             print("[Platform] 套餐预置数据已初始化 (4档套餐)")
+        except Exception as e:
+            db.rollback()
+            print(f"[Platform] 套餐预置跳过: {e}")
+        finally:
+            db.close()
+
+        # 3) Agent 中台注册表落库同步（部署期样板 → DB，运营态热插拔）
+        try:
+            from qihuang_platform.agent.registry import sync_from_db
+            n = sync_from_db()
+            print(f"[Platform] Agent 中台注册表已同步 {n} 个能力")
+        except Exception as e:
+            print(f"[Platform] Agent 注册表同步失败: {e}")
+
+        # 4) 默认租户订阅企业版（含 compliance），保证控制端/默认租户可调用 Agent 能力
+        db = SessionLocal()
+        try:
+            from qihuang_platform.db.models import Subscription, Plan as _Plan
+            ent = db.query(_Plan).filter_by(plan_name="enterprise").first()
+            if ent and not db.query(Subscription).filter_by(
+                tenant_id="tenant_default", status="active"
+            ).first():
+                db.add(Subscription(
+                    tenant_id="tenant_default", plan_id=ent.id, status="active"
+                ))
+                db.commit()
+                print("[Platform] 已为默认租户(tenant_default)订阅企业版套餐（含 Agent 能力）")
+        except Exception as e:
+            db.rollback()
+            print(f"[Platform] 默认租户订阅跳过: {e}")
         finally:
             db.close()
 
