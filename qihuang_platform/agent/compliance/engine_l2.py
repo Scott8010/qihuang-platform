@@ -106,16 +106,20 @@ class ComplianceEngineL2:
             import sys
             rules_path = os.path.join(RULES_DIR, "rules.py")
             engine_path = os.path.join(RULES_DIR, "engine.py")
-            # 1) 先加载 rules.py 并注册为 "rules"
+            # 1) 先加载 rules.py 并临时注册为 "rules"
             r_spec = importlib.util.spec_from_file_location("rules", rules_path)
             r_mod = importlib.util.module_from_spec(r_spec)
             sys.modules["rules"] = r_mod
             r_spec.loader.exec_module(r_mod)
-            # 2) 再加载 engine.py（含 scan_text/judge_state）
+            # 2) 再加载 engine.py（此时 from rules import ... 可正常解析）
             e_spec = importlib.util.spec_from_file_location("hb_compliance_engine", engine_path)
             e_mod = importlib.util.module_from_spec(e_spec)
             sys.modules["hb_compliance_engine"] = e_mod
             e_spec.loader.exec_module(e_mod)
+            # 3) 清理 sys.modules：engine.py 的 from rules import 已在加载时绑定名称，
+            #    运行时不再依赖 sys.modules["rules"]；移除避免全局命名空间污染
+            sys.modules.pop("rules", None)
+            sys.modules.pop("hb_compliance_engine", None)
             self._rules_mod = e_mod
         return self._rules_mod
 

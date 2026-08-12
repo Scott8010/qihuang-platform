@@ -291,4 +291,106 @@ def test_router_feedback_requires_admin(tmp_env):
 
 async def _set_tenant(request, call_next):
     request.state.tenant_id = "t1"
+    request.state.user_id = "test_user"
     return await call_next(request)
+
+
+# ════════════════ 审计日志 ════════════════
+def test_audit_scan_and_feedback(tmp_env):
+    """scan + feedback 各写一条审计记录，audit 端点可查询。"""
+    from qihuang_platform.agent.compliance import engine_l2
+    from qihuang_platform.agent.compliance.router import router as compliance_router
+    from qihuang_platform.agent.compliance.audit import AuditStore
+    from qihuang_platform.gateway.deps import get_current_user, get_current_admin
+
+    engine_l2.compliance_engine.store = ComplianceStore(tmp_env["store"])
+    os.environ["COMPLIANCE_RULES_PATH"] = _RULES_PATH
+
+    # 用临时审计文件
+    import qihuang_platform.agent.compliance.router as rmod
+    rmod._audit_store = AuditStore(os.path.join(tmp_env["dir"], "audit.jsonl"))
+
+    app = FastAPI()
+    app.middleware("http")(_set_tenant)
+    app.include_router(compliance_router, prefix="/api/v1/agent")
+    app.dependency_overrides[get_current_user] = lambda: {"sub": "auditor1"}
+    app.dependency_overrides[get_current_admin] = lambda: {"sub": "auditor1"}
+
+    client = TestClient(app)
+    # scan
+    r = client.post("/api/v1/agent/compliance/scan", json={
+        "text": "包治百病、药到病除", "store_id": "store_AUD",
+        "material_type": "朋友圈", "port": "wechat",
+    })
+    assert r.status_code == 200
+    mid = r.json()["data"]["material_id"]
+
+    # feedback
+    r2 = client.post("/api/v1/agent/compliance/feedback", json={
+        "material_id": mid, "decision": "keep", "action_taken": "released",
+    })
+    assert r2.status_code == 200
+
+    # 查审计
+    r3 = client.get("/api/v1/agent/compliance/audit")
+    assert r3.status_code == 200
+    audit_data = r3.json()["data"]
+    assert audit_data["total"] == 2
+    assert audit_data["returned"] == 2
+    actions = [rec["action"] for rec in audit_data["records"]]
+    assert "scan" in actions
+    assert "feedback" in actions
+    # scan 审计记录有 operator 和 state_after
+    scan_rec = next(r for r in audit_data["records"] if r["action"] == "scan")
+    assert scan_rec["operator"] == "test_user"
+    assert scan_rec["state_after"] == "违规拦截"
+    assert scan_rec["material_id"] == mid
+    # feedback 审计记录有 state_before 和 state_after
+    fb_rec = next(r for r in audit_data["records"] if r["action"] == "feedback")
+    assert fb_rec["state_before"] == "违规拦截"
+    assert fb_rec["state_after"] == "已通过"
+    assert fb_rec["decision"] == "keep"
+
+
+def test_audit_filter_by_material_id(tmp_env):
+    """审计日志按 material_id 过滤。"""
+    from qihuang_platform.agent.compliance import engine_l2
+    from qihuang_platform.agent.compliance.router import router as compliance_router
+    from qihuang_platform.agent.compliance.audit import AuditStore
+    from qihuang_platform.gateway.deps import get_current_user, get_current_admin
+
+    engine_l2.compliance_engine.store = ComplianceStore(tmp_env["store"])
+    os.environ["COMPLIANCE_RULES_PATH"] = _RULES_PATH
+
+    import qihuang_platform.agent.compliance.router as rmod
+    rmod._audit_store = AuditStore(os.path.join(tmp_env["dir"], "audit2.jsonl"))
+
+    app = FastAPI()
+    app.middleware("http")(_set_tenant)
+    app.include_router(compliance_router, prefix="/api/v1/agent")
+    app.dependency_overrides[get_current_user] = lambda: {"sub": "u1"}
+    app.dependency_overrides[get_current_admin] = lambda: {"sub": "u1"}
+
+    client = TestClient(app)
+    # 两次 scan 不同门店
+    r1 = client.post("/api/v1/agent/compliance/scan", json={
+        "text": "包治百病", "store_id": "store_X", "material_type": "海报", "port": "wechat",
+    })
+    r2 = client.post("/api/v1/agent/compliance/scan", json={
+        "text": "最好的产品", "store_id": "store_Y", "material_type": "海报", "port": "wechat",
+    })
+    mid_x = r1.json()["data"]["material_id"]
+    mid_y = r2.json()["data"]["material_id"]
+
+    # 按 mid_x 过滤
+    r3 = client.get(f"/api/v1/agent/compliance/audit?material_id={mid_x}")
+    assert r3.status_code == 200
+    data = r3.json()["data"]
+    assert data["total"] == 2  # 全量计数
+    assert data["returned"] == 1  # 过滤后只返回 1 条
+    assert data["records"][0]["material_id"] == mid_x
+
+    # 按 action 过滤
+    r4 = client.get("/api/v1/agent/compliance/audit?action=scan")
+    assert r4.status_code == 200
+    assert r4.json()["data"]["returned"] == 2

@@ -31,12 +31,17 @@ def _parse_llm(raw: dict) -> Optional[dict]:
     if not content:
         return None
     try:
+        import json
+        import re
+        # 优先尝试剥离 markdown 代码块 ```json ... ``` 或 ``` ... ```
+        md_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL)
+        if md_match:
+            return json.loads(md_match.group(1))
         # 容错：截取首个 {...} JSON 块
         start = content.find("{")
         end = content.rfind("}")
         if start == -1 or end == -1:
             return None
-        import json
         return json.loads(content[start:end + 1])
     except Exception:
         return None

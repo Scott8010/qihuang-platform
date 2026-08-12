@@ -32,6 +32,42 @@ from qihuang_platform.agent.compliance.schema import (
 _CJK_RE = re.compile(r"[一-鿿]{2,}")
 _REGEX_META = re.compile(r"[()\[\]?*+\\{|}.^$]")
 
+# 同义词扩展表：key↔synonyms 双向匹配，任意一方出现都算命中
+# 解决纯子串匹配召回率低的问题（"疗效"匹配不到"功效"、"治病"匹配不到"治疗"）
+_SYNONYMS: dict[str, list[str]] = {
+    "疗效": ["功效", "效果", "作用"],
+    "治病": ["治疗", "医治", "诊治"],
+    "根治": ["根除", "治愈", "断根"],
+    "秘方": ["祖传秘方", "独家秘方", "绝密配方"],
+    "最好": ["最佳", "最优", "第一", "顶级"],
+    "百分百": ["100%", "百分之百", "百分之百有效"],
+    "纯天然": ["全天然", "纯自然"],
+    "无副作用": ["零副作用", "没有副作用", "无任何副作用"],
+    "速效": ["快速见效", "立竿见影", "即刻见效"],
+    "抗癌": ["防癌", "治癌", "抑制肿瘤"],
+    "减肥": ["瘦身", "减脂", "塑形"],
+    "壮阳": ["补肾壮阳", "提升性功能", "助阳"],
+}
+
+
+def _expand_synonyms(kw: str) -> list[str]:
+    """返回关键词本身 + 所有关联同义词（双向查找）。"""
+    terms = [kw]
+    for k, syns in _SYNONYMS.items():
+        if kw == k:
+            terms.extend(syns)
+        elif kw in syns:
+            terms.append(k)
+            terms.extend(syns)
+    # 去重保序
+    seen: set[str] = set()
+    out: list[str] = []
+    for t in terms:
+        if t and t not in seen:
+            seen.add(t)
+            out.append(t)
+    return out
+
 
 def extract_terms(patterns: list[str]) -> list[str]:
     """只取「字面短语」作检索词（正则含元字符则跳过，L0 仍用正则精确判定）。
@@ -182,14 +218,17 @@ class ComplianceKB:
         return len(clauses)
 
     async def retrieve(self, text: str, top_k: int = 8) -> list[ComplianceClause]:
-        """关键词打分召回（与后端无关）。"""
+        """关键词打分召回（与后端无关），支持同义词扩展提升召回率。"""
         await self._ensure()
         scored = []
         for c in (self._cache or []):
             s = 0
             for kw in c.keywords:
-                if kw and kw in text:
-                    s += 2
+                # 同义词扩展：任一同义词命中即计分（每个 keyword 只计一次）
+                for term in _expand_synonyms(kw):
+                    if term and term in text:
+                        s += 2
+                        break
             if c.category_label and c.category_label in text:
                 s += 1
             if s > 0:

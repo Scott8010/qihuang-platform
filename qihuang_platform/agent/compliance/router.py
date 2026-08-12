@@ -5,6 +5,7 @@
   POST /api/v1/agent/compliance/scan      门店送审文案 -> L0+L1+L2 三轨融合判定
   POST /api/v1/agent/compliance/feedback  人工结论回写（钉 material_id，客观真实）
   GET  /api/v1/agent/compliance/dashboard 四态看板（按门店行级隔离）
+  GET  /api/v1/agent/compliance/audit     审计日志查询（仅管理员）
 
 底层架构（老黄 2026-08-11/12 拍板「从底层搭建」）：
   - L1 合规知识底座（kb.ComplianceKB）：Neo4j 独立 label `ComplianceClause` 横向隔离
@@ -26,8 +27,18 @@ from pydantic import BaseModel, Field
 from qihuang_platform.gateway.deps import get_current_user, get_current_admin
 from qihuang_platform.gateway.response import success, error
 from qihuang_platform.agent.compliance.engine_l2 import compliance_engine
+from qihuang_platform.agent.compliance.audit import (
+    AuditStore, make_scan_audit, make_feedback_audit,
+)
+import os
 
 router = APIRouter()
+
+# 审计日志存储（与 materials.jsonl 同目录）
+_AUDIT_PATH = os.path.join(
+    os.path.dirname(__file__), "seed", "audit.jsonl"
+)
+_audit_store = AuditStore(_AUDIT_PATH)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -80,6 +91,16 @@ async def compliance_scan(
     # 附运营平台租户上下文：供 8602 侧计量/审计/跨租户汇聚，不污染引擎库
     result["tenant_id"] = tenant_id
     result["store_id"] = req.store_id
+    # 审计留痕
+    _audit_store.append(make_scan_audit(
+        operator=getattr(request.state, "user_id", "unknown"),
+        tenant_id=tenant_id,
+        store_id=req.store_id,
+        material_id=result["material_id"],
+        state=result["state"],
+        hit_count=result.get("hit_count", 0),
+        text_preview=req.text[:120],
+    ))
     return success(data=result)
 
 
@@ -91,16 +112,30 @@ async def compliance_feedback(
 ):
     """人工结论回写：钉在 scan 返回的 material_id 上，客观真实，不替门店改文案。"""
     tenant_id = getattr(request.state, "tenant_id", None)
+    # 记录变更前状态（用于审计）
+    material_before = compliance_engine.store.get(req.material_id)
+    state_before = material_before.get("state") if material_before else None
     result = await compliance_engine.feedback(
         material_id=req.material_id,
         decision=req.decision,
         action_taken=req.action_taken,
         note=req.note,
-        operator=req.operator or user.get("sub"),
+        operator=req.operator or getattr(request.state, "user_id", "unknown"),
     )
     if result is None:
         return error(code_key="NOT_FOUND", message=f"物料 {req.material_id} 不存在于引擎库")
     result["tenant_id"] = tenant_id
+    # 审计留痕
+    _audit_store.append(make_feedback_audit(
+        operator=getattr(request.state, "user_id", "unknown"),
+        tenant_id=tenant_id,
+        material_id=req.material_id,
+        state_before=state_before,
+        state_after=result["state"],
+        decision=req.decision,
+        action_taken=req.action_taken,
+        note=req.note,
+    ))
     return success(data=result)
 
 
@@ -116,3 +151,28 @@ async def compliance_dashboard(
     result = await compliance_engine.dashboard(institution_id=store_id, port=port)
     result["tenant_id"] = tenant_id
     return success(data=result)
+
+
+@router.get("/compliance/audit")
+async def compliance_audit(
+    action: Optional[str] = None,
+    material_id: Optional[str] = None,
+    operator: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+    request: Request = None,
+    user: dict = Depends(get_current_admin),
+):
+    """审计日志查询（仅管理员）：合规操作留痕，支持按操作类型/物料/操作人过滤。"""
+    records = _audit_store.query(
+        action=action,
+        material_id=material_id,
+        operator=operator,
+        limit=limit,
+        offset=offset,
+    )
+    return success(data={
+        "total": _audit_store.count(),
+        "returned": len(records),
+        "records": records,
+    })
