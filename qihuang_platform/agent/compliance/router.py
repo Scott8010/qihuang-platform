@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 
 from qihuang_platform.gateway.deps import get_current_user, get_current_admin
@@ -30,6 +31,10 @@ from qihuang_platform.agent.deps import require_agent_in_plan
 from qihuang_platform.agent.compliance.engine_l2 import compliance_engine
 from qihuang_platform.agent.compliance.audit import (
     AuditStore, make_scan_audit, make_feedback_audit,
+)
+from qihuang_platform.db.config import SessionLocal, get_db
+from qihuang_platform.living.ingest import (
+    bridge_compliance_scan, bridge_compliance_feedback,
 )
 import os
 
@@ -77,6 +82,7 @@ class ComplianceFeedbackRequest(BaseModel):
 async def compliance_scan(
     req: ComplianceScanRequest,
     request: Request,
+    db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
     _agent=Depends(require_agent_in_plan("compliance")),
 ):
@@ -93,6 +99,20 @@ async def compliance_scan(
     # 附运营平台租户上下文：供 8602 侧计量/审计/跨租户汇聚，不污染引擎库
     result["tenant_id"] = tenant_id
     result["store_id"] = req.store_id
+
+    # 活态化 B · 回路三（业务实证加权）：门店送审命中中医实体 → business_use 正加权回流图谱。
+    # 桥接失败（如 8601 解析超时）绝不阻断审核主流程，仅记日志。
+    if req.persist and result.get("aligned_entities"):
+        try:
+            bridge = await bridge_compliance_scan(
+                db, result["aligned_entities"],
+                tenant_id=tenant_id, store_id=req.store_id,
+            )
+            result["living_bridge"] = bridge
+        except Exception as e:  # 兜底：回流异常不影响审核返回
+            print("WARN: living bridge_compliance_scan failed:", e)
+            result["living_bridge"] = {"error": str(e)}
+
     # 审计留痕
     _audit_store.append(make_scan_audit(
         operator=getattr(request.state, "user_id", "unknown"),
@@ -110,6 +130,7 @@ async def compliance_scan(
 async def compliance_feedback(
     req: ComplianceFeedbackRequest,
     request: Request,
+    db: Session = Depends(get_db),
     user: dict = Depends(get_current_admin),
     _agent=Depends(require_agent_in_plan("compliance")),
 ):
@@ -128,6 +149,22 @@ async def compliance_feedback(
     if result is None:
         return error(code_key="NOT_FOUND", message=f"物料 {req.material_id} 不存在于引擎库")
     result["tenant_id"] = tenant_id
+
+    # 活态化 B · 回路三（业务实证加权）：人工结论 override/escalate（疑错知识被拦）
+    # → expert_reject 负加权回流图谱，打通「审核发现的错知识」压低其置信度。
+    # 桥接失败绝不阻断审核主流程，仅记日志。
+    store_id = (material_before or {}).get("institution_id")
+    entities = (material_before or {}).get("aligned_entities") or []
+    try:
+        bridge = await bridge_compliance_feedback(
+            db, entities, req.decision,
+            tenant_id=tenant_id, store_id=store_id,
+        )
+        result["living_bridge"] = bridge
+    except Exception as e:  # 兜底：回流异常不影响审核返回
+        print("WARN: living bridge_compliance_feedback failed:", e)
+        result["living_bridge"] = {"error": str(e)}
+
     # 审计留痕
     _audit_store.append(make_feedback_audit(
         operator=getattr(request.state, "user_id", "unknown"),
