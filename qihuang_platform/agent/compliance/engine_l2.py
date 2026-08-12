@@ -52,18 +52,20 @@ def _find_rules_dir() -> str | None:
 
     搜索顺序：
     1. 环境变量 COMPLIANCE_RULES_PATH（最高优先级）
-    2. 项目根目录 hb-compliance-guard/
-    3. 服务器部署路径 /root/qihuang_platform/hb-compliance-guard/
-    4. 本地开发路径（兜底）
+    2. 本仓库内置 guard/ 目录（随仓库提交，CI 可用）
+    3. 项目根目录 hb-compliance-guard/（向后兼容老部署）
+    4. 服务器部署路径 /root/qihuang_platform/hb-compliance-guard/
+    5. 本地开发路径（兜底）
     """
     env_path = os.getenv("COMPLIANCE_RULES_PATH")
     candidates: list[str] = []
     if env_path:
         candidates.append(env_path)
     candidates.extend([
-        os.path.join(_HERE, "..", "..", "..", "hb-compliance-guard"),       # 项目根
-        "/root/qihuang_platform/hb-compliance-guard",                        # 服务器
-        r"C:/Users/Administrator/WorkBuddy/HealthBridge/hb-compliance-guard", # 本地开发
+        os.path.join(_HERE, "guard"),                                          # 仓库内置（CI/新部署）
+        os.path.join(_HERE, "..", "..", "..", "hb-compliance-guard"),       # 项目根（旧布局兼容）
+        "/root/qihuang_platform/hb-compliance-guard",                           # 服务器旧路径
+        r"C:/Users/Administrator/WorkBuddy/HealthBridge/hb-compliance-guard",   # 本地开发
     ])
     for d in candidates:
         if d and os.path.isfile(os.path.join(d, "rules.py")):

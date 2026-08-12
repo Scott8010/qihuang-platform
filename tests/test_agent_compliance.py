@@ -31,7 +31,11 @@ _SEED_SRC = os.path.join(
     "compliance", "seed", "compliance_clauses.jsonl",
 )
 _SEED_SRC = os.path.abspath(_SEED_SRC)
-_RULES_PATH = r"C:/Users/Administrator/WorkBuddy/HealthBridge/hb-compliance-guard/rules.py"
+_RULES_DIR = os.path.join(
+    os.path.dirname(__file__), "..", "qihuang_platform", "agent",
+    "compliance", "guard",
+)
+_RULES_DIR = os.path.abspath(_RULES_DIR)
 
 
 @pytest.fixture
@@ -225,7 +229,7 @@ def test_router_scan_and_feedback(tmp_env):
 
     # 让单例用临时存储，避免污染种子目录
     engine_l2.compliance_engine.store = ComplianceStore(tmp_env["store"])
-    os.environ["COMPLIANCE_RULES_PATH"] = _RULES_PATH
+    os.environ["COMPLIANCE_RULES_PATH"] = _RULES_DIR
 
     app = FastAPI()
     app.middleware("http")(_set_tenant)
@@ -264,7 +268,7 @@ def test_router_feedback_requires_admin(tmp_env):
     from qihuang_platform.gateway.deps import get_current_admin as real_admin
 
     engine_l2.compliance_engine.store = ComplianceStore(tmp_env["store"])
-    os.environ["COMPLIANCE_RULES_PATH"] = _RULES_PATH
+    os.environ["COMPLIANCE_RULES_PATH"] = _RULES_DIR
 
     app = FastAPI()
     app.middleware("http")(_set_tenant)
@@ -304,7 +308,7 @@ def test_audit_scan_and_feedback(tmp_env):
     from qihuang_platform.gateway.deps import get_current_user, get_current_admin
 
     engine_l2.compliance_engine.store = ComplianceStore(tmp_env["store"])
-    os.environ["COMPLIANCE_RULES_PATH"] = _RULES_PATH
+    os.environ["COMPLIANCE_RULES_PATH"] = _RULES_DIR
 
     # 用临时审计文件
     import qihuang_platform.agent.compliance.router as rmod
@@ -360,7 +364,7 @@ def test_audit_filter_by_material_id(tmp_env):
     from qihuang_platform.gateway.deps import get_current_user, get_current_admin
 
     engine_l2.compliance_engine.store = ComplianceStore(tmp_env["store"])
-    os.environ["COMPLIANCE_RULES_PATH"] = _RULES_PATH
+    os.environ["COMPLIANCE_RULES_PATH"] = _RULES_DIR
 
     import qihuang_platform.agent.compliance.router as rmod
     rmod._audit_store = AuditStore(os.path.join(tmp_env["dir"], "audit2.jsonl"))
