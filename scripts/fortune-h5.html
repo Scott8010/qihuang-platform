@@ -426,13 +426,44 @@ async function doArchive(){
       bars += `<div class="bar"><div class="fill"><i style="width:${p}%"></i></div><div class="n wx wx-${w}">${w} ${n}</div></div>`; });
     bars += '</div>';
     h += `<div class="block"><div class="bt">五行强弱</div>${bars}</div>`;
+    // ★ 增厚展示：纳音 / 十二长生 / 旬空 / 调候 / 特殊格局 / 完整四柱十神
+    if(d.nayin){
+      const _nm=["年柱","月柱","日柱","时柱"];
+      h += '<div class="block"><div class="bt">四柱纳音</div><div style="display:flex;flex-wrap:wrap;gap:8px">'
+         + _nm.map(n=>`<span style="font-size:13px"><b>${n[0]}</b> ${esc(d.nayin[n]||'-')}</span>`).join('')
+         + '</div></div>';
+    }
+    if(d.changsheng){
+      const _cm=["年支","月支","日支","时支"];
+      h += `<div class="block"><div class="bt">十二长生（日主${esc(d.day_master_wx||'')}）</div><div style="display:flex;flex-wrap:wrap;gap:8px">`
+         + _cm.map(n=>`<span style="font-size:13px"><b>${n[0]}</b> ${esc(d.changsheng[n]||'-')}</span>`).join('')
+         + '</div></div>';
+    }
+    if(d.xunkong && d.xunkong.length){
+      h += `<div class="block"><div class="bt">旬空</div><div class="muted">${esc(d.xunkong.join('、'))} 空亡</div></div>`;
+    }
+    if(d.tiaohou && d.tiaohou.length){
+      h += '<div class="block"><div class="bt">调候喜用</div><div>'+pills(d.tiaohou,'good')+'</div></div>';
+    }
+    if(d.special){
+      h += `<div class="block"><div class="bt">特殊格局</div><span class="badge gold">${esc(d.special)}</span></div>`;
+    }
+    if(d.tenshen_full){
+      const _ord=["年柱","月柱","日柱","时柱"];
+      let _tt='<table class="ten-tb">';
+      _ord.forEach(k=>{ const _c=d.tenshen_full[k]||{};
+        _tt+=`<tr><td class="k">${k}</td><td class="v"><span class="ts">${esc(_c.干||'')}</span>（干） · <span class="ts">${esc(_c.支||'')}</span>（支） · ${esc(_c.纳音||'')}</td></tr>`;
+      });
+      _tt+='</table>';
+      h += `<div class="block"><div class="bt">完整四柱十神</div>${_tt}</div>`;
+    }
     const bi = d.bazi_interp||{};
     if(bi.nature){
       h += `<div class="block"><div class="bt">性格倾向</div><div class="nature">${esc(bi.nature)}</div>`;
       if(bi.wuxing_read) h += `<div class="muted" style="margin-top:6px">${esc(bi.wuxing_read)}</div>`;
       h += '</div>';
     }
-    const ten = d.tenshen||{}; const tmean = bi.tenshen_mean||{};
+    const tmean = bi.tenshen_mean||{};
     if(Object.keys(ten).length){
       let tt = '<table class="ten-tb">';
       Object.keys(ten).forEach(k=>{ tt += `<tr><td class="k">${k}</td><td class="v"><span class="ts">${ten[k]}</span>${esc(tmean[k]||'')}</td></tr>`; });
@@ -595,6 +626,30 @@ async function doReport(){
       h += `<div class="kv"><b>重点五行</b><span>${(d.advice.重点五行||[]).join('、')}</span></div>`;
       h += `<div class="kv"><b>宜</b><span>${esc(d.advice.宜)}</span></div>`;
       h += `<div class="kv"><b>忌</b><span>${esc(d.advice.忌)}</span></div>`;
+    }
+    if(d.bazi_base){
+      const bb = d.bazi_base;
+      let bx = '<div class="block" style="margin-top:8px"><div class="bt">八字底妆</div>';
+      if(bb.nayin){
+        const _nm=["年","月","日","时"];
+        bx += '<div style="display:flex;flex-wrap:wrap;gap:8px">'
+            + _nm.map((n,i)=>`<span style="font-size:13px"><b>${n}</b> ${esc(bb.nayin[["年柱","月柱","日柱","时柱"][i]]||'-')}</span>`).join('')
+            + '</div>';
+      }
+      if(bb.changsheng){
+        const _cm=["年","月","日","时"];
+        bx += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">'
+            + _cm.map((n,i)=>`<span style="font-size:13px"><b>${n}支</b> ${esc(bb.changsheng[["年支","月支","日支","时支"][i]]||'-')}</span>`).join('')
+            + '</div>';
+      }
+      if(bb.xunkong && bb.xunkong.length){
+        bx += `<div class="muted" style="margin-top:4px">旬空：${esc(bb.xunkong.join('、'))} 空亡</div>`;
+      }
+      if(bb.special){
+        bx += `<div style="margin-top:4px"><span class="badge gold">${esc(bb.special)}</span></div>`;
+      }
+      bx += '</div>';
+      h += bx;
     }
     show('o-report', h);
   }catch(e){ show('o-report', '错误：'+esc(e.message), true); }

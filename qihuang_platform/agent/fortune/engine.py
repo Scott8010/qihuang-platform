@@ -62,6 +62,38 @@ WX_TEA = {
 }
 WX_NUMBER = {"水": [1, 6], "火": [2, 7], "木": [3, 8], "金": [4, 9], "土": [5, 0]}
 
+# ── 排盘辅助数据 ───────────────────────────────────────────────
+# 六十甲子纳音（干支 → 纳音名，末字即纳音五行）
+_NAYIN_PAIRS = [
+    ("甲子", "乙丑", "海中金"), ("丙寅", "丁卯", "炉中火"), ("戊辰", "己巳", "大林木"),
+    ("庚午", "辛未", "路旁土"), ("壬申", "癸酉", "剑锋金"), ("甲戌", "乙亥", "山头火"),
+    ("丙子", "丁丑", "涧下水"), ("戊寅", "己卯", "城头土"), ("庚辰", "辛巳", "白蜡金"),
+    ("壬午", "癸未", "杨柳木"), ("甲申", "乙酉", "泉中水"), ("丙戌", "丁亥", "屋上土"),
+    ("戊子", "己丑", "霹雳火"), ("庚寅", "辛卯", "松柏木"), ("壬辰", "癸巳", "长流水"),
+    ("甲午", "乙未", "沙中金"), ("丙申", "丁酉", "山下火"), ("戊戌", "己亥", "平地木"),
+    ("庚子", "辛丑", "壁上土"), ("壬寅", "癸卯", "金箔金"), ("甲辰", "乙巳", "覆灯火"),
+    ("丙午", "丁未", "天河水"), ("戊申", "己酉", "大驿土"), ("庚戌", "辛亥", "钗钏金"),
+    ("壬子", "癸丑", "桑柘木"), ("甲寅", "乙卯", "大溪水"), ("丙辰", "丁巳", "沙中土"),
+    ("戊午", "己未", "天上火"), ("庚申", "辛酉", "石榴木"), ("壬戌", "癸亥", "大海水"),
+]
+NAYIN = {g: name for a, b, name in _NAYIN_PAIRS for g in (a, b)}
+
+# 十二长生：五行长生起步地支（土随水，长生在申）
+_STAGES = ["长生", "沐浴", "冠带", "临官", "帝旺", "衰", "病", "死", "墓", "绝", "胎", "养"]
+_CHANGSHENG_START = {"木": "亥", "火": "寅", "金": "巳", "水": "申", "土": "申"}
+CHANGSHENG = {}
+for _wx, _start in _CHANGSHENG_START.items():
+    _s = ZHI.index(_start)
+    CHANGSHENG[_wx] = {ZHI[(_s + i) % 12]: _STAGES[i] for i in range(12)}
+
+# 旬空：60 甲子按旬首定空亡两支
+_60 = [GAN[i % 10] + ZHI[i % 12] for i in range(60)]
+_XUN_KONG = {
+    "甲子": ["戌", "亥"], "甲戌": ["申", "酉"], "甲申": ["午", "未"],
+    "甲午": ["辰", "巳"], "甲辰": ["寅", "卯"], "甲寅": ["子", "丑"],
+}
+XUNKONG = {_60[i]: _XUN_KONG[_60[(i // 10) * 10]] for i in range(60)}
+
 # 八卦（上/下卦三爻，阳=1 阴=0；bit 顺序：初爻..上爻）
 TRI_BITS = {"111": "乾", "110": "兑", "101": "离", "100": "震",
             "011": "巽", "010": "坎", "001": "艮", "000": "坤"}
@@ -176,6 +208,19 @@ def _ke_wo(wx: str) -> str:
         if v == wx:
             return k
     return ""
+
+
+def _tiaohou(month_zhi: str) -> List[str]:
+    """调候：依月支寒暖燥湿给喜用五行（传统调候简法，供参考）。"""
+    if month_zhi in ("亥", "子", "丑"):
+        return ["火"]                       # 寒水局，调候用暖
+    if month_zhi in ("巳", "午", "未"):
+        return ["水"]                       # 燥热局，调候用润
+    if month_zhi in ("寅", "卯", "辰"):
+        return ["火"]                       # 春木，调候用火泄秀暖局
+    if month_zhi in ("申", "酉", "戌"):
+        return ["水"]                       # 秋金，调候用水泄秀润局
+    return []
 
 
 def shishen(day_gan: str, target_gan: str) -> str:
@@ -478,11 +523,18 @@ def bazi_profile(pillars) -> Dict:
     day_gan = day[0]
     dwx = GAN_WX[day_gan]
 
-    # 五行统计（天干 + 地支本气）
+    # 五行统计（天干 + 地支本气，保持原口径供象义复用）
     count = {w: 0 for w in WX}
     for p in ps:
         count[GAN_WX[p[0]]] += 1
         count[ZHI_BEN[p[1]]] += 1
+    # 五行加权（天干1.0 + 地支藏干加权：本气1.0 / 中气0.5 / 余气0.3）
+    weight = {w: 0.0 for w in WX}
+    _HIDE_W = [1.0, 0.5, 0.3]
+    for p in ps:
+        weight[GAN_WX[p[0]]] += 1.0
+        for k, hg in enumerate(ZHI_HIDDEN[p[1]]):
+            weight[GAN_WX[hg]] += _HIDE_W[min(k, 2)]
 
     # 十神（年干、月干、时干相对日干；日支本气亦列）
     tenshen = {
@@ -490,6 +542,13 @@ def bazi_profile(pillars) -> Dict:
         "月干": shishen(day_gan, month[0]),
         "时干": shishen(day_gan, hour[0]),
         "日支": shishen(day_gan, ZHI_BEN_GAN[day[1]]),
+    }
+    # 完整四柱十神（干 + 支本气 + 纳音）
+    tenshen_full = {
+        "年柱": {"干": shishen(day_gan, year[0]), "支": shishen(day_gan, ZHI_BEN_GAN[year[1]]), "纳音": NAYIN.get(year)},
+        "月柱": {"干": shishen(day_gan, month[0]), "支": shishen(day_gan, ZHI_BEN_GAN[month[1]]), "纳音": NAYIN.get(month)},
+        "日柱": {"干": "日主", "支": shishen(day_gan, ZHI_BEN_GAN[day[1]]), "纳音": NAYIN.get(day)},
+        "时柱": {"干": shishen(day_gan, hour[0]), "支": shishen(day_gan, ZHI_BEN_GAN[hour[1]]), "纳音": NAYIN.get(hour)},
     }
 
     # 身强身弱：得令 / 得地 / 得势 三项加权（传统旺衰法）
@@ -531,6 +590,20 @@ def bazi_profile(pillars) -> Dict:
     xi = list(dict.fromkeys(xi))
     ji = list(dict.fromkeys(ji))
 
+    # 纳音（四柱）
+    nayin = {nm: NAYIN.get(p) for nm, p in
+             zip(["年柱", "月柱", "日柱", "时柱"], ps)}
+    # 十二长生：以日主五行查四支所落阶段
+    changsheng = {nm: CHANGSHENG[dwx].get(p[1]) for nm, p in
+                  zip(["年支", "月支", "日支", "时支"], ps)}
+    # 旬空：以日柱定空亡
+    xunkong = XUNKONG.get(day)
+    # 调候：依月令寒暖燥湿
+    tiaohou = _tiaohou(month[1])
+    # 从格判定（极旺 / 极弱）
+    special = "从强格（专旺，顺其势）" if score >= 6.0 else (
+        "从弱格（弃命从他）" if score <= 0.0 else None)
+
     interp = _interpret_bazi(dwx, xi, tenshen, score, strength, count)
     return {
         "pillars": ps,
@@ -543,6 +616,14 @@ def bazi_profile(pillars) -> Dict:
         "favorable": xi,     # 喜用五行
         "unfavorable": ji,   # 忌五行
         "bazi_interp": interp,
+        "wuxing_weight": {w: round(v, 1) for w, v in weight.items()},  # 藏干加权五行
+        "tenshen_full": tenshen_full,        # 完整四柱十神
+        "nayin": nayin,                      # 四柱纳音
+        "changsheng": changsheng,            # 四支十二长生
+        "xunkong": xunkong,                  # 旬空两支
+        "tiaohou": tiaohou,                  # 调候喜用
+        "special": special,                  # 从格（None/从强/从弱）
+        "strength_level": special or strength,
     }
 
 
@@ -1118,6 +1199,16 @@ def year_report(pillars, year: int = None) -> Dict:
         "strength": prof["strength"],
         "favorable": fav,
         "unfavorable": prof["unfavorable"],
+        "bazi_base": {
+            "wuxing_weight": prof["wuxing_weight"],
+            "tenshen_full": prof["tenshen_full"],
+            "nayin": prof["nayin"],
+            "changsheng": prof["changsheng"],
+            "xunkong": prof["xunkong"],
+            "tiaohou": prof["tiaohou"],
+            "special": prof["special"],
+            "strength_level": prof["strength_level"],
+        },
         "liunian_relation": rel,
         "advice": {
             "重点五行": advice_wx or fav,
