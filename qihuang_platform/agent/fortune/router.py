@@ -46,11 +46,16 @@ async def fortune_archive(
     user: dict = Depends(get_current_user),
     _agent=Depends(require_agent_in_plan("fortune")),
 ):
-    """四柱建档：排盘 + 喜用神，钉在 user_id 上（幂等覆盖）。"""
+    """四柱建档：排盘 + 喜用神，钉在 user_id 上（幂等覆盖）。四柱或公历生日二选一。"""
     try:
-        prof = engine.bazi_profile(req.pillars)
-    except ValueError as e:
+        if req.birth:
+            b = req.birth
+            prof = engine.bazi_profile_from_birth(b["date"], int(b.get("hour", 0)))
+        else:
+            prof = engine.bazi_profile(req.pillars)
+    except (ValueError, KeyError, TypeError) as e:
         return error(code_key="BAD_PILLARS", message=str(e))
+    prof["birth"] = req.birth
     material_key = f"fortune:archive:{req.user_id}"
     material_id = make_material_id(material_key)
     prof["kind"] = "archive"

@@ -123,6 +123,105 @@ def shishen(day_gan: str, target_gan: str) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════
+# 干支历换算（公历生日 → 四柱）
+# ═══════════════════════════════════════════════════════════════
+def _zhi_num(zhi: str) -> int:
+    """地支序号 子1…亥12。"""
+    return ZHI.index(zhi) + 1
+
+
+# 寿星公式：12 节（月令起点）在 2000-2099 的世纪常数 C
+# 顺序：小寒 / 立春 / 惊蛰 / 清明 / 立夏 / 芒种 / 小暑 / 立秋 / 白露 / 寒露 / 立冬 / 大雪
+_SOLAR_C = [5.4055, 3.87, 5.63, 4.81, 5.52, 5.678,
+            7.108, 7.5, 7.646, 8.318, 7.438, 7.18]
+# 12 节对应的月支（起点）：小寒起丑月 … 大雪起子月
+_SOLAR_BRANCH = ["丑", "寅", "卯", "辰", "巳", "午",
+                 "未", "申", "酉", "戌", "亥", "子"]
+
+
+def _solar_jie(year: int, idx: int) -> datetime.date:
+    """第 idx 个节（0=小寒, 1=立春 …）在 year 的日期（寿星公式，2000-2099 近似）。"""
+    y = year % 100
+    day = int(y * 0.2422 + _SOLAR_C[idx]) - (y - 1) // 4
+    month = idx + 1                      # 小寒1月、立春2月 …
+    return datetime.date(year, month, max(1, min(day, 31)))
+
+
+def _month_branch(d: datetime.date) -> str:
+    """按 12 节 定月支：取「不晚于 d 的最后一个节」所起的月。"""
+    anchors = []
+    for yy in (d.year - 1, d.year, d.year + 1):
+        for i, br in enumerate(_SOLAR_BRANCH):
+            anchors.append((_solar_jie(yy, i), br))
+    anchors.sort()
+    br = "子"
+    for dt, b in anchors:
+        if dt <= d:
+            br = b
+        else:
+            break
+    return br
+
+
+def _solar_month_seq(d: datetime.date) -> int:
+    """节气月序号 寅=1 … 丑=12（梅花易数用）。"""
+    return ((_zhi_num(_month_branch(d)) - 3) % 12) + 1
+
+
+def _wuhu_dun(year_gan: str) -> int:
+    """五虎遁：年干 → 寅月（月支序1）天干序号。甲己=丙(2) 乙庚=戊(4) 丙辛=庚(6) 丁壬=壬(8) 戊癸=甲(0)。"""
+    return {"甲": 2, "己": 2, "乙": 4, "庚": 4, "丙": 6, "辛": 6,
+            "丁": 8, "壬": 8, "戊": 0, "癸": 0}[year_gan]
+
+
+def _wushu_dun(day_gan: str) -> int:
+    """五鼠遁：日干 → 子时（时支序1）天干序号。甲己=甲(0) 乙庚=丙(2) 丙辛=戊(4) 丁壬=庚(6) 戊癸=壬(8)。"""
+    return {"甲": 0, "己": 0, "乙": 2, "庚": 2, "丙": 4, "辛": 4,
+            "丁": 6, "壬": 6, "戊": 8, "癸": 8}[day_gan]
+
+
+def _hour_zhi(hour: int) -> str:
+    """时辰地支：23→子，0/1→子，2/3→丑 …"""
+    if hour == 23:
+        return "子"
+    return ZHI[(hour // 2) % 12]
+
+
+def year_pillar(d: datetime.date) -> str:
+    """年柱：以立春为界切换。"""
+    lichun = _solar_jie(d.year, 1)              # 立春 idx=1
+    y = d.year if d >= lichun else d.year - 1
+    return year_ganzhi(y)
+
+
+def month_pillar(d: datetime.date) -> str:
+    """月柱：节气月支 + 五虎遁定月干。"""
+    br = _month_branch(d)
+    seq = _solar_month_seq(d)                    # 寅1…丑12（月序）
+    stem_idx = (_wuhu_dun(year_pillar(d)[0]) + (seq - 1)) % 10
+    return GAN[stem_idx] + br
+
+
+def hour_pillar(d: datetime.date, hour: int) -> str:
+    """时柱：时辰地支 + 五鼠遁定时干。"""
+    hz = _hour_zhi(hour)
+    seq = _zhi_num(hz)                           # 子1…亥12
+    stem_idx = (_wushu_dun(day_ganzhi(d)[0]) + (seq - 1)) % 10
+    return GAN[stem_idx] + hz
+
+
+def bazi_from_birth(date_str, hour: int = 0) -> str:
+    """公历生日（'YYYY-MM-DD' 或 date）→ 四柱 '年 月 日 时'。"""
+    d = datetime.date.fromisoformat(date_str) if isinstance(date_str, str) else date_str
+    return " ".join([year_pillar(d), month_pillar(d), day_ganzhi(d), hour_pillar(d, hour)])
+
+
+def bazi_profile_from_birth(date_str, hour: int = 0) -> Dict:
+    """公历生日直接出命盘（便捷封装）。"""
+    return bazi_profile(bazi_from_birth(date_str, hour))
+
+
+# ═══════════════════════════════════════════════════════════════
 # 八字排盘
 # ═══════════════════════════════════════════════════════════════
 def bazi_profile(pillars) -> Dict:
@@ -145,24 +244,34 @@ def bazi_profile(pillars) -> Dict:
         "日支": shishen(day_gan, ZHI_BEN_GAN[day[1]]),
     }
 
-    # 身强身弱打分（传统经验启发式，可随样本调参）
+    # 身强身弱：得令 / 得地 / 得势 三项加权（传统旺衰法）
     score = 0.0
-    month_zhi_wx = ZHI_BEN[month[1]]
-    if month_zhi_wx == dwx or month_zhi_wx == _sheng_wo(dwx):
-        score += 2.0          # 得令（比劫月令 / 印月令）
-    elif month_zhi_wx in (SHENG[dwx], KE[dwx], _ke_wo(dwx)):
-        score -= 1.0          # 失令（食伤/财/官杀月令，泄耗日主）
-    # 根：日支为日主自坐强根权重最高，余支本气次之，藏干余气轻
+    mwx = ZHI_BEN[month[1]]
+    if mwx == dwx:
+        score += 2.5                       # 比劫月令（旺）
+    elif mwx == _sheng_wo(dwx):
+        score += 2.0                       # 印月令（相）
+    elif mwx in (SHENG[dwx], KE[dwx]):
+        score -= 0.5                       # 食伤/财月令（休囚）
+    elif mwx == _ke_wo(dwx):
+        score -= 1.5                       # 官杀月令（死）
+    # 得地：地支藏干中有日主之根；本气根最重，日支(自坐)再加权
     for i, p in enumerate(ps):
-        if ZHI_BEN[p[1]] == dwx:
-            score += 3.0 if i == 2 else 1.5     # 日支(座位)强根
-        elif dwx in ZHI_HIDDEN[p[1]][1:]:
-            score += 0.5
-    # 帮身天干（比肩/劫财透干）
+        hidden = ZHI_HIDDEN[p[1]]
+        w = 0.0
+        if GAN_WX[hidden[0]] == dwx:
+            w = 2.0                        # 本气根
+        elif dwx in [GAN_WX[x] for x in hidden[1:]]:
+            w = 1.0                        # 中气/余气根
+        if w > 0:
+            score += w * (1.5 if i == 2 else 1.0)
+    # 得势：天干比劫 / 印 透出
     for g in (year[0], month[0], hour[0]):
         if GAN_WX[g] == dwx:
-            score += 1.0
-    strength = "身强" if score >= 3 else ("身弱" if score <= 1.5 else "中和")
+            score += 1.0                   # 比劫透干
+        elif GAN_WX[g] == _sheng_wo(dwx):
+            score += 0.5                   # 印透干
+    strength = "身强" if score >= 3.5 else ("身弱" if score <= 1.5 else "中和")
 
     # 喜用神
     if strength == "身强":
@@ -208,12 +317,45 @@ def _lines_to_hex(lines: List[int]):
     return name_of(ben), name_of(bian), dyn
 
 
-def liuyao(method: str = "coin", question: str = "", seed_key: str = None) -> Dict:
+# 先天八卦数（梅花易数）：1乾 2兑 3离 4震 5巽 6坎 7艮 8坤
+_NUM_TRI = {1: "乾", 2: "兑", 3: "离", 4: "震", 5: "巽", 6: "坎", 7: "艮", 8: "坤"}
+# 卦名 → 三爻位（初..上，阳1阴0），配合 TRI_IDX 使用
+_TRI_BITS = {"乾": "111", "兑": "110", "离": "101", "震": "100",
+             "巽": "011", "坎": "010", "艮": "001", "坤": "000"}
+
+
+def _meihua_time(when: datetime.datetime) -> List[int]:
+    """梅花易数时间起卦：年支序 + 节气月序 + 日数 → 上/下卦；+ 时数 → 动爻。
+    以真实时辰干支推演，确定性（同刻同卦），非随机。
+    """
+    ynum = _zhi_num(year_pillar(when.date())[1])
+    mseq = _solar_month_seq(when.date())
+    dnum = when.day
+    hnum = _zhi_num(_hour_zhi(when.hour))
+    s = ynum + mseq + dnum
+    up = (s % 8) or 8
+    down = ((s + hnum) % 8) or 8
+    dong = (s + hnum) % 6 or 6
+    lo = [int(c) for c in _TRI_BITS[_NUM_TRI[down]]]   # 下卦（内）初..上
+    up_bits = [int(c) for c in _TRI_BITS[_NUM_TRI[up]]]  # 上卦（外）初..上
+    ben = lo + up_bits                                  # 自下而上 6 位
+    lines = []
+    for i in range(6):
+        old = (i + 1) == dong
+        lines.append(9 if (ben[i] == 1 and old) else
+                     6 if (ben[i] == 0 and old) else
+                     7 if ben[i] == 1 else 8)
+    return lines
+
+
+def liuyao(method: str = "coin", question: str = "", seed_key: str = None,
+           when: datetime.datetime = None) -> Dict:
     if method == "time":
-        # 时间卦：以当前时辰干支扰动随机种子，保证"同时问近似同局"
-        now = datetime.datetime.now()
-        random.seed((now.year * 372 + now.month * 31 + now.day) ^ (now.hour * 7))
-    lines = [_coin() for _ in range(6)]
+        # 时间卦：以真实时辰干支起卦（确定性），非随机
+        when = when or datetime.datetime.now()
+        lines = _meihua_time(when)
+    else:
+        lines = [_coin() for _ in range(6)]
     ben, bian, dyn = _lines_to_hex(lines)
     yang_line = [v in (7, 9) for v in lines]
     result = {

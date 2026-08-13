@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 
 class ArchiveRequest(BaseModel):
     user_id: str = Field(..., description="用户标识（钉业务实体主键）")
-    pillars: str = Field(..., description="四柱，空格分隔：年柱 月柱 日柱 时柱，如 '庚申 丙戌 丁巳 辛丑'")
+    pillars: Optional[str] = Field(None, description="四柱，空格分隔：年柱 月柱 日柱 时柱，如 '庚申 丙戌 丁巳 辛丑'；与 birth 二选一")
+    birth: Optional[dict] = Field(None, description="公历生日建档：{'date':'YYYY-MM-DD','hour':0-23}；与 pillars 二选一")
     name: Optional[str] = Field(None, description="昵称/备注")
     persist: bool = Field(True, description="是否真实入库")
 
