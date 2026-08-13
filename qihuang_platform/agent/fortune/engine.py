@@ -692,11 +692,155 @@ def _magnetic_declination(lat: float, lon: float, year: int) -> float:
     return round(decl, 2)
 
 
-def geo_fengshui(orientation, gps: Dict = None, floor_plan: str = None) -> Dict:
-    """风水堪舆（看空间）规则引擎：
-      坐向(罗盘/24山) → 宅卦(八宅) → 四吉四凶方；叠加九宫绝对方位与 GPS 峦头/磁偏角校正。
+# 八卦 ↔ 家庭成员/人事含义（缺角、压凶时研判用）
+_BAGUA_MEANING = {
+    "坎": "中男·事业·肾", "离": "中女·名声·心",
+    "震": "长男·进取·肝", "巽": "长女·文昌·胆",
+    "乾": "男主·权威·头", "坤": "女主·包容·腹",
+    "艮": "少男·稳定·脾胃", "兑": "少女·口才·肺",
+}
 
-      注：户型图视觉识别属多模态范畴，本纯规则引擎仅处理坐向/GPS 与方位理气。
+
+def _analyze_floor_plan(fp, ji: List[str], xiong: List[str]) -> Dict:
+    """户型图/实景结构化峦头（形法）分析。
+
+    入参 fp：
+      - None                      → 未提供，仅给坐向理气通用建议
+      - str（图片URL/备注）        → 多模态视觉解析占位钩子
+      - dict（结构化户型要素）      → 真正分析
+        字段（中文键，前后端对齐）：
+          '门向'/'door_dir'      大门开向方位
+          '主卧方'/'master_dir'  主卧方位
+          '厨房方'/'kitchen_dir' 厨房/灶台方位
+          '卫生间方'/'toilet_dir'卫生间方位
+          '缺角'/'missing'       缺角方位列表
+          '横梁'/'beam'          是否横梁压顶
+          '穿堂'/'through'       是否门对窗穿堂煞
+    返回 {provided, mode, findings[], summary}
+    """
+    if fp is None:
+        return {"provided": False,
+                "note": "未提供户型图或实地信息，仅按坐向理气给通用建议。"}
+    if isinstance(fp, str):
+        return {"provided": True, "mode": "image_pending",
+                "note": "图片/链接已接收，等待视觉模型解析为结构化户型；"
+                        "当前仅按坐向理气叠加结论。",
+                "raw_hint": fp[:120]}
+    if not isinstance(fp, dict):
+        return {"provided": True, "mode": "unknown",
+                "note": "户型信息格式无法识别，请传结构化 dict 或图片引用字符串。"}
+
+    def _grade(d):
+        if d in ji:
+            return "吉"
+        if d in xiong:
+            return "凶"
+        return "中"
+
+    findings = []
+
+    # 大门 —— 纳气之口
+    dd = fp.get("门向") or fp.get("door_dir")
+    if dd:
+        tri = _DIR_TO_TRIGRAM.get(dd)
+        if tri:
+            g = _grade(dd)
+            findings.append({
+                "项": "大门", "方位": dd, "卦": tri, "评级": f"{g}方",
+                "建议": ("大门纳吉气，利纳财进气，保持明亮整洁即可。"
+                         if g == "吉" else
+                         "大门落凶方，宜设玄关/屏风缓冲，门内挂天然葫芦化煞。"
+                         if g == "凶" else
+                         "大门落中平方位，正常使用、保持通畅明亮即可。"),
+            })
+
+    # 主卧 —— 人休养之所，宜吉
+    md = fp.get("主卧方") or fp.get("master_dir")
+    if md:
+        tri = _DIR_TO_TRIGRAM.get(md)
+        if tri:
+            g = _grade(md)
+            findings.append({
+                "项": "主卧", "方位": md, "卦": tri, "评级": f"{g}方",
+                "建议": ("主卧在吉方，利于休养与夫妻感情。"
+                         if g == "吉" else
+                         "主卧落凶方，宜用柔和灯光/浅色化解，床头避开凶位尖角。"
+                         if g == "凶" else
+                         "主卧落中平方位，注意安静与通风即可。"),
+            })
+
+    # 厨房（火）—— 宜在凶方以火压凶，忌在吉方泄吉
+    kd = fp.get("厨房方") or fp.get("kitchen_dir")
+    if kd:
+        tri = _DIR_TO_TRIGRAM.get(kd)
+        if tri:
+            g = _grade(kd)
+            findings.append({
+                "项": "厨房/灶台", "方位": kd, "卦": tri,
+                "评级": ("宜·凶方镇火" if g == "凶" else
+                         "忌·泄吉气" if g == "吉" else "中"),
+                "建议": ("厨房在凶方可火压凶，尚可；注意灶台远离水龙头，以黄/棕调和水火。"
+                         if g == "凶" else
+                         "厨房在吉方易火克泄吉位，建议多用土色(黄/棕)中和并保持通风。"
+                         if g == "吉" else
+                         "厨房落中平方位，正常使用，注意水火分隔。"),
+            })
+
+    # 卫生间（污）—— 宜在凶方镇凶，忌在吉方/中宫
+    td = fp.get("卫生间方") or fp.get("toilet_dir")
+    if td:
+        tri = _DIR_TO_TRIGRAM.get(td)
+        if tri:
+            g = _grade(td)
+            extra = "尤忌压中宫(房屋中心)，主全家气场紊乱。" if td == "中" else ""
+            findings.append({
+                "项": "卫生间", "方位": td, "卦": tri,
+                "评级": ("宜·镇凶" if g == "凶" else
+                         "忌·污泄吉" if g == "吉" else "中"),
+                "建议": ("卫生间在凶方以污镇凶，尚可；保持干燥、常关马桶盖。"
+                         if g == "凶" else
+                         "卫生间在吉方易污秽泄吉气，宜加强排风、挂天然葫芦/盐灯净化。"
+                         if g == "吉" else
+                         "卫生间落中平方位，保持洁净即可。") + extra,
+            })
+
+    # 缺角 —— 对应卦位成员/人事偏弱
+    mc = fp.get("缺角") or fp.get("missing") or []
+    if isinstance(mc, str):
+        mc = [mc]
+    for c in (mc or []):
+        tri = _DIR_TO_TRIGRAM.get(c)
+        who = _BAGUA_MEANING.get(tri, "") if tri else ""
+        findings.append({
+            "项": "缺角", "方位": c, "卦": tri or "?", "评级": "缺失",
+            "建议": f"缺{c}角，对应{who}偏弱；宜在该方位补角（摆放对应五行物品/绿植/灯具引气）。",
+        })
+
+    # 横梁压顶
+    if fp.get("横梁") or fp.get("beam"):
+        findings.append({"项": "横梁压顶", "方位": "—", "卦": "—", "评级": "煞",
+                         "建议": "避免床/沙发/餐桌正对横梁，可用吊顶包覆或挂葫芦化解。"})
+    # 穿堂煞
+    if fp.get("穿堂") or fp.get("through"):
+        findings.append({"项": "穿堂煞", "方位": "—", "卦": "—", "评级": "煞",
+                         "建议": "大门直对窗/阳台泄气，宜设玄关、屏风或绿植缓冲以聚气。"})
+
+    return {
+        "provided": True,
+        "mode": "structured",
+        "findings": findings,
+        "summary": (f"共识别 {len(findings)} 项户型要素。"
+                    + ("大门/功能房方位与坐向理气大体协调。"
+                       if findings else "仅收到基础信息，建议补全户型要素以获得完整分析。")),
+    }
+
+
+def geo_fengshui(orientation, gps: Dict = None, floor_plan=None) -> Dict:
+    """风水堪舆（看空间）规则引擎：
+      坐向(罗盘/24山) → 宅卦(八宅) → 四吉四凶方；叠加九宫绝对方位、GPS 峦头/磁偏角校正，
+      以及户型图结构化峦头（形法）分析（大门/主卧/厨房/卫生间方位、缺角、横梁、穿堂）。
+
+      注：图片类户型图属多模态视觉范畴，传入字符串时仅作占位钩子，结构化 dict 才进入形法分析。
     """
     ori = _parse_orientation(orientation)
     house_tri = _MT_TO_TRIGRAM.get(ori["sitting_mountain"], "坎")
@@ -732,6 +876,9 @@ def geo_fengshui(orientation, gps: Dict = None, floor_plan: str = None) -> Dict:
             "luan_tou": "外部峦头需结合实地/地图（山形水势、路冲、邻栋），本引擎仅占位，建议配多模态识别。",
         }
 
+    # 户型图结构化峦头（形法）分析
+    fp_analysis = _analyze_floor_plan(floor_plan, ji, xiong)
+
     advice = [
         f"本宅坐{ori['sitting_mountain']}向{ori['facing_mountain']}（{house_tri}宅），"
         f"吉方：{'、'.join(ji)}；凶方：{'、'.join(xiong)}。",
@@ -750,6 +897,7 @@ def geo_fengshui(orientation, gps: Dict = None, floor_plan: str = None) -> Dict:
         "unlucky_dirs": xiong,
         "jiu_gong": jiu_gong,
         "geo": geo_info,
+        "floor_plan_analysis": fp_analysis,
         "advice": advice,
         "floor_plan_note": floor_plan,
         "disclaimer": "风水堪舆为传统人居环境文化，本结果为规则引擎演示，仅供娱乐与文化参考，不构成装修/人生决策依据。",

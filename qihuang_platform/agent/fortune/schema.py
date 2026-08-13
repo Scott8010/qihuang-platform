@@ -41,6 +41,11 @@ class GeoRequest(BaseModel):
         ))
     gps: Optional[dict] = Field(
         None, description="定位 {'lat': 31.23, 'lon': 121.47, 'year': 2026}，用于磁偏角校正+外部峦头占位")
-    floor_plan: Optional[str] = Field(
-        None, description="户型图文案/备注（多模态视觉识别另走视觉通道）")
+    floor_plan: Optional[Union[dict, str]] = Field(
+        None, description=(
+            "户型/实地信息。结构化(dict)优先，字段中文键："
+            "{'门向':'南','主卧方':'东南','厨房方':'东','卫生间方':'西北',"
+            "'缺角':['西南'],'横梁':false,'穿堂':false}；"
+            "或传图片URL/备注字符串（多模态视觉解析另走视觉通道，当前为占位钩子）。"
+        ))
     user_id: Optional[str] = Field(None, description="可选，回写个人档案")
