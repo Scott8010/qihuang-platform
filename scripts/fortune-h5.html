@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>岐黄智脑 · 命理风水</title>
+<style>
+  :root{
+    --ink:#0f2a23; --deep:#0b1f1a; --gold:#c9a44a; --gold-soft:#e3c878;
+    --bg:#f5f2ea; --card:#ffffff; --line:#e7e1d0; --good:#2e7d4f; --bad:#b3402f;
+    --muted:#928c79; --txt:#2a2a26; --soft:#faf7ef;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:#dfe6e0;color:var(--txt)}
+  .app{max-width:480px;margin:0 auto;min-height:100vh;background:var(--bg);
+    position:relative;padding-bottom:64px;box-shadow:0 0 40px rgba(0,0,0,.18)}
+  header{background:linear-gradient(135deg,var(--deep),var(--ink));color:var(--gold-soft);
+    padding:16px 16px 13px;text-align:center;position:sticky;top:0;z-index:20;
+    border-bottom:2px solid var(--gold)}
+  header h1{margin:0;font-size:18px;letter-spacing:3px}
+  header p{margin:3px 0 0;font-size:11px;color:#9fb6ac;letter-spacing:1px}
+  .panel{display:none;padding:14px;animation:fade .25s ease}
+  .panel.on{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;
+    padding:15px;margin-bottom:13px;box-shadow:0 2px 12px rgba(15,42,35,.05)}
+  .card h3{margin:0 0 13px;font-size:15px;color:var(--ink);letter-spacing:1px;
+    display:flex;align-items:center;gap:7px}
+  .card h3::before{content:"";width:4px;height:15px;background:var(--gold);border-radius:3px}
+  label.f{display:block;font-size:12px;color:#6b6657;margin:11px 0 5px}
+  input,select,textarea{width:100%;padding:11px;border:1px solid var(--line);border-radius:11px;
+    font-size:14px;background:#fff;color:var(--txt);font-family:inherit}
+  textarea{resize:vertical;min-height:58px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .btn{display:block;width:100%;margin-top:13px;padding:13px;border:0;border-radius:13px;
+    background:linear-gradient(135deg,var(--gold),#b8913c);color:#1a120a;font-size:15px;
+    font-weight:700;letter-spacing:2px;cursor:pointer}
+  .btn:active{transform:scale(.98)}
+  .btn.ghost{background:#eef0ea;color:#5a5648}
+  .btn.sm{padding:9px;font-size:13px;margin-top:8px;letter-spacing:1px}
+  .pill{display:inline-block;padding:5px 11px;border-radius:20px;font-size:12px;margin:3px;
+    background:#f0ece0;color:#5a5648;border:1px solid var(--line)}
+  .pill.good{background:#e7f3ea;color:var(--good);border-color:#bfe3c9}
+  .pill.bad{background:#fae9e5;color:var(--bad);border-color:#f0c9bf}
+  .badge{display:inline-flex;align-items:center;justify-content:center;padding:4px 12px;
+    border-radius:20px;font-size:13px;font-weight:700;letter-spacing:1px}
+  .badge.green{background:#e7f3ea;color:var(--good)}
+  .badge.red{background:#fae9e5;color:var(--bad)}
+  .badge.gold{background:#f7eccf;color:#9a7b22}
+  .kv{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px dashed var(--line);font-size:13px}
+  .kv:last-child{border-bottom:0}
+  .kv b{color:var(--ink);font-weight:600;white-space:nowrap}
+  .kv span{color:#5a5648;text-align:right}
+  .out{margin-top:12px;border-top:1px dashed var(--line);padding-top:12px;display:none}
+  .out.show{display:block}
+  .out.err{color:var(--bad)}
+  .muted{color:var(--muted);font-size:11px;line-height:1.7;margin-top:9px}
+  .note{font-size:11px;color:var(--muted);background:var(--soft);border-radius:9px;padding:9px 11px;margin-top:8px}
+  .disc{font-size:10px;color:var(--muted);text-align:center;padding:16px;line-height:1.8}
+  .tabs{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;max-width:480px;
+    display:flex;background:var(--ink);z-index:30;border-top:1px solid rgba(201,164,74,.4)}
+  .tabs button{flex:1;background:none;border:0;color:#a9c0b6;padding:9px 0 10px;font-size:12px;
+    letter-spacing:1px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px}
+  .tabs button .ic{font-size:18px;line-height:1}
+  .tabs button.on{color:var(--gold-soft)}
+  .tabs button.on .ic{text-shadow:0 0 8px rgba(227,200,120,.5)}
+  details.cfg{background:var(--soft);border-radius:12px;padding:10px 12px;margin-bottom:13px;font-size:12px}
+  details.cfg summary{cursor:pointer;color:var(--muted);letter-spacing:1px}
+  details.cfg .row{display:flex;gap:8px;margin-top:9px;align-items:center;flex-wrap:wrap}
+  details.cfg label{color:#6b6657;font-size:12px}
+  details.cfg input{flex:1;min-width:120px;padding:8px;font-size:13px}
+  /* 命盘四柱 */
+  .pillars{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:4px 0 10px}
+  .pcol{background:var(--soft);border:1px solid var(--line);border-radius:11px;padding:9px 4px;text-align:center}
+  .pcol .lbl{font-size:10px;color:var(--muted)}
+  .pcol .gz{font-size:19px;font-weight:700;color:var(--ink);letter-spacing:1px;margin:3px 0}
+  .pcol .wx{font-size:11px}
+  .pcol .ts{font-size:10px;color:#6b6657;margin-top:2px}
+  .wx-木{color:#2e7d4f}.wx-火{color:#c0432b}.wx-土{color:#9a7b22}.wx-金{color:#8a6d2f}.wx-水{color:#2f6fb3}
+  /* 日签 */
+  .hero{background:linear-gradient(135deg,#123a2e,#0e2c22);color:var(--gold-soft);border-radius:14px;
+    padding:15px;display:flex;justify-content:space-between;align-items:center;margin-bottom:11px}
+  .hero .date{font-size:13px;color:#bcd0c8}
+  .hero .gz{font-size:24px;font-weight:700;letter-spacing:2px;margin-top:3px}
+  .hero .score{text-align:center}
+  .hero .score b{font-size:30px;color:var(--gold-soft);line-height:1}
+  .hero .score span{font-size:10px;color:#9fb6ac;display:block}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+  .chip{font-size:12px;padding:5px 11px;border-radius:9px;background:var(--soft);border:1px solid var(--line);color:#5a5648}
+  .chip.yi{background:#e7f3ea;border-color:#bfe3c9;color:var(--good)}
+  .chip.ji{background:#fae9e5;border-color:#f0c9bf;color:var(--bad)}
+  .clothes{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:6px}
+  .cw{border-radius:10px;padding:8px 3px;text-align:center;border:1px solid var(--line)}
+  .cw .wx{font-size:13px;font-weight:700}
+  .cw .co{font-size:10px;color:#6b6657;margin:2px 0}
+  .cw .rk{font-size:10px}
+  .cw.lv0{background:#e7f3ea;border-color:#bfe3c9}.cw.lv0 .rk{color:var(--good)}
+  .cw.lv1{background:#eef3ea;border-color:#cfe0c9}.cw.lv1 .rk{color:#6f8f5a}
+  .cw.lv2{background:#f6f3e9;border-color:#e6e0cd}.cw.lv2 .rk{color:var(--muted)}
+  .cw.lv3{background:#fae9e5;border-color:#f0c9bf}.cw.lv3 .rk{color:var(--bad)}
+  .adv{background:#fdf3da;border:1px solid #f0dca0;border-radius:10px;padding:10px;margin-top:9px;font-size:12px;color:#7a5e1c;line-height:1.7}
+  /* 六爻 */
+  .gua{display:flex;justify-content:center;gap:14px;margin:10px 0}
+  .guabox{text-align:center}
+  .guabox .gt{font-size:12px;color:var(--muted)}
+  .guabox .gn{font-size:20px;font-weight:700;color:var(--ink);margin:3px 0}
+  .yao{display:flex;flex-direction:column-reverse;gap:5px;margin:8px 0}
+  .yao i{width:120px;height:9px;border-radius:3px;background:var(--gold);display:block;margin:0 auto}
+  .yao i.yin{background:var(--ink)}
+  .yao i.dyn{box-shadow:0 0 0 2px var(--bad)}
+  .reading{font-size:13px;color:#5a5648;line-height:1.7;text-align:center;background:var(--soft);border-radius:10px;padding:10px}
+  /* 风水 */
+  .compass{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}
+  .cm{font-size:11px;text-align:center;padding:9px 3px;border-radius:10px;border:1px solid var(--line);background:var(--soft)}
+  .cm.g{background:#e7f3ea;border-color:#bfe3c9}
+  .cm.x{background:#fae9e5;border-color:#f0c9bf}
+  .cm .d{font-weight:700;color:var(--ink)}
+  .cm .s{font-size:10px;margin-top:2px}
+  .cm.g .s{color:var(--good)}.cm.x .s{color:var(--bad)}
+  .find{background:var(--soft);border:1px solid var(--line);border-radius:11px;padding:10px 12px;margin-top:8px}
+  .find .fh{display:flex;justify-content:space-between;align-items:center}
+  .find .fi{font-weight:700;color:var(--ink);font-size:13px}
+  .find .fr{font-size:11px}
+  .find .fp{font-size:12px;color:#5a5648;margin-top:5px;line-height:1.6}
+  .dirbtn{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:6px}
+  .dirbtn button{padding:9px 0;border:1px solid var(--line);border-radius:9px;background:#fff;font-size:13px;color:var(--ink);cursor:pointer}
+  .dirbtn button.on{background:var(--ink);color:var(--gold-soft);border-color:var(--ink)}
+  .shake{animation:sk .5s ease}
+  @keyframes sk{0%,100%{transform:rotate(0)}25%{transform:rotate(-9deg)}75%{transform:rotate(9deg)}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>岐黄智脑 · 命理风水</h1>
+    <p>传统人居环境与运程文化 · 娱乐参考</p>
+  </header>
+
+  <!-- ============ 命理 ============ -->
+  <div class="panel on" id="p-ming">
+    <details class="cfg">
+      <summary>接口配置（经本地/线上代理留空即可）</summary>
+      <div class="row">
+        <label>Base</label><input id="baseUrl" placeholder="留空=同源代理">
+      </div>
+      <div class="row">
+        <label>Token</label><input id="token" placeholder="经代理则留空（令牌在服务端）">
+      </div>
+      <div class="row">
+        <label>User ID</label><input id="uid" value="demo-user">
+      </div>
+    </details>
+
+    <div class="card">
+      <h3>八字建档</h3>
+      <label class="f">出生日期</label>
+      <input id="birthDate" type="date" value="1980-10-01">
+      <div class="grid2">
+        <div><label class="f">出生时辰</label><input id="birthHour" type="number" min="0" max="23" value="10"></div>
+        <div><label class="f">昵称（可选）</label><input id="birthName" placeholder="如 老黄"></div>
+      </div>
+      <details style="margin-top:8px">
+        <summary class="muted" style="cursor:pointer">高级：直接填四柱（留空则用生日）</summary>
+        <input id="pillars" placeholder="庚申 丙戌 丁巳 辛丑" style="margin-top:8px">
+      </details>
+      <button class="btn" onclick="doArchive()">排盘建档</button>
+      <div class="out" id="o-archive"></div>
+    </div>
+
+    <div class="card">
+      <h3>每日日签</h3>
+      <p class="muted">带 User ID 且已建档则按你的喜用神个性化穿衣/配色。</p>
+      <button class="btn ghost" onclick="doDaily()">生成今日日签</button>
+      <div class="out" id="o-daily"></div>
+    </div>
+
+    <div class="card">
+      <h3>六爻卜卦</h3>
+      <label class="f">起卦方式</label>
+      <select id="castMethod">
+        <option value="coin">铜钱卦（随机）</option>
+        <option value="time">时间卦（时辰，确定）</option>
+      </select>
+      <label class="f">所问之事（仅记录）</label>
+      <input id="castQ" placeholder="如 今日事宜">
+      <button class="btn" onclick="doCast()">🪙 摇卦</button>
+      <div class="out" id="o-cast"></div>
+    </div>
+
+    <div class="card">
+      <h3>年运报告</h3>
+      <label class="f">年份（可选，默认今年）</label>
+      <input id="repYear" type="number" placeholder="2026">
+      <button class="btn ghost" onclick="doReport()">生成年运报告</button>
+      <div class="out" id="o-report"></div>
+    </div>
+  </div>
+
+  <!-- ============ 风水 ============ -->
+  <div class="panel" id="p-feng">
+    <div class="card">
+      <h3>坐向（必填）</h3>
+      <div class="grid2">
+        <div><label class="f">坐山</label><select id="sit"></select></div>
+        <div><label class="f">向山</label><select id="face"></select></div>
+      </div>
+      <label class="f">或罗盘度数（磁北，0=正北，覆盖上方）</label>
+      <input id="bearing" type="number" placeholder="如 178.3">
+      <p class="muted">也可直接填「子山午向」「坐北朝南」，见高级。</p>
+      <details style="margin-top:8px">
+        <summary class="muted" style="cursor:pointer">高级：文本坐向</summary>
+        <input id="oriText" placeholder="子山午向 / 坐北朝南" style="margin-top:8px">
+      </details>
+    </div>
+
+    <div class="card">
+      <h3>定位（GPS，可选）</h3>
+      <button class="btn ghost sm" onclick="doLocate()">📍 获取定位（算真北磁偏）</button>
+      <div class="kv" id="locInfo" style="display:none"><b>已定位</b><span id="locVal"></span></div>
+    </div>
+
+    <div class="card">
+      <h3>户型 / 实地信息</h3>
+      <p class="muted">结构化表单（本地即可出峦头分析）；上传户型图则走视觉模型（需线上 GEO_VISION_KEY）。</p>
+      <div class="grid2" style="margin-top:8px">
+        <div><label class="f">大门向</label><select class="fpd" data-k="门向"></select></div>
+        <div><label class="f">主卧方</label><select class="fpd" data-k="主卧方"></select></div>
+        <div><label class="f">厨房方</label><select class="fpd" data-k="厨房方"></select></div>
+        <div><label class="f">卫生间方</label><select class="fpd" data-k="卫生间方"></select></div>
+      </div>
+      <label class="f">缺角（可多选，逗号分隔，如 西南,东）</label>
+      <input id="fpMiss" placeholder="西南,东">
+      <label class="f" style="margin-top:8px">
+        <input type="checkbox" id="fpBeam" style="width:auto;margin-right:6px">横梁压顶
+        <input type="checkbox" id="fpThrough" style="width:auto;margin:0 6px 0 14px">穿堂煞
+      </label>
+      <label class="f" style="margin-top:10px;color:#9a7b22">上传户型图（手机拍照，自动转 data URI，增强项）</label>
+      <input id="fpImg" type="file" accept="image/*" onchange="onFpImg(event)">
+      <button class="btn" onclick="doGeo()">堪舆分析</button>
+      <div class="out" id="o-geo"></div>
+    </div>
+  </div>
+
+  <!-- ============ 我的 ============ -->
+  <div class="panel" id="p-me">
+    <div class="card">
+      <h3>我的档案</h3>
+      <label class="f">User ID（用于日签/年运个性化，需先建档）</label>
+      <input id="uid2" value="demo-user" oninput="document.getElementById('uid').value=this.value">
+      <div class="note">建档后，每日日签的穿衣配色会按你的喜用神个性化；年运报告也会读取同一命盘。</div>
+    </div>
+    <div class="card">
+      <h3>连接设置</h3>
+      <p class="muted">生产建议：C 端不直接持有平台令牌。把 H5 放「中间小后端（代理）」同源托管，令牌只存代理服务端环境变量。本页 Base/Token 经代理时留空即可。</p>
+      <details class="cfg" style="background:var(--soft);border-radius:12px;padding:10px 12px;margin:0">
+        <summary style="cursor:pointer;color:var(--muted);letter-spacing:1px;font-size:12px">展开：Base / Token</summary>
+        <div class="row" style="display:flex;gap:8px;margin-top:9px;align-items:center;flex-wrap:wrap">
+          <label style="color:#6b6657;font-size:12px">Base</label>
+          <input id="baseUrl2" placeholder="留空=同源代理" oninput="document.getElementById('baseUrl').value=this.value">
+        </div>
+        <div class="row" style="display:flex;gap:8px;margin-top:9px;align-items:center;flex-wrap:wrap">
+          <label style="color:#6b6657;font-size:12px">Token</label>
+          <input id="token2" placeholder="经代理留空" oninput="document.getElementById('token').value=this.value">
+        </div>
+      </details>
+    </div>
+    <div class="card">
+      <h3>关于</h3>
+      <div class="note">岐黄智脑命理风水，由规则引擎 + 多模态视觉模型驱动，属传统民俗文化娱乐参考，不构成医疗 / 投资 / 人生决策依据。</div>
+    </div>
+  </div>
+
+  <div class="disc">
+    免责声明：所有结果由规则引擎 / 视觉模型生成，属传统民俗文化娱乐参考，<br>
+    不构成任何医疗、投资或人生决策依据。
+  </div>
+
+  <div class="tabs">
+    <button class="on" data-tab="ming"><span class="ic">☯</span>命理</button>
+    <button data-tab="feng"><span class="ic">🏠</span>风水</button>
+    <button data-tab="me"><span class="ic">👤</span>我的</button>
+  </div>
+</div>
+
+<script>
+const DIRS = ["北","东北","东","东南","南","西南","西","西北","中"];
+const CN = ["北","东北","东","东南","南","西南","西","西北"];
+const WX_ORDER = ["木","火","土","金","水"];
+const rankClass = {"大吉":0,"次吉":1,"平":2,"忌":3};
+
+function fill(sel, arr, def){ sel.innerHTML = arr.map(d=>`<option ${d===def?'selected':''}>${d}</option>`).join(''); }
+fill(document.getElementById('sit'), CN, '北');
+fill(document.getElementById('face'), CN, '南');
+document.querySelectorAll('.fpd').forEach(s=>fill(s, DIRS, '北'));
+
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  document.getElementById('p-'+b.dataset.tab).classList.add('on');
+});
+
+async function api(path, {method='GET', body}={}){
+  const base = (document.getElementById('baseUrl').value.trim().replace(/\/$/,'')||'');
+  const token = document.getElementById('token').value.trim();
+  const headers = {'Content-Type':'application/json'};
+  if(token) headers['Authorization'] = 'Bearer ' + token;
+  const opts = {method, headers};
+  if(body) opts.body = JSON.stringify(body);
+  const res = await fetch(base + path, opts);
+  const json = await res.json().catch(()=>({code:1,message:'返回非 JSON'}));
+  if(json && json.code && json.code !== 0) throw new Error(json.message || '请求失败');
+  return (json && json.data !== undefined) ? json.data : json;
+}
+function show(id, html, isErr){
+  const el = document.getElementById(id);
+  el.className = 'out show' + (isErr ? ' err' : '');
+  el.innerHTML = html;
+  el.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function pills(arr, cls){ return (arr||[]).map(x=>`<span class="pill ${cls||''}">${esc(x)}</span>`).join(''); }
+
+const GAN_WX = {甲:"木",乙:"木",丙:"火",丁:"火",戊:"土",己:"土",庚:"金",辛:"金",壬:"水",癸:"水"};
+const SHEN = {比肩:"同",劫财:"同",正印:"生",偏印:"生",食神:"我生",伤官:"我生",正财:"我克",偏财:"我克",正官:"克我",七杀:"克我"};
+
+// ---------- 八字 ----------
+async function doArchive(){
+  const uid = document.getElementById('uid').value.trim() || 'demo-user';
+  const pl = document.getElementById('pillars').value.trim();
+  let body = {user_id: uid, persist: true};
+  if(pl){ body.pillars = pl; }
+  else {
+    const d = document.getElementById('birthDate').value;
+    const h = parseInt(document.getElementById('birthHour').value||'0',10);
+    if(!d){ show('o-archive','请填出生日期或四柱',true); return; }
+    body.birth = {date:d, hour:h};
+    body.name = document.getElementById('birthName').value.trim()||undefined;
+  }
+  try{
+    const d = await api('/api/v1/agent/fortune/archive', {method:'POST', body});
+    const names = ["年柱","月柱","日柱","时柱"];
+    const ten = d.tenshen || {};
+    let h = '<div class="pillars">';
+    (d.pillars||[]).forEach((p,i)=>{
+      const gz = GAN_WX[p[0]];
+      const ts = ten[["年干","月干","日支","时干"][i]] || (i===2?ten["日支"]:"");
+      h += `<div class="pcol"><div class="lbl">${names[i]}</div><div class="gz">${p}</div>`
+         + `<div class="wx wx-${gz}">${gz}</div><div class="ts">${ts?ts:''}</div></div>`;
+    });
+    h += '</div>';
+    h += `<div style="margin:4px 0 8px">日主 <b>${d.day_master}</b>（${d.day_master_wx}）　`
+       + `<span class="badge ${d.strength==='身强'?'red':d.strength==='身弱'?'green':'gold'}">${d.strength}</span>`
+       + ` <span class="muted">旺衰分 ${d.score}</span></div>`;
+    h += '<div>喜用神：'+pills(d.favorable,'good')+'　忌神：'+pills(d.unfavorable,'bad')+'</div>';
+    const wc = d.wuxing_count||{};
+    h += '<div class="kv"><b>五行统计</b><span>'+WX_ORDER.map(w=>`${w} ${wc[w]||0}`).join(' · ')+'</span></div>';
+    h += `<div class="note">material_id：${esc(d.material_id||'')}</div>`;
+    show('o-archive', h);
+  }catch(e){ show('o-archive', '错误：'+esc(e.message), true); }
+}
+
+// ---------- 日签 ----------
+async function doDaily(){
+  const uid = document.getElementById('uid').value.trim() || 'demo-user';
+  try{
+    const d = await api('/api/v1/agent/fortune/daily?user_id='+encodeURIComponent(uid));
+    let h = `<div class="hero"><div><div class="date">${d.date}</div><div class="gz">${d.day_ganzhi}</div>`
+          + `<div class="date" style="margin-top:4px">日干五行 ${d.day_wx}</div></div>`
+          + `<div class="score"><b>${d.scores.综合}</b><span>综合评分</span></div></div>`;
+    const sc = d.scores||{};
+    h += `<div class="kv"><b>事业 / 财运 / 感情</b><span>${sc.事业} / ${sc.财运} / ${sc.感情}</span></div>`;
+    h += '<div class="kv"><b>宜</b><span>'+ (d.yi||[]).map(x=>`<span class="chip yi">${x}</span>`).join('') +'</span></div>';
+    h += '<div class="kv"><b>忌</b><span>'+ (d.ji||[]).map(x=>`<span class="chip ji">${x}</span>`).join('') +'</span></div>';
+    h += `<div class="kv"><b>财神位 / 喜神位</b><span>${d.shen?d.shen.财神位+' / '+d.shen.喜神位:'-'}</span></div>`;
+    h += `<div class="kv"><b>生肖冲合</b><span>${d.zodiac?('冲 '+d.zodiac.冲+' · 合 '+d.zodiac.合):'-'}</span></div>`;
+    h += `<div class="kv"><b>幸运色 / 数</b><span>${(d.lucky_colors||[]).join('、')} · ${(d.lucky_numbers||[]).join('、')}</span></div>`;
+    h += '<div class="muted" style="margin:9px 0 2px">五行穿衣</div><div class="clothes">';
+    WX_ORDER.forEach(w=>{
+      const o = (d.clothes||{})[w]||{color:[],rank:'平'};
+      h += `<div class="cw lv${rankClass[o.rank]||2}"><div class="wx wx-${w}">${w}</div>`
+         + `<div class="co">${(o.color||[]).join('/')}</div><div class="rk">${o.rank}</div></div>`;
+    });
+    h += '</div>';
+    if(d.personal_advice && d.personal_advice.text){
+      h += '<div class="adv">'+esc(d.personal_advice.text)+'</div>';
+    }
+    show('o-daily', h);
+  }catch(e){ show('o-daily', '错误：'+esc(e.message), true); }
+}
+
+// ---------- 六爻 ----------
+async function doCast(){
+  const body = {method: document.getElementById('castMethod').value,
+                question: document.getElementById('castQ').value.trim()||undefined};
+  try{
+    const d = await api('/api/v1/agent/fortune/cast', {method:'POST', body});
+    let h = '<div class="gua">'
+          + `<div class="guabox"><div class="gt">本卦</div><div class="gn">${d.ben_gua}</div></div>`
+          + (d.is_static?'':`<div class="guabox"><div class="gt">变卦</div><div class="gn">${d.bian_gua}</div></div>`)
+          + '</div>';
+    h += '<div class="yao">';
+    (d.lines||[]).forEach(l=>{ h += `<i class="${l.yang?'':'yin'} ${l.old?'dyn':''}"></i>`; });
+    h += '</div>';
+    h += `<div class="kv"><b>动爻</b><span>${d.changing_lines&&d.changing_lines.length?d.changing_lines.join('、'):'无（六爻俱静）'}</span></div>`;
+    h += `<div class="reading">${esc(d.reading||'')}</div>`;
+    show('o-cast', h);
+  }catch(e){ show('o-cast', '错误：'+esc(e.message), true); }
+}
+
+// ---------- 年运 ----------
+async function doReport(){
+  const uid = document.getElementById('uid').value.trim() || 'demo-user';
+  const y = document.getElementById('repYear').value.trim();
+  const body = {user_id: uid};
+  if(y) body.year = parseInt(y,10);
+  try{
+    const d = await api('/api/v1/agent/fortune/report', {method:'POST', body});
+    let h = `<div class="kv"><b>流年</b><span>${d.year_ganzhi}（${d.year}）</span></div>`;
+    h += `<div class="kv"><b>日主 / 身</b><span>${d.day_master}（${d.strength}）</span></div>`;
+    h += `<div class="kv"><b>流年关系</b><span>${d.liunian_relation}</span></div>`;
+    h += '<div style="margin:6px 0">喜用：'+pills(d.favorable,'good')+'　忌：'+pills(d.unfavorable,'bad')+'</div>';
+    if(d.advice){
+      h += `<div class="kv"><b>重点五行</b><span>${(d.advice.重点五行||[]).join('、')}</span></div>`;
+      h += `<div class="kv"><b>宜</b><span>${esc(d.advice.宜)}</span></div>`;
+      h += `<div class="kv"><b>忌</b><span>${esc(d.advice.忌)}</span></div>`;
+    }
+    show('o-report', h);
+  }catch(e){ show('o-report', '错误：'+esc(e.message), true); }
+}
+
+// ---------- 风水 ----------
+let gpsCache = null;
+function doLocate(){
+  if(!navigator.geolocation){ show('locInfo','浏览器不支持定位',true); return; }
+  navigator.geolocation.getCurrentPosition(p=>{
+    gpsCache = {lat:+p.coords.latitude.toFixed(4), lon:+p.coords.longitude.toFixed(4), year:new Date().getFullYear()};
+    document.getElementById('locInfo').style.display='flex';
+    document.getElementById('locVal').textContent = gpsCache.lat+', '+gpsCache.lon;
+  }, err=>{ show('locInfo','定位失败：'+err.message,true); });
+}
+let fpImgData = null;
+function onFpImg(e){
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{ fpImgData = r.result; show('o-geo','已读取户型图（'+Math.round(fpImgData.length/1024)+' KB），点「堪舆分析」',false); };
+  r.readAsDataURL(f);
+}
+function buildOrientation(){
+  const t = document.getElementById('oriText').value.trim();
+  if(t) return t;
+  const b = document.getElementById('bearing').value.trim();
+  if(b !== '') return parseFloat(b);
+  return '坐'+document.getElementById('sit').value+'朝'+document.getElementById('face').value;
+}
+function buildFloorPlan(){
+  if(fpImgData) return fpImgData;
+  const fp = {
+    门向: document.querySelector('.fpd[data-k="门向"]').value,
+    主卧方: document.querySelector('.fpd[data-k="主卧方"]').value,
+    厨房方: document.querySelector('.fpd[data-k="厨房方"]').value,
+    卫生间方: document.querySelector('.fpd[data-k="卫生间方"]').value,
+  };
+  const miss = document.getElementById('fpMiss').value.trim();
+  if(miss) fp.缺角 = miss.split(/[,，]/).map(s=>s.trim()).filter(Boolean);
+  if(document.getElementById('fpBeam').checked) fp.横梁 = true;
+  if(document.getElementById('fpThrough').checked) fp.穿堂 = true;
+  return fp;
+}
+async function doGeo(){
+  try{
+    const body = {orientation: buildOrientation()};
+    if(gpsCache) body.gps = gpsCache;
+    const fp = buildFloorPlan();
+    if(fp) body.floor_plan = fp;
+    const d = await api('/api/v1/agent/fortune/geo', {method:'POST', body});
+    let h = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">`
+          + `<span class="badge gold">${d.house_trigram}宅</span>`
+          + `<span class="badge ${d.east_west_zhai==='东四宅'?'green':'gold'}">${d.east_west_zhai}</span>`
+          + `<span class="muted">${esc(d.orientation&&d.orientation.sitting_facing||'')}</span></div>`;
+    h += '<div class="muted" style="margin:2px 0 6px">八宅吉凶方（按坐向理气）</div><div class="compass">';
+    (d.bagua_mansions||[]).forEach(m=>{
+      const cls = m.lucky?'g':'x';
+      h += `<div class="cm ${cls}"><div class="d">${m.dir}</div><div class="s">${m.star}</div></div>`;
+    });
+    h += '</div>';
+    if(d.geo){
+      h += `<div class="kv"><b>磁偏角</b><span>${d.geo.magnetic_declination}°</span></div>`;
+      h += `<div class="kv"><b>真北度数</b><span>${d.geo.bearing_true_north}</span></div>`;
+    }
+    const fa = d.floor_plan_analysis||{};
+    if(fa.findings && fa.findings.length){
+      h += `<div class="muted" style="margin:9px 0 2px">户型峦头分析（${esc(fa.mode)}）</div>`;
+      fa.findings.forEach(f=>{
+        const rc = f.评级&&f.评级.indexOf('吉')>=0?'green':(f.评级&&(f.评级.indexOf('凶')>=0||f.评级.indexOf('忌')>=0||f.评级.indexOf('煞')>=0||f.评级.indexOf('缺失')>=0)?'red':'gold');
+        h += `<div class="find"><div class="fh"><span class="fi">${esc(f.项)}·${esc(f.方位)}</span>`
+           + `<span class="badge ${rc}">${esc(f.评级)}</span></div>`
+           + `<div class="fp">${esc(f.建议)}</div></div>`;
+      });
+    } else if(fa.note){
+      h += `<div class="note" style="margin-top:8px">${esc(fa.note)}</div>`;
+    }
+    if(d.advice){
+      h += '<div class="note" style="margin-top:9px">'+ (d.advice||[]).map(a=>'· '+esc(a)).join('<br>') +'</div>';
+    }
+    show('o-geo', h);
+  }catch(e){ show('o-geo', '错误：'+esc(e.message), true); }
+}
+</script>
+</body>
+</html>
