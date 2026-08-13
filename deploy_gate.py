@@ -39,10 +39,14 @@ import urllib.error
 
 GITHUB_API = "https://api.github.com"
 DEFAULT_REPO = "Scott8010/qihuang-platform"
-DEFAULT_SERVER = "http://111.231.63.73:8602"
+# 注：生产服务只监听 127.0.0.1:8602，对外经 nginx 反代 + 强制 HTTPS + Host 匹配，
+# 故门禁必须打域名(https)而非直连 IP:Port（直连会连不上，造成假阴性）。
+DEFAULT_SERVER = "https://yshealth.com.cn"
 EXPECTED_JOBS = ["代码检查", "测试 Python 3.13", "测试 Python 3.12", "部署到生产服务器"]
 # 路径实测：健康检查 + React 控制台 + 旧版控制端
 SERVER_PATHS = ["/platform/health", "/admin/", "/admin-static/admin.html"]
+# fortune Agent 专项：401=路由已注册且鉴权生效(已上线)，404=未上线
+FORTUNE_PATH = "/api/v1/agent/fortune/dashboard"
 
 
 def _git_head() -> str:
@@ -203,6 +207,17 @@ def main():
         ok = code in (200, 301, 307)
         mark = "✅" if ok else "❌"
         print(f"  {mark}  HTTP {code}  {p}")
+        if not ok:
+            all_ok = False
+
+    # fortune Agent 专项校验：401/200=路由已注册(上线)；404=未上线
+    print(f"\n=== fortune Agent 专项 {args.server}{FORTUNE_PATH} ===")
+    fg = check_server(args.server, [FORTUNE_PATH])
+    for p, code, st in fg:
+        ok = code in (200, 401)
+        mark = "✅" if ok else "❌"
+        hint = "（路由已注册·鉴权生效=已上线）" if code == 401 else ("（已上线）" if code == 200 else "（404=路由未注册）")
+        print(f"  {mark}  HTTP {code}  {hint}")
         if not ok:
             all_ok = False
 
