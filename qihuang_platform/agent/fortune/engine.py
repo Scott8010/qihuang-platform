@@ -21,6 +21,7 @@ import datetime
 import os
 import random
 import re
+import urllib.request
 from typing import Dict, List, Optional
 
 # ═══════════════════════════════════════════════════════════════
@@ -890,9 +891,26 @@ def _norm_dir(v):
 
 
 def _to_image_url(ref: str) -> str:
-    """把图片引用转成视觉端点可用的 image_url（http(s)/data 直用，本地路径转 base64）。"""
-    if ref.startswith(("http://", "https://", "data:")):
+    """把图片引用转成视觉端点可用的 image_url。
+
+    - data URI：直用（已内联，最快、不依赖视觉端点跨网抓取）
+    - http(s) URL：服务端先下载转 base64 data URI，避免视觉端点（如 dashscope）
+      服务端去抓外链时因出网白名单/慢链路导致整体超时；下载失败则回退原样。
+    - 本地路径：读文件转 base64
+    - 其它：原样返回（可能失败，由上层捕获回退 image_pending）
+    """
+    if ref.startswith("data:"):
         return ref
+    if ref.startswith(("http://", "https://")):
+        try:
+            import base64
+            req = urllib.request.Request(ref, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                ctype = resp.headers.get_content_type() or "image/jpeg"
+                b64 = base64.b64encode(resp.read()).decode("ascii")
+            return f"data:{ctype};base64,{b64}"
+        except Exception:
+            return ref  # 下载失败回退原样（交由视觉端点尝试，再失败上层回退）
     if os.path.exists(ref):
         import base64, mimetypes
         mime = mimetypes.guess_type(ref)[0] or "image/jpeg"
