@@ -917,7 +917,8 @@ def _vision_chat_json(base: str, key: str, model: str, image_ref: str, prompt: s
                 {"type": "image_url", "image_url": {"url": _to_image_url(image_ref)}},
             ],
         }],
-        "response_format": {"type": "json_object"},
+        # 注：不强制 response_format=json_object，通义千问 VL 兼容模式下不一定接受，
+        # 改为下游用正则逐级兜底提取首个 JSON 对象，跨厂商更稳。
         "temperature": 0.2,
     }
     req = urllib.request.Request(
@@ -933,10 +934,44 @@ def _vision_chat_json(base: str, key: str, model: str, image_ref: str, prompt: s
 
 
 def _normalize_vision_floorplan(content: str) -> dict:
-    """从视觉模型输出中抽取并归一化为中文键的 floor_plan dict。"""
+    """从视觉模型输出中抽取并归一化为中文键的 floor_plan dict。
+
+    兼容多种输出形态：纯 JSON / ```json 代码块 / 前后夹带解释文字 /
+    markdown 包裹，逐级兜底提取首个 JSON 对象。
+    """
     import json
-    m = re.search(r"\{.*\}", content, re.S)
-    raw = json.loads(m.group(0)) if m else {}
+    raw: dict = {}
+    # 1) 整段即 JSON
+    try:
+        raw = json.loads(content)
+    except Exception:
+        raw = {}
+    # 2) ```json ... ``` 代码块
+    if not isinstance(raw, dict) or not raw:
+        m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.S)
+        if m:
+            try:
+                raw = json.loads(m.group(1))
+            except Exception:
+                raw = {}
+    # 3) 非贪婪：首个 { ... }
+    if not isinstance(raw, dict) or not raw:
+        m = re.search(r"\{.*?\}", content, re.S)
+        if m:
+            try:
+                raw = json.loads(m.group(0))
+            except Exception:
+                raw = {}
+    # 4) 贪婪兜底
+    if not isinstance(raw, dict) or not raw:
+        m = re.search(r"\{.*\}", content, re.S)
+        if m:
+            try:
+                raw = json.loads(m.group(0))
+            except Exception:
+                raw = {}
+    if not isinstance(raw, dict):
+        raw = {}
     out: dict = {}
     for k, v in raw.items():
         nk = _FP_KEY_ALIAS.get(str(k)) or _FP_KEY_ALIAS.get(str(k).lower())
