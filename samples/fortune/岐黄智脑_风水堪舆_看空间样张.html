@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>风水堪舆 · 看空间样张（演示）</title>
+<style>
+  :root{--bg:#f4f1ea;--card:#fffdf8;--ink:#2b2620;--muted:#8a8175;--line:#e6e0d4;--gold:#b8860b;--jade:#3a7d5d;--red:#b5503a;--blue:#3a6ea5}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;line-height:1.7;padding:16px}
+  .phone{max-width:430px;margin:0 auto;background:var(--card);border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+  .hero{background:linear-gradient(135deg,#1f3a2e,#3a7d5d);color:#f4f1ea;padding:22px 20px}
+  .hero .date{font-size:12px;opacity:.75}
+  .hero h1{font-size:20px;margin:6px 0 2px;letter-spacing:1px}
+  .hero .sub{font-size:12px;opacity:.8}
+  .sec{padding:16px 18px;border-bottom:1px solid var(--line)}
+  .sec h2{font-size:15px;color:var(--jade);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+  .sec h2:before{content:"";width:4px;height:14px;background:var(--jade);border-radius:2px}
+  .row{display:flex;gap:10px;margin:6px 0}
+  .row .k{width:64px;color:var(--muted);font-size:13px;flex-shrink:0}
+  .row .v{font-size:13px;flex:1}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .chip{font-size:12px;padding:3px 10px;border-radius:20px;border:1px solid var(--line)}
+  .chip.good{background:#eef6f0;color:var(--jade);border-color:#cfe5d6}
+  .chip.bad{background:#fbeeea;color:var(--red);border-color:#f0cfc6}
+  .chip.info{background:#eaf1f8;color:var(--blue);border-color:#cfe0f0}
+  /* 九宫方位 */
+  .grid9{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+  .cell{aspect-ratio:1/1;border-radius:10px;padding:6px;font-size:11px;display:flex;flex-direction:column;justify-content:space-between;border:1px solid var(--line)}
+  .cell .gua{font-weight:700;font-size:13px}
+  .cell .note{font-size:10px;line-height:1.3;opacity:.85}
+  .cell.g{background:#eef6f0;border-color:#cfe5d6}
+  .cell.b{background:#fbeeea;border-color:#f0cfc6}
+  .cell.n{background:#faf7f0}
+  .cell .tag{font-size:9px;padding:0 5px;border-radius:6px;align-self:flex-start}
+  .cell .tag.g{background:var(--jade);color:#fff}
+  .cell .tag.b{background:var(--red);color:#fff}
+  /* 上传户型图 */
+  .upload{margin-top:10px;border:2px dashed var(--jade);border-radius:14px;padding:22px 12px;text-align:center;background:#f3f8f5;cursor:pointer}
+  .upload .ic{font-size:30px}
+  .upload .t{font-size:13px;font-weight:700;color:var(--jade);margin-top:4px}
+  .upload .d{font-size:11px;color:var(--muted);margin-top:2px}
+  /* 户型要素表单 + 分析卡 */
+  .fpform{margin-top:12px;background:#fff;border:1px solid #e4ece8;border-radius:14px;padding:12px}
+  .fptip{font-size:11px;color:var(--muted);margin-bottom:8px}
+  .fprow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:6px 0}
+  .fprow>label{font-size:12px;color:#3a4a42;min-width:52px}
+  .fprow select{font-size:12px;padding:4px 6px;border-radius:8px;border:1px solid #cfd9d3;background:#fff}
+  .chk{font-size:11px;margin-right:6px;color:#3a4a42}
+  .analysis{margin-top:12px;background:#f3f8f5;border-radius:14px;padding:12px}
+  .attip{font-size:11px;color:var(--muted);margin-bottom:8px}
+  .finding{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 0;border-top:1px dashed #dde6e1;font-size:12px}
+  .finding:first-of-type{border-top:none}
+  .fi{font-weight:700;color:var(--ink);min-width:72px}
+  .fd{color:var(--muted)}
+  .fg{min-width:62px;font-weight:700}
+  .fg.good{color:#1f9d55}.fg.warn{color:#d98a00}.fg.miss{color:#c0392b}.fg.bad{color:#c0392b}
+  .fadv{flex:1;min-width:160px;color:#3a4a42}
+  .tip{margin-top:10px;background:#fdf6e8;border-left:3px solid #c9a227;border-radius:0 8px 8px 0;padding:9px 10px;font-size:12.5px;line-height:1.7;color:#5a4a2a}
+  .tip b{color:#8a6a12}
+  .tip .lab{display:block;font-size:10.5px;letter-spacing:1px;color:#a08a4a;margin-bottom:2px}
+  .layout{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+  .layout .b{background:#faf7f0;border:1px solid var(--line);border-radius:10px;padding:8px;font-size:12px}
+  .layout .b .h{font-weight:700;color:var(--ink);margin-bottom:2px}
+  .disclaimer{font-size:11px;color:var(--muted);padding:14px 18px;line-height:1.6}
+  .cta{display:block;width:100%;margin-top:12px;padding:12px;border:none;border-radius:12px;font-size:14px;font-weight:700;color:#fff;background:linear-gradient(135deg,var(--jade),#4f9b73);cursor:pointer}
+  .cta.ghost{background:#faf7f0;color:var(--jade);border:1px solid var(--jade)}
+  .cta .track{font-size:9px;font-weight:400;opacity:.7;display:block;margin-top:2px}
+  .dev{background:#1c1916;color:#b8c0c8;font-family:Consolas,monospace;font-size:11px;border-radius:10px;padding:12px;margin-top:10px;white-space:pre-wrap;line-height:1.5}
+  .tag{display:inline-block;font-size:10px;background:var(--jade);color:#fff;padding:1px 7px;border-radius:8px;margin-left:6px}
+  /* 测坐向 / 定位 */
+  .oribtns{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .oribtns button{font-size:12px;padding:6px 10px;border-radius:18px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+  .oribtns button.on{background:var(--jade);color:#fff;border-color:var(--jade)}
+  .oribar{display:flex;gap:8px;margin-top:10px}
+  .oribar button{flex:1;font-size:12px;padding:9px;border-radius:12px;border:1px solid var(--jade);background:#f3f8f5;color:var(--jade);cursor:pointer}
+  .oribar button.gps{border-color:var(--blue);background:#eef3fa;color:var(--blue)}
+  .orires{margin-top:10px;background:#faf7f0;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:12.5px;line-height:1.7}
+  .orires b{color:var(--jade)}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="hero">
+    <div class="date">看空间 · 住宅堪舆 · 演示样张</div>
+    <h1>风水堪舆 <span class="tag">样张</span></h1>
+    <div class="sub">输入形态：坐向(罗盘) + 定位(GPS) + 户型图/照片（multimodal）</div>
+  </div>
+
+  <div class="sec">
+    <h2>看空间 · 户型峦头分析</h2>
+    <div class="upload" onclick="track('tap_upload_plan')">
+      <div class="ic">🏠</div>
+      <div class="t">点击上传户型图 / 实地照片</div>
+      <div class="d">支持 PNG / JPG，AI 自动识别门、窗、灶、床、卫生间方位</div>
+    </div>
+
+    <div class="fpform">
+      <div class="fptip">未上传图也能看：填户型要素，结论更准（字段与后端 /fortune/geo 的 floor_plan 对齐）</div>
+      <div class="fprow">
+        <label>大门向</label><select id="fpDoor" class="fpselect" data-def="南"></select>
+        <label>主卧方</label><select id="fpMaster" class="fpselect" data-def="东"></select>
+      </div>
+      <div class="fprow">
+        <label>厨房方</label><select id="fpKitchen" class="fpselect" data-def="东"></select>
+        <label>卫生间方</label><select id="fpToilet" class="fpselect" data-def="西北"></select>
+      </div>
+      <div class="fprow">
+        <label>缺角</label><span id="fpMissing" class="fpchk"></span>
+      </div>
+      <div class="fprow">
+        <label>横梁压顶</label><input type="checkbox" id="fpBeam">
+        <label>穿堂煞</label><input type="checkbox" id="fpThrough">
+      </div>
+      <button class="cta" onclick="runAnalysis()">开始堪舆（看 AI 分析）
+        <span class="track">埋点：tap_upload_plan</span></button>
+    </div>
+
+    <div class="analysis" id="analysis" style="display:none">
+      <div class="attip">演示结论（样例三室一厅）—— 真实调用将把上方要素作为 floor_plan 提交 /fortune/geo，返回同结构 findings（项 / 方位 / 卦 / 评级 / 建议）</div>
+      <div class="finding"><span class="fi">大门</span><span class="fd">南 · 离</span><span class="fg good">吉方</span><span class="fadv">纳吉气，利纳财进气，保持明亮整洁</span></div>
+      <div class="finding"><span class="fi">主卧</span><span class="fd">东 · 震</span><span class="fg good">吉方</span><span class="fadv">在吉方，利于休养与夫妻感情</span></div>
+      <div class="finding"><span class="fi">厨房/灶台</span><span class="fd">东 · 震</span><span class="fg warn">忌·泄吉</span><span class="fadv">在吉方易泄吉气，用土色(黄/棕)中和并保持通风</span></div>
+      <div class="finding"><span class="fi">卫生间</span><span class="fd">西北 · 乾</span><span class="fg good">宜·镇凶</span><span class="fadv">在凶方镇凶，保持干燥、常关马桶盖</span></div>
+      <div class="finding"><span class="fi">缺角</span><span class="fd">西南 · 坤</span><span class="fg miss">缺失</span><span class="fadv">女主偏弱，宜在该方位补角引气</span></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2>① 测坐向 / 定位（堪舆必填）</h2>
+    <div class="tip">
+      <span class="lab">为什么需要</span>
+      风水以<b>房屋自身坐向</b>为基准：九宫八卦、八宅吉凶方都由坐向（坐山朝向）推算，不是地理正南正北。先测准坐向，结论才立得住。
+    </div>
+    <div class="oribtns" id="oriBtns">
+      <button data-o="坐北朝南">坐北朝南</button>
+      <button data-o="坐南朝北">坐南朝北</button>
+      <button data-o="坐东朝西">坐东朝西</button>
+      <button data-o="坐西朝东">坐西朝东</button>
+      <button data-o="坐东南朝西北">坐东南朝西北</button>
+      <button data-o="坐西北朝东南">坐西北朝东南</button>
+      <button data-o="坐东北朝西南">坐东北朝西南</button>
+      <button data-o="坐西南朝东北">坐西南朝东北</button>
+    </div>
+    <div class="oribar">
+      <button class="compass" onclick="measureCompass()">🧭 用手机罗盘测坐向</button>
+      <button class="gps" onclick="measureGps()">📍 获取定位（峦头+磁偏角）</button>
+    </div>
+    <div class="orires" id="oriRes">尚未测坐向</div>
+  </div>
+
+  <div class="sec">
+    <h2>方位九宫（八卦 · 吉凶）</h2>
+    <div class="tip"><span class="lab">方位基准</span>下图八卦为<b>罗盘绝对方向</b>（东=震、南=离…）；结合上方坐向可判本宅吉凶方（八宅）。</div>
+    <div class="grid9">
+      <div class="cell b"><div class="gua">巽</div><div class="tag b">凶</div><div class="note">东南 · 卫生间<br>宜保持干燥通风</div></div>
+      <div class="cell g"><div class="gua">离</div><div class="tag g">吉</div><div class="note">南 · 客厅明堂<br>纳气聚财</div></div>
+      <div class="cell n"><div class="gua">坤</div><div class="tag">平</div><div class="note">西南 · 次卧<br>安稳平和</div></div>
+      <div class="cell n"><div class="gua">震</div><div class="tag">平</div><div class="note">东 · 餐厅<br>木气生发</div></div>
+      <div class="cell n"><div class="gua">中</div><div class="tag">中</div><div class="note">太极位<br>宜空净</div></div>
+      <div class="cell g"><div class="gua">兑</div><div class="tag g">吉</div><div class="note">西 · 书房<br>口才学业</div></div>
+      <div class="cell n"><div class="gua">艮</div><div class="tag">平</div><div class="note">东北 · 玄关<br>聚气守财</div></div>
+      <div class="cell b"><div class="gua">坎</div><div class="tag b">凶</div><div class="note">北 · 厨房灶位<br>远水龙头·土色调和</div></div>
+      <div class="cell b"><div class="gua">乾</div><div class="tag b">凶</div><div class="note">西北 · 主卧卫生间<br>污口压乾，需化解</div></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2>五行生克布局</h2>
+    <div class="layout">
+      <div class="b"><div class="h">开门 / 玄关（艮·土）</div>宜放黄水晶、陶瓷；忌水景、镜照门。</div>
+      <div class="b"><div class="h">客厅（离·火）</div>宜暖光、绿植（木生火）；忌大水族缸。</div>
+      <div class="b"><div class="h">主卧（乾·金）</div>宜白/金、圆润器物；卫生间压位，挂天然葫芦化解。</div>
+      <div class="b"><div class="h">厨房（坎·水）</div>灶台远离水龙头；用黄/棕色调和（土克水）。</div>
+    </div>
+    <div class="tip">
+      <span class="lab">调理优先级</span>
+      ① 西北乾位卫生间（影响男主事业健康）→ 常关盖、放天然葫芦 + 盐灯；<b>② 灶台对门</b> → 加半帘阻隔；③ 东南巽位潮湿 → 加强除湿通风。
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2>宜 / 忌 摘要</h2>
+    <div class="chips">
+      <span class="chip good">宜：户型方正</span>
+      <span class="chip good">宜：南北通透</span>
+      <span class="chip good">宜：明堂（客厅）在南</span>
+      <span class="chip bad">忌：卫生间压乾位</span>
+      <span class="chip bad">忌：灶台对门</span>
+      <span class="chip bad">忌：横梁压床/沙发</span>
+      <span class="chip info">开运色：黄/棕（土）· 白/金（金）</span>
+    </div>
+  </div>
+
+  <div class="sec">
+    <button class="cta" onclick="track('share')">分享给家人一起看风水
+      <span class="track">埋点：share</span></button>
+    <button class="cta ghost" onclick="track('tap_upload_plan')">换一张户型图重新看
+      <span class="track">埋点：tap_upload_plan</span></button>
+  </div>
+
+  <div class="disclaimer">
+    风水堪舆为传统人居环境文化，本样张所有结论均为演示数据，仅供娱乐与文化参考，不构成装修、医疗或人生决策依据。
+  </div>
+
+  <div class="dev">埋点设计（≤2，落在情绪高点）
+- tap_upload_plan：上传户型图 + 测坐向 + 定位，一并触发 AI 分析（功能钩子，演示为静态结论）
+- share：分享给家人（传播钩子）
+门禁：次日留存 ≥ 30% · 分享率 ≥ 10% 才保留</div>
+</div>
+
+<script>
+function track(ev){
+  // 演示：真实环境上报至埋点网关；此处仅控制台留痕
+  console.log('[track]', ev, new Date().toISOString());
+}
+
+let _ori = null, _gps = null;
+function selectOri(o, btn){
+  _ori = o;
+  document.querySelectorAll('#oriBtns button').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  renderOri();
+}
+function measureCompass(){
+  // 演示：真实环境调 DeviceOrientationEvent（iOS13+ 需授权）读罗盘度数 → 24山
+  const deg = 178 + (Math.random()*4 - 2);
+  _ori = {'facing_deg': +deg.toFixed(1), 'source':'device'};
+  document.querySelectorAll('#oriBtns button').forEach(b=>b.classList.remove('on'));
+  renderOri();
+}
+function measureGps(){
+  // 演示：真实环境调 navigator.geolocation
+  _gps = {'lat': 31.23, 'lon': 121.47, 'year': 2026};
+  renderOri();
+}
+function renderOri(){
+  const r = document.getElementById('oriRes');
+  let s = _ori ? ('坐向：<b>' + JSON.stringify(_ori) + '</b>') : '尚未测坐向';
+  if(_gps) s += '<br>定位：<b>' + _gps.lat + ', ' + _gps.lon + '</b>（磁偏角校正 + 峦头占位）';
+  s += '<br><span style="color:var(--muted)">演示：选/测后点「开始堪舆」即触发分析（埋点 tap_upload_plan）</span>';
+  r.innerHTML = s;
+}
+document.querySelectorAll('#oriBtns button').forEach(b=>{
+  b.addEventListener('click', ()=>selectOri(b.dataset.o, b));
+});
+
+const DIRS = ['北','东北','东','东南','南','西南','西','西北','中'];
+function fillSelects(){
+  document.querySelectorAll('.fpselect').forEach(sel=>{
+    DIRS.forEach(d=>{const o=document.createElement('option');o.value=d;o.textContent=d;sel.appendChild(o);});
+    if(sel.dataset.def) sel.value = sel.dataset.def;
+  });
+  const mc = document.getElementById('fpMissing');
+  DIRS.forEach(d=>{
+    const l=document.createElement('label');l.className='chk';
+    const i=document.createElement('input');i.type='checkbox';i.value=d;
+    l.appendChild(i);l.appendChild(document.createTextNode(d));
+    mc.appendChild(l);
+  });
+}
+function runAnalysis(){
+  track('tap_upload_plan');
+  const fp = {
+    '门向': document.getElementById('fpDoor').value,
+    '主卧方': document.getElementById('fpMaster').value,
+    '厨房方': document.getElementById('fpKitchen').value,
+    '卫生间方': document.getElementById('fpToilet').value,
+    '缺角': Array.from(document.querySelectorAll('#fpMissing input:checked')).map(i=>i.value),
+    '横梁': document.getElementById('fpBeam').checked,
+    '穿堂': document.getElementById('fpThrough').checked,
+  };
+  // 演示：真实环境以此 fp 作为 floor_plan 提交 POST /fortune/geo
+  console.log('[fortune/geo body.floor_plan]', JSON.stringify(fp));
+  document.getElementById('analysis').style.display = 'block';
+  document.getElementById('analysis').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+fillSelects();
+</script>
+</body>
+</html>
