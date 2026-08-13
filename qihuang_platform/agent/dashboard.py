@@ -14,4 +14,10 @@ async def get_agent_dashboard(agent_key: str, **kwargs) -> Dict[str, Any]:
         institution_id = kwargs.get("store_id") or kwargs.get("institution_id")
         port = kwargs.get("port")
         return await compliance_engine.dashboard(institution_id=institution_id, port=port)
+    if agent_key == "fortune":
+        from qihuang_platform.agent.fortune.store import FortuneStore
+        import os
+        _seed = os.path.join(os.path.dirname(__file__), "fortune", "seed")
+        store = FortuneStore(os.path.join(_seed, "fortune.jsonl"))
+        return store.dashboard(user_id=kwargs.get("user_id"))
     raise KeyError(f"未知 Agent 能力看板：{agent_key}")

@@ -57,9 +57,9 @@ DEFAULT_PLANS = [
             "report_export": True,
             "priority_support": True,
             "custom_skin": False,
-            "agents": ["compliance"],
+            "agents": ["compliance", "fortune"],
         },
-        "description": "专业健康服务，含3D经络穴位可视化+优先支持+内容合规审核Agent",
+        "description": "专业健康服务，含3D经络穴位可视化+优先支持+内容合规审核Agent+命理运程Agent",
     },
     {
         "plan_name": "enterprise",
@@ -75,9 +75,9 @@ DEFAULT_PLANS = [
             "report_export": True,
             "priority_support": True,
             "custom_skin": True,
-            "agents": ["compliance"],
+            "agents": ["compliance", "fortune"],
         },
-        "description": "企业级全功能，含3D穴位+名医智能体+品牌定制+专属支持+内容合规审核Agent",
+        "description": "企业级全功能，含3D穴位+名医智能体+品牌定制+专属支持+内容合规审核Agent+命理运程Agent",
     },
 ]
 

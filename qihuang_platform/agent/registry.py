@@ -25,6 +25,18 @@ BUILTIN_AGENTS: Dict[str, Dict[str, Any]] = {
         "desc": "门店经营文案送审：广告法/医疗夸大/禁忌缺失等规则四态判定，"
                 "回写钉业务实体（material_key→MAT-XXXX 幂等），客观真实可反哺。",
     },
+    "fortune": {
+        "name": "命理运程",
+        "kind": "business_embedded",          # 功能业务型，非对话窗口型
+        "engine": "hb-fortune-rules",          # 纯规则引擎（八字/六爻/日签/年运）
+        "router_prefix": "/api/v1/agent/fortune",
+        "capabilities": ["archive", "cast", "daily", "report", "dashboard"],
+        "status": "active",
+        "category": "mystic",                  # 玄学大类之「看人」（与 geo_fengshui「看空间」并列）
+        "desc": "命理运程趣味钩子：八字排盘/六爻起卦/每日日签(五行穿衣茶)/年运报告，"
+                "独立 JSONL 落盘（不入 Neo4j），钉业务实体（material_key→FOR-XXXX 幂等），"
+                "附免责声明，仅作传统文化娱乐参考。",
+    },
 }
 
 # 运行时缓存（与 agent_def 表最终一致）
