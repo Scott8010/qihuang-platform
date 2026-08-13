@@ -154,6 +154,31 @@
   .yixiang{font-size:13px;color:#3a3526;line-height:1.7;background:var(--soft);border-left:3px solid var(--gold);border-radius:9px;padding:10px 12px;margin-top:8px}
   .yixiang .gn{font-weight:700;color:var(--ink)}
   .detail{font-size:13px;color:#5a5648;line-height:1.75;background:#f3f0e6;border-radius:9px;padding:11px 12px;margin-top:8px}
+  /* 装卦表（六爻纳甲） */
+  .zhg{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
+  .zhg th,.zhg td{padding:6px 5px;border-bottom:1px dashed var(--line);text-align:center}
+  .zhg th{color:var(--muted);font-weight:600;font-size:11px}
+  .zhg td.y{color:var(--ink);font-weight:600;white-space:nowrap}
+  .zhg .row-shi{background:#f3f0e6}
+  .zhg .tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:3px}
+  .zhg .tag.shi{background:#f7eccf;color:#9a7b22}
+  .zhg .tag.ying{background:#e7f3ea;color:var(--good)}
+  .zhg .tag.dyn{background:#fae9e5;color:var(--bad)}
+  .gua-head{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0;font-size:12px}
+  .gua-head .badge{font-size:12px}
+  .solar{background:#eef4f8;border:1px solid #cfe0e8;border-radius:10px;padding:10px 12px;margin-top:10px;font-size:12px;color:#3a4a52;line-height:1.7}
+  .solar b{color:#1d4a6b}
+  .dayun-list{display:flex;flex-direction:column;gap:5px;margin-top:6px}
+  .dayun-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;background:var(--soft);border:1px solid var(--line);border-radius:9px;padding:8px 11px}
+  .dayun-row .gz{font-weight:700;color:var(--ink);font-size:15px}
+  .dayun-row.on{border-color:var(--gold);background:#fbf5e4}
+  .dayun-row .meta{color:var(--muted);font-size:11px}
+  /* AI 详批（LLM 象义层） */
+  .narr{margin-top:12px;border:1px solid #d9cba6;border-radius:12px;overflow:hidden;background:#fffdf6}
+  .narr .narr-h{font-size:12px;font-weight:700;color:#7a5e1c;background:linear-gradient(135deg,#fdf3da,#f7ecd2);padding:9px 13px;border-bottom:1px solid #ecdcb6}
+  .narr .narr-b{font-size:13.5px;color:#3a3526;line-height:1.85;padding:13px 15px;white-space:pre-wrap;word-break:break-word}
+  .chk{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink);margin-top:8px;font-weight:500}
+  .chk input{width:16px;height:16px;accent-color:var(--gold)}
   /* 日签评分条 */
   .rates{display:flex;gap:8px;margin:9px 0}
   .rate{flex:1;text-align:center;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:9px 4px}
@@ -189,11 +214,14 @@
       <input id="birthDate" type="date" value="1980-10-01">
       <div class="grid2">
         <div><label class="f">出生时辰</label><input id="birthHour" type="number" min="0" max="23" value="10"></div>
-        <div><label class="f">昵称（可选）</label><input id="birthName" placeholder="如 老黄"></div>
+        <div><label class="f">性别（排大运需）</label><select id="birthGender"><option>男</option><option>女</option></select></div>
       </div>
+      <label class="f">昵称（可选）</label><input id="birthName" placeholder="如 老黄">
       <details style="margin-top:8px">
         <summary class="muted" style="cursor:pointer">高级：直接填四柱（留空则用生日）</summary>
         <input id="pillars" placeholder="庚申 丙戌 丁巳 辛丑" style="margin-top:8px">
+        <label class="f" style="margin-top:8px">出生地经度（真太阳时用，默认北京 116.40°）</label>
+        <input id="birthLng" type="number" step="0.01" value="116.40">
       </details>
       <button class="btn" onclick="doArchive()">排盘建档</button>
       <div class="out" id="o-archive"></div>
@@ -215,6 +243,7 @@
       </select>
       <label class="f">所问之事（仅记录）</label>
       <input id="castQ" placeholder="如 今日事宜">
+      <label class="f chk"><input type="checkbox" id="castAI"> AI 详批（LLM 象义层散文解读，需平台已配置文本模型）</label>
       <button class="btn" onclick="doCast()">🪙 摇卦（铜钱六掷，一键成卦）</button>
       <div class="hint">六爻每爻需摇铜钱一次，共摇六次；这里一次按钮帮你完成六次。</div>
       <div class="out" id="o-cast"></div>
@@ -369,6 +398,10 @@ async function doArchive(){
     if(!d){ show('o-archive','请填出生日期或四柱',true); return; }
     body.birth = {date:d, hour:h};
     body.name = document.getElementById('birthName').value.trim()||undefined;
+    const g = document.getElementById('birthGender').value.trim();
+    if(g) body.gender = g;
+    const lng = parseFloat(document.getElementById('birthLng').value);
+    if(!isNaN(lng)) body.birth.lng = lng;
   }
   try{
     const d = await api('/api/v1/agent/fortune/archive', {method:'POST', body});
@@ -413,6 +446,28 @@ async function doArchive(){
       ul += '</div>';
       h += `<div class="block"><div class="bt">喜用神怎么用</div>${ul}</div>`;
     }
+    if(d.true_solar){
+      const ts = d.true_solar;
+      h += `<div class="solar"><b>真太阳时校正</b>　输入 ${esc(ts.input_time)}（北京时间）→ 当地真太阳时 <b>${esc(ts.true_time)}</b>`
+         + `（经度 ${ts.lng}°，${ts.delta_min>=0?'+':''}${ts.delta_min} 分）`
+         + `<div class="muted" style="margin-top:4px">${esc(ts.note)}</div></div>`;
+    }
+    if(d.dayun && d.dayun.dayun && d.dayun.dayun.length){
+      const dy = d.dayun;
+      h += `<div class="block"><div class="bt">大运（${dy.direction}，起运 ${dy.start_age} 岁${dy.start_months?('零'+dy.start_months+'月'):''}）</div><div class="dayun-list">`;
+      (dy.dayun||[]).forEach(x=>{
+        const on = d.liunian && d.liunian.active_dayun===x.ganzhi;
+        h += `<div class="dayun-row ${on?'on':''}"><span class="gz">${x.ganzhi}</span>`
+           + `<span class="meta">第 ${x.seq} 运 · ${x.start_age} 岁起${on?' · 当前所在' : ''}</span></div>`;
+      });
+      h += '</div></div>';
+    }
+    if(d.liunian){
+      const ln = d.liunian;
+      h += `<div class="block"><div class="bt">流年</div>`;
+      h += `<div class="kv"><b>${ln.year} 年（${ln.year_ganzhi}）</b><span>实岁 ${ln.age}${ln.active_dayun?' · 大运 '+ln.active_dayun:''}</span></div>`;
+      h += '</div>';
+    }
     h += `<div class="note">material_id：${esc(d.material_id||'')}</div>`;
     show('o-archive', h);
   }catch(e){ show('o-archive', '错误：'+esc(e.message), true); }
@@ -430,6 +485,9 @@ async function doDaily(){
     h += '<div class="rates"><div class="rate"><b>'+(sc.事业||'-')+'</b><span>事业</span></div>'
        + '<div class="rate"><b>'+(sc.财运||'-')+'</b><span>财运</span></div>'
        + '<div class="rate"><b>'+(sc.感情||'-')+'</b><span>感情</span></div></div>';
+    if(d.day_tenshen){
+      h += `<div class="kv"><b>今日对你</b><span>${d.day_tenshen}日（日支 ${d.day_zhi_tenshen||'-'}） · ${esc(d.day_tenshen_note||'')}</span></div>`;
+    }
     h += '<div class="kv"><b>宜</b><span>'+ (d.yi||[]).map(x=>`<span class="chip yi">${x}</span>`).join('') +'</span></div>';
     h += '<div class="kv"><b>忌</b><span>'+ (d.ji||[]).map(x=>`<span class="chip ji">${x}</span>`).join('') +'</span></div>';
     h += `<div class="kv"><b>财神位 / 喜神位</b><span>${d.shen?d.shen.财神位+' / '+d.shen.喜神位:'-'}</span></div>`;
@@ -457,10 +515,27 @@ async function doDaily(){
 
 // ---------- 六爻 ----------
 function wait(ms){ return new Promise(r=>setTimeout(r,ms)); }
+function zhuangTbl(z, title){
+  if(!z || !z.lines || !z.lines.length) return '';
+  let h = `<div class="block"><div class="bt">${title}</div>`;
+  h += `<div class="gua-head"><span>宫：<b>${z.palace}（${z.palace_wx}）</b></span>`
+     + `<span class="badge gold">世 ${z.shi_pos}</span><span class="badge green">应 ${z.ying_pos}</span>`;
+  if(z.yongshen) h += `<span class="badge gold">用神：${z.yongshen}</span>`;
+  h += '</div>';
+  h += '<table class="zhg"><tr><th>爻</th><th>干支</th><th>五行</th><th>六亲</th><th>六神</th></tr>';
+  z.lines.slice().reverse().forEach(l=>{
+    const tags = (l.shi?'<span class="tag shi">世</span>':'') + (l.ying?'<span class="tag ying">应</span>':'') + (l.old?'<span class="tag dyn">动</span>':'');
+    h += `<tr class="${l.shi||l.ying?'row-shi':''}"><td class="y">${l.name}${tags}</td>`
+       + `<td>${l.gz}</td><td class="wx wx-${l.wx}">${l.wx}</td><td>${l.liuqin}</td><td>${l.liushen}</td></tr>`;
+  });
+  h += '</table></div>';
+  return h;
+}
 async function doCast(){
   const btn = document.querySelector('button[onclick="doCast()"]');
   const body = {method: document.getElementById('castMethod').value,
-                question: document.getElementById('castQ').value.trim()||undefined};
+                question: document.getElementById('castQ').value.trim()||undefined,
+                ai: document.getElementById('castAI').checked};
   const out = document.getElementById('o-cast');
   btn.disabled = true;
   try{
@@ -486,6 +561,16 @@ async function doCast(){
     if(d.ben_yixiang) h += `<div class="yixiang"><span class="gn">本卦《${d.ben_gua}》</span>　${esc(d.ben_yixiang)}</div>`;
     if(!d.is_static && d.bian_yixiang) h += `<div class="yixiang"><span class="gn">变卦《${d.bian_gua}》</span>　${esc(d.bian_yixiang)}</div>`;
     if(d.reading_detail) h += `<div class="detail">${esc(d.reading_detail)}</div>`;
+    h += zhuangTbl(d.zhuanggua, '本卦装卦（纳甲·世应·六亲·六神）');
+    if(!d.is_static) h += zhuangTbl(d.zhuanggua_bian, '变卦装卦');
+    // LLM 象义层（AI 详批）：mode=llm 显正文，pending/error 显回退说明
+    if(d.narrative){
+      const n = d.narrative;
+      const label = n.mode==='llm' ? 'AI 详批（'+esc(n.model||'')+'）'
+                  : (n.mode==='pending' ? 'AI 详批（未启用）' : 'AI 详批（回退）');
+      h += `<div class="narr"><div class="narr-h">${label}</div>`
+         + `<div class="narr-b">${esc(n.text||'')}</div></div>`;
+    }
     show('o-cast', h);
   }catch(e){ show('o-cast', '错误：'+esc(e.message), true); }
   finally{ btn.disabled = false; }
@@ -502,6 +587,9 @@ async function doReport(){
     let h = `<div class="kv"><b>流年</b><span>${d.year_ganzhi}（${d.year}）</span></div>`;
     h += `<div class="kv"><b>日主 / 身</b><span>${d.day_master}（${d.strength}）</span></div>`;
     h += `<div class="kv"><b>流年关系</b><span>${d.liunian_relation}</span></div>`;
+    if(d.advice && d.advice.流年天干十神){
+      h += `<div class="kv"><b>流年十神</b><span>${d.advice.流年天干十神}（天干）· ${d.advice.流年地支十神}（地支）</span></div>`;
+    }
     h += '<div style="margin:6px 0">喜用：'+pills(d.favorable,'good')+'　忌：'+pills(d.unfavorable,'bad')+'</div>';
     if(d.advice){
       h += `<div class="kv"><b>重点五行</b><span>${(d.advice.重点五行||[]).join('、')}</span></div>`;

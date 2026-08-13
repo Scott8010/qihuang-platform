@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import datetime
+import math
 import os
 import random
 import re
@@ -253,10 +254,9 @@ def _wushu_dun(day_gan: str) -> int:
 
 
 def _hour_zhi(hour: int) -> str:
-    """时辰地支：23→子，0/1→子，2/3→丑 …"""
-    if hour == 23:
-        return "子"
-    return ZHI[(hour // 2) % 12]
+    """时辰地支（传统）：子(23-1) 丑(1-3) 寅(3-5) 卯(5-7) 辰(7-9) 巳(9-11)
+    午(11-13) 未(13-15) 申(15-17) 酉(17-19) 戌(19-21) 亥(21-23)。"""
+    return ZHI[((int(hour) + 1) // 2) % 12]
 
 
 def year_pillar(d: datetime.date) -> str:
@@ -282,15 +282,132 @@ def hour_pillar(d: datetime.date, hour: int) -> str:
     return GAN[stem_idx] + hz
 
 
-def bazi_from_birth(date_str, hour: int = 0) -> str:
-    """公历生日（'YYYY-MM-DD' 或 date）→ 四柱 '年 月 日 时'。"""
+def _true_solar_datetime(date_str, hour, minute=0, lng: float = 116.40):
+    """
+    北京时间（UTC+8，标准时对应东经120°）生日 → 真太阳时 datetime。
+    真太阳时 = 平太阳时 + 经度时差 + 时差方程(EoT)。
+      · 经度时差 = (lng - 120) × 4 分钟（东经为正，越往东越早见到太阳 → 真太阳时越晚）
+      · EoT（时差方程，近似）：9.87·sin2B − 7.53·cosB − 1.5·sinB，B=360(N−81)/365（度）
+    排盘以真太阳时所定时辰为准（传统命理以当地真太阳时定盘）。
+    """
     d = datetime.date.fromisoformat(date_str) if isinstance(date_str, str) else date_str
-    return " ".join([year_pillar(d), month_pillar(d), day_ganzhi(d), hour_pillar(d, hour)])
+    dt = datetime.datetime(d.year, d.month, d.day, int(hour), int(minute or 0))
+    N = dt.timetuple().tm_yday
+    B = math.radians(360.0 * (N - 81) / 365.0)
+    eot = 9.87 * math.sin(2 * B) - 7.53 * math.cos(B) - 1.5 * math.sin(B)   # 分钟
+    delta = (lng - 120.0) * 4.0 + eot
+    ts = dt + datetime.timedelta(minutes=delta)
+    return ts, round(delta, 1)
 
 
-def bazi_profile_from_birth(date_str, hour: int = 0) -> Dict:
-    """公历生日直接出命盘（便捷封装）。"""
-    return bazi_profile(bazi_from_birth(date_str, hour))
+def bazi_from_birth(date_str, hour: int = 0, minute: int = 0, lng: float = 116.40) -> str:
+    """公历生日（'YYYY-MM-DD' 或 date）→ 四柱 '年 月 日 时'。
+    可选 minute / lng：按出生地经度换算真太阳时后再定盘。"""
+    ts, _ = _true_solar_datetime(date_str, hour, minute, lng)
+    d = ts.date()
+    h = ts.hour
+    return " ".join([year_pillar(d), month_pillar(d), day_ganzhi(d), hour_pillar(d, h)])
+
+
+def bazi_profile_from_birth(date_str, hour: int = 0, minute: int = 0, lng: float = 116.40) -> Dict:
+    """公历生日直接出命盘（便捷封装），并附真太阳时校正信息。"""
+    ts, delta = _true_solar_datetime(date_str, hour, minute, lng)
+    prof = bazi_profile(bazi_from_birth(date_str, hour, minute, lng))
+    prof["true_solar"] = {
+        "input_time": f"{int(hour):02d}:{int(minute or 0):02d}",
+        "true_time": f"{ts.hour:02d}:{ts.minute:02d}",
+        "delta_min": delta,
+        "lng": lng,
+        "note": ("已按出生地经度将北京时间换算为真太阳时（传统排盘以真太阳时定盘）。"
+                 if abs(delta) >= 1 else
+                 "出生地接近东经120°，真太阳时与北京时间基本一致。"),
+    }
+    return prof
+
+
+# ═══════════════════════════════════════════════════════════════
+# 大运 / 流年（八字延伸，传统民俗娱乐参考）
+# ═══════════════════════════════════════════════════════════════
+_JIAZI = [GAN[k % 10] + ZHI[k % 12] for k in range(60)]
+
+
+def _jiazi_index(g: str, z: str) -> int:
+    a, b = GAN.index(g), ZHI.index(z)
+    for k in range(60):
+        if k % 10 == a and k % 12 == b:
+            return k
+    return 0
+
+
+def bazi_dayun(pillars, gender: str, birth_date) -> Dict:
+    """排大运：阳年男 / 阴年女顺排，阴年男 / 阳年女逆排；起运 = 距最近节气天数 ÷ 3（三日为一岁）。"""
+    if gender not in ("男", "女"):
+        return {}
+    year_gan = pillars[0][0]
+    yang = GAN_YIN[year_gan]
+    forward = (yang and gender == "男") or ((not yang) and gender == "女")
+    mp = pillars[1]
+    bd = birth_date if isinstance(birth_date, datetime.date) else datetime.date.fromisoformat(str(birth_date))
+    # 12 节锚点（寿星公式），取出生前后最近的一个
+    anchors = []
+    for yy in (bd.year - 1, bd.year, bd.year + 1):
+        for i in range(12):
+            anchors.append(_solar_jie(yy, i))
+    anchors.sort()
+    if forward:
+        nxt = min(a for a in anchors if a > bd)
+        days = (nxt - bd).days
+    else:
+        prv = max(a for a in anchors if a < bd)
+        days = (bd - prv).days
+    start_age = days / 3.0
+    months = int(round((days % 3) * 4))        # 一日 ≈ 四个月
+    mi = _jiazi_index(mp[0], mp[1])
+    dayun = []
+    for n in range(1, 9):
+        k = (mi + n) % 60 if forward else (mi - n) % 60
+        dayun.append({
+            "seq": n,
+            "ganzhi": _JIAZI[k],
+            "start_age": round(start_age + (n - 1) * 10, 1),
+        })
+    return {
+        "forward": forward,
+        "direction": "顺排" if forward else "逆排",
+        "start_age": round(start_age, 1),
+        "start_months": months,
+        "days_to_jie": days,
+        "dayun": dayun,
+    }
+
+
+def bazi_liunian(birth_date, ref_year: int = None) -> Dict:
+    """流年：当前(或指定)年份干支 + 实岁。"""
+    now = datetime.date.today()
+    ry = ref_year or now.year
+    bd = birth_date if isinstance(birth_date, datetime.date) else datetime.date.fromisoformat(str(birth_date))
+    age = ry - bd.year
+    if ry == now.year and (bd.month, bd.day) > (now.month, now.day):
+        age -= 1
+    return {"year": ry, "year_ganzhi": year_ganzhi(ry), "age": age}
+
+
+def attach_destiny(prof: Dict, gender: str, birth_date) -> Dict:
+    """把大运 / 流年挂到八字命盘（娱乐参考）；同时标注当前所处大运。"""
+    if not prof or gender not in ("男", "女"):
+        return prof
+    prof["dayun"] = bazi_dayun(prof["pillars"], gender, birth_date)
+    prof["liunian"] = bazi_liunian(birth_date)
+    du = prof.get("dayun")
+    if du and du.get("dayun"):
+        a = prof["liunian"]["age"]
+        active = None
+        for d in du["dayun"]:
+            if d["start_age"] <= a < d["start_age"] + 10:
+                active = d["ganzhi"]
+                break
+        prof["liunian"]["active_dayun"] = active
+    return prof
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -481,8 +598,254 @@ def _meihua_time(when: datetime.datetime) -> List[int]:
     return lines
 
 
+# ═══════════════════════════════════════════════════════════════
+# 六爻 · 京房纳甲装卦（世应 / 六亲 / 六神）
+# 纯规则派生，传统民俗娱乐参考，不涉占断结论。
+# ═══════════════════════════════════════════════════════════════
+# 八宫（每宫 8 卦，顺序：本宫/一世/二世/三世/四世/五世/游魂/归魂 → 世爻位 6/1/2/3/4/5/4/3）
+_PALACE_ORDER = [
+    ("乾", ["乾", "姤", "遁", "否", "观", "剥", "晋", "大有"]),
+    ("兑", ["兑", "困", "萃", "咸", "蹇", "谦", "小过", "归妹"]),
+    ("离", ["离", "旅", "鼎", "未济", "蒙", "涣", "讼", "同人"]),
+    ("震", ["震", "豫", "解", "恒", "升", "井", "大过", "随"]),
+    ("巽", ["巽", "小畜", "家人", "益", "无妄", "噬嗑", "颐", "蛊"]),
+    ("坎", ["坎", "节", "屯", "既济", "革", "丰", "明夷", "师"]),
+    ("艮", ["艮", "贲", "大畜", "损", "睽", "履", "中孚", "渐"]),
+    ("坤", ["坤", "复", "临", "泰", "大壮", "夬", "需", "比"]),
+]
+_SHI_BY_ORDER = [6, 1, 2, 3, 4, 5, 4, 3]
+HEX_PALACE = {}
+for _pt, _names in _PALACE_ORDER:
+    for _j, _nm in enumerate(_names):
+        HEX_PALACE[_nm] = (_pt, _SHI_BY_ORDER[_j])
+
+# 纳甲：每卦（八纯）内卦(初/二/三爻)与外卦(四/五/上爻)的干支
+_NAJIA = {
+    "乾": (["甲子", "甲寅", "甲辰"], ["壬午", "壬申", "壬戌"]),
+    "坤": (["乙未", "乙巳", "乙卯"], ["癸丑", "癸亥", "癸酉"]),
+    "震": (["庚子", "庚寅", "庚辰"], ["庚午", "庚申", "庚戌"]),
+    "巽": (["辛丑", "辛亥", "辛酉"], ["辛未", "辛巳", "辛卯"]),
+    "坎": (["戊寅", "戊辰", "戊午"], ["戊申", "戊戌", "戊子"]),
+    "离": (["己卯", "己丑", "己亥"], ["己酉", "己未", "己巳"]),
+    "艮": (["丙辰", "丙午", "丙申"], ["丙戌", "丙子", "丙寅"]),
+    "兑": (["丁巳", "丁卯", "丁丑"], ["丁亥", "丁酉", "丁未"]),
+}
+
+# 六神（六兽）：青龙/朱雀/勾陈/螣蛇/白虎/玄武，由占卦日干定初爻起神
+_LIUSHEN = ["青龙", "朱雀", "勾陈", "螣蛇", "白虎", "玄武"]
+
+
+def _liushen_start(day_gan: str) -> int:
+    if day_gan in ("甲", "乙"):
+        return 0          # 青龙起
+    if day_gan in ("丙", "丁"):
+        return 1          # 朱雀起
+    if day_gan == "戊":
+        return 2          # 勾陈起
+    if day_gan == "己":
+        return 3          # 螣蛇起
+    if day_gan in ("庚", "辛"):
+        return 4          # 白虎起
+    return 5              # 壬癸 → 玄武起
+
+
+# 问事 → 用神六亲（简表，娱乐参考；命中首关键词即定）
+_YONG_MAP = [
+    ("财", "妻财"), ("钱", "妻财"), ("生意", "妻财"), ("工资", "妻财"), ("薪", "妻财"),
+    ("事业", "官鬼"), ("工作", "官鬼"), ("职位", "官鬼"), ("官", "官鬼"), ("升", "官鬼"),
+    ("感情", "妻财"), ("婚", "妻财"), ("恋", "妻财"), ("对象", "妻财"),
+    ("学", "父母"), ("考试", "父母"), ("文书", "父母"), ("名", "父母"), ("证", "父母"),
+    ("病", "官鬼"), ("健康", "官鬼"), ("身体", "官鬼"),
+    ("出行", "父母"), (" travel", "父母"), ("迁", "父母"),
+]
+
+
+def _yongshen_hint(q: str, palace_wx: str):
+    if not q:
+        return None
+    for k, v in _YONG_MAP:
+        if k in q:
+            return v
+    return None
+
+
+def _zhuanggua(lines: List[int], when: datetime.datetime = None) -> Dict:
+    """京房纳甲装卦：为本卦/变卦六爻配 干支 / 六亲 / 六神 / 世应。"""
+    when = when or datetime.datetime.now()
+    ben_bits = [1 if v in (7, 9) else 0 for v in lines]
+    lower = TRI_BITS["".join(map(str, ben_bits[0:3]))]
+    upper = TRI_BITS["".join(map(str, ben_bits[3:6]))]
+    ben_name = HEX_NAMES[TRI_IDX[lower]][TRI_IDX[upper]]
+    palace_tri, shi = HEX_PALACE.get(ben_name, ("乾", 6))
+    palace_wx = TRI_WX[palace_tri]
+    ying = ((shi + 2) % 6) + 1
+    day_gan = day_ganzhi(when.date())[0]
+    ls_start = _liushen_start(day_gan)
+    pos_name = ["初", "二", "三", "四", "五", "上"]
+    out = []
+    for i in range(6):
+        tri = lower if i < 3 else upper
+        gz = _NAJIA[tri][0 if i < 3 else 1][i % 3]
+        zhi = gz[1]
+        wx = ZHI_WX[zhi]
+        if wx == palace_wx:
+            lq = "兄弟"
+        elif SHENG[palace_wx] == wx:
+            lq = "子孙"
+        elif KE[palace_wx] == wx:
+            lq = "妻财"
+        elif KE[wx] == palace_wx:
+            lq = "官鬼"
+        else:
+            lq = "父母"
+        yang = lines[i] in (7, 9)
+        old = lines[i] in (6, 9)
+        # 爻名：初/上居前（初九/上六），二三四五则九/六居前（九二/六五…）
+        yw = "九" if yang else "六"
+        pn = pos_name[i]
+        yname = pn + yw if pn in ("初", "上") else yw + pn
+        out.append({
+            "pos": i + 1,
+            "name": yname,
+            "gz": gz,
+            "wx": wx,
+            "liuqin": lq,
+            "liushen": _LIUSHEN[(ls_start + i) % 6],
+            "shi": (i + 1) == shi,
+            "ying": (i + 1) == ying,
+            "yang": yang,
+            "old": old,
+        })
+    return {
+        "ben_gua": ben_name,
+        "lower": lower,
+        "upper": upper,
+        "palace": palace_tri,
+        "palace_wx": palace_wx,
+        "shi_pos": shi,
+        "ying_pos": ying,
+        "lines": out,
+    }
+
+
+# ───────────────────────────────────────────────────────────
+# LLM 象义层（六爻解读散文）—— 规则引擎保底 + LLM 增厚
+# 配置读取环境变量 FORTUNE_LLM_API_BASE / FORTUNE_LLM_API_KEY / FORTUNE_LLM_MODEL
+# 未配置或调用失败均安全回退，绝不阻断主流程。
+# ───────────────────────────────────────────────────────────
+def _llm_chat_text(base: str, key: str, model: str, prompt: str) -> str:
+    """调用 OpenAI 兼容文本对话端点，返回模型文本（复用视觉通道的 urllib 模式）。"""
+    import json
+    url = f"{base.rstrip('/')}/chat/completions"
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.7,
+    }
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {key}"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        out = json.loads(resp.read().decode("utf-8"))
+    return out["choices"][0]["message"]["content"]
+
+
+def _liuyao_zhuang_text(z: Dict) -> str:
+    """把装卦 dict 转成给 LLM 看的结构化中文文本（自下而上，标注世/应/动）。"""
+    lines = z.get("lines", [])
+    rows = []
+    for ln in reversed(lines):  # 初爻在下，上爻在上
+        tags = []
+        if ln.get("shi"):
+            tags.append("世")
+        if ln.get("ying"):
+            tags.append("应")
+        if ln.get("old"):
+            tags.append("动" if ln.get("yang") else "变")
+        t = "（" + "/".join(tags) + "）" if tags else ""
+        rows.append("  · 第%s爻（%d位）: %s %s %s %s%s"
+                    % (ln["name"], ln["pos"], ln["gz"], ln["wx"],
+                       ln["liuqin"], ln["liushen"], t))
+    head = ("卦名：%s　宫：%s宫（五行属%s）　世爻在%d位　应爻在%d位"
+            % (z.get("ben_gua"), z.get("palace"), z.get("palace_wx"),
+               z.get("shi_pos"), z.get("ying_pos")))
+    if z.get("yongshen"):
+        head += "　用神提示：%s" % z.get("yongshen")
+    return head + "\n" + "\n".join(rows)
+
+
+def _build_liuyao_prompt(zhuang: Dict, zhuang_bian: Dict,
+                         question: str, is_static: bool) -> str:
+    """构造六爻解读散文的 prompt：装卦数据 + 结构约束。"""
+    ben_txt = _liuyao_zhuang_text(zhuang)
+    if not is_static and zhuang_bian:
+        change_desc = ("本卦（现状）装卦如下：\n" + ben_txt +
+                       "\n\n变卦（演变后）装卦如下：\n" + _liuyao_zhuang_text(zhuang_bian))
+        sections = [
+            "一、卦局总断（一句话点出本卦与变卦的核心意象，以及总体吉凶/趋势）",
+            "二、本卦解析（现状处境，结合世应、用神、六亲六神）",
+            "三、动爻拆解（逐一说明发动之爻的变化与含义）",
+            "四、变卦解析（事态演变后的走向）",
+            "五、针对所求之事的具体研判（近期大概率会怎样）",
+            "六、实操建议（为求问者提供 2-4 条可落地的建议或心态提醒）",
+            "七、简短总结（收束语，强调一切仅供参考、娱乐向）",
+        ]
+    else:
+        change_desc = "本卦（六爻俱静，无变卦）装卦如下：\n" + ben_txt
+        sections = [
+            "一、卦局总断（一句话点出本卦的核心意象，以及总体吉凶/趋势）",
+            "二、本卦解析（现状处境，结合世应、用神、六亲六神）",
+            "三、针对所求之事的具体研判（近期大概率会怎样）",
+            "四、实操建议（为求问者提供 2-4 条可落地的建议或心态提醒）",
+            "五、简短总结（收束语，强调一切仅供参考、娱乐向）",
+        ]
+    section_block = "\n".join("   " + s for s in sections)
+    q = (question or "求问近期运势").strip()
+    return (
+        "你是一位深谙《周易》京房纳甲六爻的命理解读师。下面是一卦的装卦结果"
+        "（纳甲、世应、六亲、六神已排定），请用传统卦象义理为求问者撰写一篇"
+        "通俗而专业的中文解读散文。\n\n"
+        "【求问之事】\n" + q + "\n\n"
+        "【装卦数据】\n" + change_desc + "\n\n"
+        "【撰写要求】\n"
+        "1. 语言：简体中文，通俗流畅、有温度，避免生硬堆砌术语；可适当引经据典。\n"
+        "2. 结构（用小标题分段，序号连贯）：\n" + section_block + "\n"
+        "3. 必须基于上方装卦数据推演，不得凭空捏造干支/世应；保持理性、正向、娱乐向。\n"
+        "4. 总篇幅约 500-900 字。直接输出正文，不要外层 JSON、不要代码块。"
+    )
+
+
+def _liuyao_narrative(zhuang: Dict, zhuang_bian: Dict,
+                      question: str, is_static: bool) -> Dict:
+    """LLM 象义层：基于装卦数据生成中文解读散文。未配置或失败则优雅回退。
+
+    返回 {mode: 'llm'|'pending'|'error', model, text}。
+    """
+    base = os.environ.get("FORTUNE_LLM_API_BASE", "").rstrip("/")
+    key = os.environ.get("FORTUNE_LLM_API_KEY", "")
+    model = os.environ.get("FORTUNE_LLM_MODEL", "gpt-4o-mini")
+    if not (base and key):
+        return {"mode": "pending", "model": None,
+                "text": "未配置 LLM 象义层（FORTUNE_LLM_API_BASE/KEY），"
+                        "当前仅展示规则引擎装卦与卦象参考。开启 AI 详批需平台配置文本模型。"}
+    try:
+        prompt = _build_liuyao_prompt(zhuang, zhuang_bian, question, is_static)
+        text = _llm_chat_text(base, key, model, prompt)
+        if not text or not text.strip():
+            return {"mode": "error", "model": model,
+                    "text": "LLM 象义层返回为空，请稍后重试或查看规则引擎装卦与卦象参考。"}
+        return {"mode": "llm", "model": model, "text": text.strip()}
+    except Exception as e:  # 任意异常均安全回退
+        return {"mode": "error", "model": model,
+                "text": f"LLM 象义层调用失败（{e}），已回退为规则引擎装卦与卦象参考。"}
+
+
 def liuyao(method: str = "coin", question: str = "", seed_key: str = None,
-           when: datetime.datetime = None) -> Dict:
+           when: datetime.datetime = None, ai: bool = False) -> Dict:
     if method == "time":
         # 时间卦：以真实时辰干支起卦（确定性），非随机
         when = when or datetime.datetime.now()
@@ -491,6 +854,11 @@ def liuyao(method: str = "coin", question: str = "", seed_key: str = None,
         lines = [_coin() for _ in range(6)]
     ben, bian, dyn = _lines_to_hex(lines)
     yang_line = [v in (7, 9) for v in lines]
+    zhuang = _zhuanggua(lines, when)
+    zhuang["yongshen"] = _yongshen_hint(question, zhuang["palace_wx"])
+    # 变卦装卦：动爻阴阳反转后的六爻
+    bian_bits = [0 if v == 9 else (1 if v == 6 else (1 if v in (7, 9) else 0)) for v in lines]
+    zhuang_bian = _zhuanggua([7 if b else 8 for b in bian_bits], when)
     result = {
         "method": method,
         "question": question,
@@ -499,6 +867,8 @@ def liuyao(method: str = "coin", question: str = "", seed_key: str = None,
         "bian_gua": bian,
         "changing_lines": dyn,
         "is_static": len(dyn) == 0,
+        "zhuanggua": zhuang,
+        "zhuanggua_bian": zhuang_bian,
     }
     # 卦象象义 + 解析（传统卦象参考，娱乐为主）
     by = _GUA_YIXIANG.get(ben, "")
@@ -515,6 +885,11 @@ def liuyao(method: str = "coin", question: str = "", seed_key: str = None,
     result["ben_yixiang"] = by
     result["bian_yixiang"] = yy
     result["reading_detail"] = detail + "（传统卦象参考，仅供娱乐）"
+    # LLM 象义层（可选增厚）：规则引擎保底，ai=True 时挂 narrative
+    if ai:
+        result["narrative"] = _liuyao_narrative(
+            zhuang, zhuang_bian, question, result["is_static"],
+        )
     return result
 
 
@@ -595,14 +970,33 @@ def _personal_advice(dwx: str, fav: List[str], unfav: List[str], rank) -> Dict:
     }
 
 
+# 当日日干 / 日支 对本人日主的十神 → 日签个人化提示（传统民俗娱乐参考）
+_DAY_TENSHEN_NOTE = {
+    "比肩": "同辈协作之日，利社交、团队、并肩推进；忌与人争利、单打独斗。",
+    "劫财": "人际互动之日，利帮扶、沟通；忌破耗、与人争财。",
+    "食神": "表达创意之日，利写作、沟通、展现才华；忌口舌任性、过度表现。",
+    "伤官": "才艺显露之日，利创意、突破；忌傲气、口舌、违逆上级。",
+    "正财": "务实求财之日，利理财、交易、稳定进账；忌冲动消费、投机。",
+    "偏财": "灵活机变之日，利交际、偏财机遇；忌贪心、冒险冒进。",
+    "正官": "规矩名望之日，利推进正事、尽责、立信；忌违规、顶撞上司。",
+    "七杀": "压力机遇之日，利攻坚、决断；忌畏缩、硬碰硬。",
+    "正印": "学习沉淀之日，利读书、规划、受教、得贵人；忌懒散荒废。",
+    "偏印": "钻研独思之日，利专研、冷门深耕；忌钻牛角尖、孤僻。",
+}
+
+
 def daily_sign(date: datetime.date = None, favorable: List[str] = None,
-               unfavorable: List[str] = None) -> Dict:
+               unfavorable: List[str] = None, day_master: str = None) -> Dict:
+    """每日日签。带 day_master（本人日主天干）时，额外给出「当日日干/日支对本人的十神」个人化解读。"""
     date = date or datetime.date.today()
     dg = day_ganzhi(date)
     dgan, dzhi = dg[0], dg[1]
     dwx = GAN_WX[dgan]
     fav = favorable or []
     unfav = unfavorable or []
+    day_tenshen = shishen(day_master, dgan) if day_master else None
+    day_zhi_tenshen = shishen(day_master, ZHI_BEN_GAN[dzhi]) if day_master else None
+    day_tenshen_note = _DAY_TENSHEN_NOTE.get(day_tenshen, "") if day_master else ""
 
     # 五行穿衣 / 茶（以日干为「我」）
     def rank(wx):
@@ -651,6 +1045,10 @@ def daily_sign(date: datetime.date = None, favorable: List[str] = None,
         "day_ganzhi": dg,
         # 注意：这是「当日日干五行」，不是本人日主五行（本人日主见 bazi_profile.day_master_wx）
         "day_wx": dwx,
+        "day_master": day_master,
+        "day_tenshen": day_tenshen,
+        "day_zhi_tenshen": day_zhi_tenshen,
+        "day_tenshen_note": day_tenshen_note,
         "favorable": fav or [],
         "scores": {"综合": score, "事业": round(score + random.uniform(-0.5, 0.5), 1),
                    "财运": round(score + random.uniform(-0.8, 0.6), 1),
@@ -671,6 +1069,24 @@ def daily_sign(date: datetime.date = None, favorable: List[str] = None,
 # ═══════════════════════════════════════════════════════════════
 # 年运报告
 # ═══════════════════════════════════════════════════════════════
+def _year_advice_text(fav, unfav, rel):
+    """年运宜忌：按本人喜用神五行动态生成（替代原来的写死文案）。"""
+    yi_parts, ji_parts = [], []
+    for w in (fav or []):
+        u = _WX_USE.get(w)
+        if u:
+            yi_parts.append(f"{w}（{u['方位']}·{u['颜色']}：{u['行业']}）")
+    for w in (unfav or []):
+        u = _WX_USE.get(w)
+        if u:
+            ji_parts.append(f"{w}（{u['方位']}·{u['行业']}）")
+    yi = ("宜：顺势借流年之便，多用「" + "；".join(yi_parts) + "」相关行业、人际与方位进取。"
+          ) if yi_parts else "宜：守成蓄势，按部就班，沉淀内功。"
+    ji = ("忌：少碰「" + "；".join(ji_parts) + "」相关事象，防耗散与无谓压力。"
+          ) if ji_parts else "忌：冒进与冲动决策。"
+    return yi, ji
+
+
 def year_report(pillars, year: int = None) -> Dict:
     prof = bazi_profile(pillars)
     year = year or datetime.date.today().year
@@ -692,6 +1108,9 @@ def year_report(pillars, year: int = None) -> Dict:
         rel = "官杀年（压力/机遇并存）"
 
     advice_wx = [w for w in fav if w not in (y_gan_wx,)]
+    yt = shishen(prof["day_master"], yg[0])
+    yz = shishen(prof["day_master"], ZHI_BEN_GAN[yg[1]])
+    yi_text, ji_text = _year_advice_text(fav, prof["unfavorable"], rel)
     return {
         "year": year,
         "year_ganzhi": yg,
@@ -702,8 +1121,10 @@ def year_report(pillars, year: int = None) -> Dict:
         "liunian_relation": rel,
         "advice": {
             "重点五行": advice_wx or fav,
-            "宜": "补水金土相关行业/人际；借伙伴之力推进。",
-            "忌": "单打独斗、冲动投资、与人争功。",
+            "宜": yi_text,
+            "忌": ji_text,
+            "流年天干十神": yt,
+            "流年地支十神": yz,
         },
         "disclaimer": "传统文化娱乐参考，不作为医疗/投资/人生决策依据。",
     }

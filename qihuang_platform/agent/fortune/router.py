@@ -51,7 +51,12 @@ async def fortune_archive(
     try:
         if req.birth:
             b = req.birth
-            prof = engine.bazi_profile_from_birth(b["date"], int(b.get("hour", 0)))
+            prof = engine.bazi_profile_from_birth(
+                b["date"], int(b.get("hour", 0)),
+                int(b.get("minute", 0)), float(b.get("lng", 116.40)),
+            )
+            if req.gender in ("男", "女"):
+                engine.attach_destiny(prof, req.gender, b["date"])
         else:
             prof = engine.bazi_profile(req.pillars)
     except (ValueError, KeyError, TypeError) as e:
@@ -77,8 +82,8 @@ async def fortune_cast(
     user: dict = Depends(get_current_user),
     _agent=Depends(require_agent_in_plan("fortune")),
 ):
-    """六爻起卦：铜钱/时间，返回本卦/变卦/动爻/趣味解析。"""
-    result = engine.liuyao(method=req.method, question=req.question or "")
+    """六爻起卦：铜钱/时间，返回本卦/变卦/动爻/趣味解析（ai=true 时附 LLM 象义层详批）。"""
+    result = engine.liuyao(method=req.method, question=req.question or "", ai=req.ai)
     result["kind"] = "cast"
     result["user_id"] = req.user_id
     material_key = f"fortune:cast:{req.user_id or 'anon'}:{result['ben_gua']}"
@@ -98,19 +103,21 @@ async def fortune_daily(
     _agent=Depends(require_agent_in_plan("fortune")),
 ):
     """每日运程日签：默认通用；带 user_id/四柱则做个性化喜用。"""
-    fav = unfav = None
+    fav = unfav = dm = None
     if user_id:
         recs = _store.all(kind="archive", user_id=user_id)
         if recs:
             fav = recs[-1].get("favorable")
             unfav = recs[-1].get("unfavorable")
+            dm = recs[-1].get("day_master")
     elif pillars:
         try:
             prof = engine.bazi_profile(pillars)
             fav, unfav = prof.get("favorable"), prof.get("unfavorable")
+            dm = prof.get("day_master")
         except ValueError:
-            fav = unfav = None
-    data = engine.daily_sign(date=date.today(), favorable=fav, unfavorable=unfav)
+            fav = unfav = dm = None
+    data = engine.daily_sign(date=date.today(), favorable=fav, unfavorable=unfav, day_master=dm)
     _audit.append("daily", operator=getattr(request.state, "user_id", "unknown"),
                   user_id=user_id)
     return success(data=data)
