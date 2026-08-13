@@ -131,6 +131,34 @@
   .shake{animation:sk .5s ease}
   @keyframes sk{0%,100%{transform:rotate(0)}25%{transform:rotate(-9deg)}75%{transform:rotate(9deg)}}
   @keyframes pop{0%{transform:scale(.7);opacity:.5}80%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
+  /* 八字解读增厚 */
+  .block{margin-top:12px}
+  .block .bt{font-size:13px;color:var(--ink);font-weight:600;margin-bottom:7px;display:flex;align-items:center;gap:6px}
+  .block .bt::before{content:"";width:3px;height:13px;background:var(--gold);border-radius:2px}
+  .ten-tb{width:100%;border-collapse:collapse;font-size:12px}
+  .ten-tb td{padding:6px 7px;border-bottom:1px dashed var(--line);vertical-align:top}
+  .ten-tb td.k{color:var(--ink);font-weight:600;white-space:nowrap;width:60px}
+  .ten-tb td.v{color:#5a5648;line-height:1.5}
+  .ten-tb .ts{color:#9a7b22;font-weight:600;margin-right:4px}
+  .bars{display:flex;gap:6px;margin-top:4px}
+  .bar{flex:1;text-align:center}
+  .bar .fill{height:7px;border-radius:4px;background:#ece6d6;overflow:hidden}
+  .bar .fill i{display:block;height:100%;background:linear-gradient(90deg,var(--gold-soft),var(--gold));border-radius:4px}
+  .bar .n{font-size:11px;margin-top:3px}
+  .use-list{display:flex;flex-direction:column;gap:6px;margin-top:2px}
+  .use-row{display:flex;gap:8px;font-size:12px;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+  .use-row .uw{font-weight:700;white-space:nowrap;padding:1px 8px;border-radius:8px;background:#fff;border:1px solid var(--line)}
+  .use-row .ud{color:#5a5648;line-height:1.5}
+  .nature{font-size:13px;color:#3a3526;line-height:1.7;background:linear-gradient(135deg,#fdf6e6,#f7efe0);border:1px solid #ecdcb6;border-radius:11px;padding:11px 13px}
+  /* 六爻增厚 */
+  .yixiang{font-size:13px;color:#3a3526;line-height:1.7;background:var(--soft);border-left:3px solid var(--gold);border-radius:9px;padding:10px 12px;margin-top:8px}
+  .yixiang .gn{font-weight:700;color:var(--ink)}
+  .detail{font-size:13px;color:#5a5648;line-height:1.75;background:#f3f0e6;border-radius:9px;padding:11px 12px;margin-top:8px}
+  /* 日签评分条 */
+  .rates{display:flex;gap:8px;margin:9px 0}
+  .rate{flex:1;text-align:center;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:9px 4px}
+  .rate b{font-size:19px;color:var(--ink);line-height:1}
+  .rate span{font-size:10px;color:var(--muted);display:block;margin-top:3px}
 </style>
 </head>
 <body>
@@ -359,7 +387,32 @@ async function doArchive(){
        + ` <span class="muted">旺衰分 ${d.score}</span></div>`;
     h += '<div>喜用神：'+pills(d.favorable,'good')+'　忌神：'+pills(d.unfavorable,'bad')+'</div>';
     const wc = d.wuxing_count||{};
-    h += '<div class="kv"><b>五行统计</b><span>'+WX_ORDER.map(w=>`${w} ${wc[w]||0}`).join(' · ')+'</span></div>';
+    const mxw = Math.max(...WX_ORDER.map(w=>wc[w]||0),1);
+    let bars = '<div class="bars">';
+    WX_ORDER.forEach(w=>{ const n=wc[w]||0; const p=Math.round(n/mxw*100);
+      bars += `<div class="bar"><div class="fill"><i style="width:${p}%"></i></div><div class="n wx wx-${w}">${w} ${n}</div></div>`; });
+    bars += '</div>';
+    h += `<div class="block"><div class="bt">五行强弱</div>${bars}</div>`;
+    const bi = d.bazi_interp||{};
+    if(bi.nature){
+      h += `<div class="block"><div class="bt">性格倾向</div><div class="nature">${esc(bi.nature)}</div>`;
+      if(bi.wuxing_read) h += `<div class="muted" style="margin-top:6px">${esc(bi.wuxing_read)}</div>`;
+      h += '</div>';
+    }
+    const ten = d.tenshen||{}; const tmean = bi.tenshen_mean||{};
+    if(Object.keys(ten).length){
+      let tt = '<table class="ten-tb">';
+      Object.keys(ten).forEach(k=>{ tt += `<tr><td class="k">${k}</td><td class="v"><span class="ts">${ten[k]}</span>${esc(tmean[k]||'')}</td></tr>`; });
+      tt += '</table>';
+      h += `<div class="block"><div class="bt">十神格局</div>${tt}</div>`;
+    }
+    const use = bi.favorable_use||[];
+    if(use.length){
+      let ul = '<div class="use-list">';
+      use.forEach(u=>{ ul += `<div class="use-row"><div class="uw wx wx-${u.wx}">${u.wx}</div><div class="ud">行业：${esc(u.行业)}　方位：${esc(u.方位)}　色：${esc(u.颜色)}　人际：${esc(u.人际)}</div></div>`; });
+      ul += '</div>';
+      h += `<div class="block"><div class="bt">喜用神怎么用</div>${ul}</div>`;
+    }
     h += `<div class="note">material_id：${esc(d.material_id||'')}</div>`;
     show('o-archive', h);
   }catch(e){ show('o-archive', '错误：'+esc(e.message), true); }
@@ -374,7 +427,9 @@ async function doDaily(){
           + `<div class="date" style="margin-top:4px">日干五行 ${d.day_wx}</div></div>`
           + `<div class="score"><b>${d.scores.综合}</b><span>综合评分</span></div></div>`;
     const sc = d.scores||{};
-    h += `<div class="kv"><b>事业 / 财运 / 感情</b><span>${sc.事业} / ${sc.财运} / ${sc.感情}</span></div>`;
+    h += '<div class="rates"><div class="rate"><b>'+(sc.事业||'-')+'</b><span>事业</span></div>'
+       + '<div class="rate"><b>'+(sc.财运||'-')+'</b><span>财运</span></div>'
+       + '<div class="rate"><b>'+(sc.感情||'-')+'</b><span>感情</span></div></div>';
     h += '<div class="kv"><b>宜</b><span>'+ (d.yi||[]).map(x=>`<span class="chip yi">${x}</span>`).join('') +'</span></div>';
     h += '<div class="kv"><b>忌</b><span>'+ (d.ji||[]).map(x=>`<span class="chip ji">${x}</span>`).join('') +'</span></div>';
     h += `<div class="kv"><b>财神位 / 喜神位</b><span>${d.shen?d.shen.财神位+' / '+d.shen.喜神位:'-'}</span></div>`;
@@ -385,6 +440,12 @@ async function doDaily(){
       const o = (d.clothes||{})[w]||{color:[],rank:'平'};
       h += `<div class="cw lv${rankClass[o.rank]||2}"><div class="wx wx-${w}">${w}</div>`
          + `<div class="co">${(o.color||[]).join('/')}</div><div class="rk">${o.rank}</div></div>`;
+    });
+    h += '</div>';
+    h += '<div class="muted" style="margin:11px 0 2px">五行茶饮</div><div class="clothes">';
+    WX_ORDER.forEach(w=>{
+      const o = (d.tea||{})[w]||{tea:[],rank:'平'};
+      h += `<div class="cw lv${rankClass[o.rank]||2}"><div class="wx wx-${w}">${w}</div><div class="co">${(o.tea||[]).join('/')}</div><div class="rk">${o.rank}</div></div>`;
     });
     h += '</div>';
     if(d.personal_advice && d.personal_advice.text){
@@ -422,6 +483,9 @@ async function doCast(){
     h += '</div>';
     h += `<div class="kv"><b>动爻</b><span>${d.changing_lines&&d.changing_lines.length?d.changing_lines.join('、'):'无（六爻俱静）'}</span></div>`;
     h += `<div class="reading">${esc(d.reading||'')}</div>`;
+    if(d.ben_yixiang) h += `<div class="yixiang"><span class="gn">本卦《${d.ben_gua}》</span>　${esc(d.ben_yixiang)}</div>`;
+    if(!d.is_static && d.bian_yixiang) h += `<div class="yixiang"><span class="gn">变卦《${d.bian_gua}》</span>　${esc(d.bian_yixiang)}</div>`;
+    if(d.reading_detail) h += `<div class="detail">${esc(d.reading_detail)}</div>`;
     show('o-cast', h);
   }catch(e){ show('o-cast', '错误：'+esc(e.message), true); }
   finally{ btn.disabled = false; }

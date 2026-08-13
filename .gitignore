@@ -60,6 +60,9 @@ frontend-admin-react/dist/
 # 前端 UI 验证截图（开发产物，不入库）
 qihuang_platform/frontend-admin/verify_shots/
 
+# 命理运程本地运行时数据（JSONL 存储，自测落盘，不入库）
+qihuang_platform/agent/fortune/seed/
+
 # Frontend build artifacts
 frontend-admin-react/dist/
 frontend-admin-react/dist_prev_*/
