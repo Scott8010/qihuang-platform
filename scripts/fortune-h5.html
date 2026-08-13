@@ -101,6 +101,7 @@
   .cw.lv2{background:#f6f3e9;border-color:#e6e0cd}.cw.lv2 .rk{color:var(--muted)}
   .cw.lv3{background:#fae9e5;border-color:#f0c9bf}.cw.lv3 .rk{color:var(--bad)}
   .adv{background:#fdf3da;border:1px solid #f0dca0;border-radius:10px;padding:10px;margin-top:9px;font-size:12px;color:#7a5e1c;line-height:1.7}
+  .hint{font-size:11px;color:var(--muted);margin-top:6px;text-align:center}
   /* 六爻 */
   .gua{display:flex;justify-content:center;gap:14px;margin:10px 0}
   .guabox{text-align:center}
@@ -129,6 +130,7 @@
   .dirbtn button.on{background:var(--ink);color:var(--gold-soft);border-color:var(--ink)}
   .shake{animation:sk .5s ease}
   @keyframes sk{0%,100%{transform:rotate(0)}25%{transform:rotate(-9deg)}75%{transform:rotate(9deg)}}
+  @keyframes pop{0%{transform:scale(.7);opacity:.5}80%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
 </style>
 </head>
 <body>
@@ -185,7 +187,8 @@
       </select>
       <label class="f">所问之事（仅记录）</label>
       <input id="castQ" placeholder="如 今日事宜">
-      <button class="btn" onclick="doCast()">🪙 摇卦</button>
+      <button class="btn" onclick="doCast()">🪙 摇卦（铜钱六掷，一键成卦）</button>
+      <div class="hint">六爻每爻需摇铜钱一次，共摇六次；这里一次按钮帮你完成六次。</div>
       <div class="out" id="o-cast"></div>
     </div>
 
@@ -392,10 +395,23 @@ async function doDaily(){
 }
 
 // ---------- 六爻 ----------
+function wait(ms){ return new Promise(r=>setTimeout(r,ms)); }
 async function doCast(){
+  const btn = document.querySelector('button[onclick="doCast()"]');
   const body = {method: document.getElementById('castMethod').value,
                 question: document.getElementById('castQ').value.trim()||undefined};
+  const out = document.getElementById('o-cast');
+  btn.disabled = true;
   try{
+    // 铜钱六掷视觉,每 400ms 展示一次计数
+    out.style.opacity='1';
+    out.innerHTML = '<div class="adv">铜钱三枚一掷，正在起卦…</div><div class="yao" id="cast-progress"></div>';
+    const prog = document.getElementById('cast-progress');
+    for(let i=1;i<=6;i++){
+      prog.innerHTML += `<i class="yin" style="animation:pop .25s"></i>`;
+      prog.parentElement.firstElementChild.innerText = `铜钱三枚一掷，正在起卦… 第 ${i}/6 次`;
+      await wait(380);
+    }
     const d = await api('/api/v1/agent/fortune/cast', {method:'POST', body});
     let h = '<div class="gua">'
           + `<div class="guabox"><div class="gt">本卦</div><div class="gn">${d.ben_gua}</div></div>`
@@ -408,6 +424,7 @@ async function doCast(){
     h += `<div class="reading">${esc(d.reading||'')}</div>`;
     show('o-cast', h);
   }catch(e){ show('o-cast', '错误：'+esc(e.message), true); }
+  finally{ btn.disabled = false; }
 }
 
 // ---------- 年运 ----------
