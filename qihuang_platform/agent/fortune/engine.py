@@ -18,7 +18,9 @@
 from __future__ import annotations
 
 import datetime
+import os
 import random
+import re
 from typing import Dict, List, Optional
 
 # ═══════════════════════════════════════════════════════════════
@@ -701,13 +703,18 @@ _BAGUA_MEANING = {
 }
 
 
+def _dir_trigram(d):
+    """方位 → 八卦；'中'(房屋中心/中宫) 特判，避免 None 跳过关键 finding。"""
+    return _DIR_TO_TRIGRAM.get(d) or (d if d == "中" else None)
+
+
 def _analyze_floor_plan(fp, ji: List[str], xiong: List[str]) -> Dict:
     """户型图/实景结构化峦头（形法）分析。
 
     入参 fp：
       - None                      → 未提供，仅给坐向理气通用建议
-      - str（图片URL/备注）        → 多模态视觉解析占位钩子
       - dict（结构化户型要素）      → 真正分析
+    注：图片字符串由 _vision_analyze_floor_plan 处理（视觉模型或占位）。
         字段（中文键，前后端对齐）：
           '门向'/'door_dir'      大门开向方位
           '主卧方'/'master_dir'  主卧方位
@@ -742,7 +749,7 @@ def _analyze_floor_plan(fp, ji: List[str], xiong: List[str]) -> Dict:
     # 大门 —— 纳气之口
     dd = fp.get("门向") or fp.get("door_dir")
     if dd:
-        tri = _DIR_TO_TRIGRAM.get(dd)
+        tri = _dir_trigram(dd)
         if tri:
             g = _grade(dd)
             findings.append({
@@ -757,7 +764,7 @@ def _analyze_floor_plan(fp, ji: List[str], xiong: List[str]) -> Dict:
     # 主卧 —— 人休养之所，宜吉
     md = fp.get("主卧方") or fp.get("master_dir")
     if md:
-        tri = _DIR_TO_TRIGRAM.get(md)
+        tri = _dir_trigram(md)
         if tri:
             g = _grade(md)
             findings.append({
@@ -772,7 +779,7 @@ def _analyze_floor_plan(fp, ji: List[str], xiong: List[str]) -> Dict:
     # 厨房（火）—— 宜在凶方以火压凶，忌在吉方泄吉
     kd = fp.get("厨房方") or fp.get("kitchen_dir")
     if kd:
-        tri = _DIR_TO_TRIGRAM.get(kd)
+        tri = _dir_trigram(kd)
         if tri:
             g = _grade(kd)
             findings.append({
@@ -789,14 +796,15 @@ def _analyze_floor_plan(fp, ji: List[str], xiong: List[str]) -> Dict:
     # 卫生间（污）—— 宜在凶方镇凶，忌在吉方/中宫
     td = fp.get("卫生间方") or fp.get("toilet_dir")
     if td:
-        tri = _DIR_TO_TRIGRAM.get(td)
+        tri = _dir_trigram(td)
         if tri:
             g = _grade(td)
             extra = "尤忌压中宫(房屋中心)，主全家气场紊乱。" if td == "中" else ""
             findings.append({
                 "项": "卫生间", "方位": td, "卦": tri,
                 "评级": ("宜·镇凶" if g == "凶" else
-                         "忌·污泄吉" if g == "吉" else "中"),
+                         "忌·污泄吉" if g == "吉" else
+                         "忌·压中宫" if td == "中" else "中"),
                 "建议": ("卫生间在凶方以污镇凶，尚可；保持干燥、常关马桶盖。"
                          if g == "凶" else
                          "卫生间在吉方易污秽泄吉气，宜加强排风、挂天然葫芦/盐灯净化。"
@@ -809,7 +817,7 @@ def _analyze_floor_plan(fp, ji: List[str], xiong: List[str]) -> Dict:
     if isinstance(mc, str):
         mc = [mc]
     for c in (mc or []):
-        tri = _DIR_TO_TRIGRAM.get(c)
+        tri = _dir_trigram(c)
         who = _BAGUA_MEANING.get(tri, "") if tri else ""
         findings.append({
             "项": "缺角", "方位": c, "卦": tri or "?", "评级": "缺失",
@@ -835,12 +843,149 @@ def _analyze_floor_plan(fp, ji: List[str], xiong: List[str]) -> Dict:
     }
 
 
+# ─────────────────────────────────────────────────────────────
+# 户型图视觉解析（多模态）：把图片解析为结构化 floor_plan dict
+#   通过 OpenAI 兼容的视觉端点（chat/completions + vision）实现。
+#   环境变量（均未配置时回退为 image_pending 占位）：
+#     GEO_VISION_API_BASE  e.g. https://api.openai.com/v1
+#     GEO_VISION_API_KEY
+#     GEO_VISION_MODEL     e.g. gpt-4o-mini / qwen-vl / deepseek-vl 等
+# ─────────────────────────────────────────────────────────────
+_VISION_PROMPT = (
+    "你是风水堪舆助手。请分析这张户型图/室内实景图，识别房屋要素，"
+    "仅以 JSON 返回（不要解释、不要 markdown 代码块）：\n"
+    '{\n'
+    '  "门向": 大门开向(东/南/西/北/东南/西南/东北/西北/中 或 null),\n'
+    '  "主卧方": 主卧所在方位或 null,\n'
+    '  "厨房方": 厨房/灶台方位或 null,\n'
+    '  "卫生间方": 卫生间方位或 null,\n'
+    '  "缺角": [缺角方位列表],\n'
+    '  "横梁": 是否有横梁压顶(bool),\n'
+    '  "穿堂": 是否门对窗穿堂(bool)\n'
+    "}"
+)
+
+_DIR_ALIAS = {
+    "east": "东", "south": "南", "west": "西", "north": "北",
+    "southeast": "东南", "southwest": "西南", "northeast": "东北",
+    "northwest": "西北", "center": "中", "middle": "中", "中": "中",
+}
+
+_FP_KEY_ALIAS = {
+    "门向": "门向", "door_dir": "门向", "door": "门向", "大门": "门向",
+    "主卧方": "主卧方", "master_dir": "主卧方", "master": "主卧方", "主卧": "主卧方",
+    "厨房方": "厨房方", "kitchen_dir": "厨房方", "kitchen": "厨房方", "厨房": "厨房方",
+    "卫生间方": "卫生间方", "toilet_dir": "卫生间方", "toilet": "卫生间方",
+    "卫生间": "卫生间方", "卫生间方位": "卫生间方",
+    "缺角": "缺角", "missing": "缺角",
+    "横梁": "横梁", "beam": "横梁",
+    "穿堂": "穿堂", "through": "穿堂",
+}
+
+
+def _norm_dir(v):
+    if not v:
+        return None
+    return _DIR_ALIAS.get(str(v).strip().lower(), str(v).strip())
+
+
+def _to_image_url(ref: str) -> str:
+    """把图片引用转成视觉端点可用的 image_url（http(s)/data 直用，本地路径转 base64）。"""
+    if ref.startswith(("http://", "https://", "data:")):
+        return ref
+    if os.path.exists(ref):
+        import base64, mimetypes
+        mime = mimetypes.guess_type(ref)[0] or "image/jpeg"
+        with open(ref, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("ascii")
+        return f"data:{mime};base64,{b64}"
+    return ref  # 交给服务端，可能失败
+
+
+def _vision_chat_json(base: str, key: str, model: str, image_ref: str, prompt: str) -> str:
+    """调用 OpenAI 兼容视觉端点，返回模型文本（期望为 JSON）。"""
+    import json
+    import urllib.request
+
+    url = f"{base.rstrip('/')}/chat/completions"
+    payload = {
+        "model": model,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": _to_image_url(image_ref)}},
+            ],
+        }],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.2,
+    }
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {key}"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        out = json.loads(resp.read().decode("utf-8"))
+    return out["choices"][0]["message"]["content"]
+
+
+def _normalize_vision_floorplan(content: str) -> dict:
+    """从视觉模型输出中抽取并归一化为中文键的 floor_plan dict。"""
+    import json
+    m = re.search(r"\{.*\}", content, re.S)
+    raw = json.loads(m.group(0)) if m else {}
+    out: dict = {}
+    for k, v in raw.items():
+        nk = _FP_KEY_ALIAS.get(str(k)) or _FP_KEY_ALIAS.get(str(k).lower())
+        if not nk:
+            continue
+        if nk in ("门向", "主卧方", "厨房方", "卫生间方"):
+            out[nk] = _norm_dir(v)
+        elif nk == "缺角":
+            v = v if isinstance(v, list) else ([v] if v else [])
+            out[nk] = [_norm_dir(x) for x in v]
+        else:  # 横梁 / 穿堂
+            out[nk] = bool(v)
+    return out
+
+
+def _vision_analyze_floor_plan(image_ref: str, ji: List[str], xiong: List[str]) -> Dict:
+    """图片类户型图：走视觉模型解析；未配置或失败则回退 image_pending。
+
+    配置读取自环境变量 GEO_VISION_API_BASE / GEO_VISION_API_KEY / GEO_VISION_MODEL。
+    """
+    base = os.environ.get("GEO_VISION_API_BASE", "").rstrip("/")
+    key = os.environ.get("GEO_VISION_API_KEY", "")
+    model = os.environ.get("GEO_VISION_MODEL", "gpt-4o-mini")
+    if not (base and key):
+        return {"provided": True, "mode": "image_pending",
+                "note": "图片已接收，但未配置视觉模型(GEO_VISION_API_BASE/KEY)，"
+                        "当前仅按坐向理气叠加结论。",
+                "raw_hint": image_ref[:120]}
+    try:
+        content = _vision_chat_json(base, key, model, image_ref, _VISION_PROMPT)
+        data = _normalize_vision_floorplan(content)
+        inner = _analyze_floor_plan(data, ji, xiong)
+        inner["mode"] = "vision"
+        inner["vision_model"] = model
+        inner["raw"] = content[:500]
+        return inner
+    except Exception as e:  # 任意异常均安全回退
+        return {"provided": True, "mode": "image_pending",
+                "note": f"视觉模型解析失败（{e}），回退为仅坐向理气结论。",
+                "raw_hint": image_ref[:120]}
+
+
 def geo_fengshui(orientation, gps: Dict = None, floor_plan=None) -> Dict:
     """风水堪舆（看空间）规则引擎：
       坐向(罗盘/24山) → 宅卦(八宅) → 四吉四凶方；叠加九宫绝对方位、GPS 峦头/磁偏角校正，
       以及户型图结构化峦头（形法）分析（大门/主卧/厨房/卫生间方位、缺角、横梁、穿堂）。
 
-      注：图片类户型图属多模态视觉范畴，传入字符串时仅作占位钩子，结构化 dict 才进入形法分析。
+      注：图片类户型图走视觉模型解析（配置 GEO_VISION_* 后生效，未配置回退占位）；
+           结构化 dict 直接进形法分析。
     """
     ori = _parse_orientation(orientation)
     house_tri = _MT_TO_TRIGRAM.get(ori["sitting_mountain"], "坎")
@@ -876,8 +1021,11 @@ def geo_fengshui(orientation, gps: Dict = None, floor_plan=None) -> Dict:
             "luan_tou": "外部峦头需结合实地/地图（山形水势、路冲、邻栋），本引擎仅占位，建议配多模态识别。",
         }
 
-    # 户型图结构化峦头（形法）分析
-    fp_analysis = _analyze_floor_plan(floor_plan, ji, xiong)
+    # 户型图：图片走视觉模型（未配置则占位），结构化 dict 走形法分析
+    if isinstance(floor_plan, str):
+        fp_analysis = _vision_analyze_floor_plan(floor_plan, ji, xiong)
+    else:
+        fp_analysis = _analyze_floor_plan(floor_plan, ji, xiong)
 
     advice = [
         f"本宅坐{ori['sitting_mountain']}向{ori['facing_mountain']}（{house_tri}宅），"
