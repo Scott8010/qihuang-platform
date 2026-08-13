@@ -11,6 +11,7 @@
   - liuyao：六爻起卦（铜钱 / 时间）→ 本卦 / 变卦 / 动爻 / 趣味解析
   - daily：每日运程日签（五行穿衣 / 五行茶 / 宜忌 / 吉时方位 / 生肖冲合 / 幸运色数）
   - report：年运报告（八字 + 流年）
+  - geo_fengshui：风水堪舆（看空间）· 坐向(罗盘/24山) + GPS → 宅卦/八宅吉凶方/九宫/峦头
 
 免责：所有输出均为传统文化娱乐参考，不作医疗 / 投资 / 人生决策依据。
 """
@@ -564,4 +565,192 @@ def year_report(pillars, year: int = None) -> Dict:
             "忌": "单打独斗、冲动投资、与人争功。",
         },
         "disclaimer": "传统文化娱乐参考，不作为医疗/投资/人生决策依据。",
+    }
+
+
+# ═══════════════════════════════════════════════════════════════
+# 风水堪舆（看空间）· 坐向 + GPS
+# ═══════════════════════════════════════════════════════════════
+# 24 山（罗盘 0°=正北子，顺时针每 15° 一山）
+_MOUNTAINS_24 = ["子", "癸", "丑", "艮", "寅", "甲", "卯", "乙", "辰", "巽", "巳", "丙",
+                 "午", "丁", "未", "坤", "申", "庚", "酉", "辛", "戌", "乾", "亥", "壬"]
+# 山 → 后天八卦（定宅卦用）
+_MT_TO_TRIGRAM = {
+    "戌": "乾", "乾": "乾", "亥": "乾",
+    "壬": "坎", "子": "坎", "癸": "坎",
+    "丑": "艮", "艮": "艮", "寅": "艮",
+    "甲": "震", "卯": "震", "乙": "震",
+    "辰": "巽", "巽": "巽", "巳": "巽",
+    "丙": "离", "午": "离", "丁": "离",
+    "未": "坤", "坤": "坤", "申": "坤",
+    "庚": "兑", "酉": "兑", "辛": "兑",
+}
+# 八宅：各宅卦（坐山后天卦）→ 八方吉凶星。吉=伏位/生气/延年/天医；凶=绝命/五鬼/六煞/祸害
+_BAZHAI = {
+    "坎": {"北": "伏位", "东": "天医", "东南": "生气", "南": "延年",
+           "东北": "五鬼", "西南": "绝命", "西": "祸害", "西北": "六煞"},
+    "离": {"南": "伏位", "北": "延年", "东": "生气", "东南": "天医",
+           "西南": "六煞", "西": "五鬼", "西北": "绝命", "东北": "祸害"},
+    "震": {"东": "伏位", "南": "生气", "北": "天医", "东南": "延年",
+           "西": "绝命", "西北": "五鬼", "东北": "六煞", "西南": "祸害"},
+    "巽": {"东南": "伏位", "北": "生气", "南": "天医", "东": "延年",
+           "西": "六煞", "西北": "祸害", "东北": "绝命", "西南": "五鬼"},
+    "乾": {"西北": "伏位", "西": "延年", "东北": "生气", "西南": "天医",
+           "北": "绝命", "东": "五鬼", "东南": "祸害", "南": "六煞"},
+    "坤": {"西南": "伏位", "西": "天医", "西北": "延年", "东北": "生气",
+           "北": "祸害", "东": "六煞", "东南": "五鬼", "南": "绝命"},
+    "艮": {"东北": "伏位", "西南": "延年", "西": "生气", "西北": "天医",
+           "南": "祸害", "北": "五鬼", "东南": "绝命", "东": "六煞"},
+    "兑": {"西": "伏位", "西北": "生气", "西南": "延年", "东北": "天医",
+           "东": "绝命", "东南": "五鬼", "南": "祸害", "北": "六煞"},
+}
+_BAZHAI_JI = {"伏位", "生气", "延年", "天医"}
+# 绝对罗盘方位 → 后天八卦（九宫八卦，固定）
+_DIR_TO_TRIGRAM = {"北": "坎", "东北": "艮", "东": "震", "东南": "巽",
+                   "南": "离", "西南": "坤", "西": "兑", "西北": "乾"}
+# 九宫（绝对罗盘方位）通用功能提示，与坐向无关，作峦头/布局参考
+_JIUGONG_NOTE = {
+    "坎": "北·水·宜静不宜动，忌污湿",
+    "艮": "东北·土·聚气守财，宜玄关",
+    "震": "东·木·生发，宜餐厅/书房",
+    "巽": "东南·木·文昌，宜书房/通风",
+    "离": "南·火·明堂纳气，宜客厅",
+    "坤": "西南·土·安稳，宜次卧",
+    "兑": "西·金·口才，宜书房/会客",
+    "乾": "西北·金·男主位，忌污压",
+    "中": "太极·宜空净",
+}
+# 中文方位 ↔ 罗盘度数（用于 '坐北朝南' 等）
+_CN_DIR = {"北": 0, "东北": 45, "东": 90, "东南": 135,
+           "南": 180, "西南": 225, "西": 270, "西北": 315}
+
+
+def _bearing_to_mountain(deg: float) -> str:
+    """罗盘度数（0=正北，顺时针）→ 24 山。"""
+    deg = (deg % 360 + 360) % 360
+    idx = round(deg / 15.0) % 24
+    return _MOUNTAINS_24[idx]
+
+
+def _parse_orientation(orientation) -> Dict:
+    """坐向入参 → 结构化。支持：
+      - 罗盘度数(浮点/int)：视为「朝向」bearing（磁北）
+      - '子山午向' / '坐子向午' / '坐北朝南' 等字符串
+      - dict：{'facing_deg': 178.3, 'source': 'device'} 或 {'sitting':'子','facing':'午'}
+    返回 {sitting, facing, sitting_mountain, facing_mountain, bearing_mag, sitting_facing, source}
+    """
+    source = "manual"
+    facing_deg = None
+    sitting_mt = facing_mt = None
+
+    if isinstance(orientation, (int, float)):
+        facing_deg = float(orientation)
+    elif isinstance(orientation, dict):
+        source = orientation.get("source", "manual")
+        if "facing_deg" in orientation:
+            facing_deg = float(orientation["facing_deg"])
+        if orientation.get("sitting") and orientation.get("facing"):
+            sitting_mt = orientation["sitting"]
+            facing_mt = orientation["facing"]
+    elif isinstance(orientation, str):
+        s = (orientation.replace("坐", "").replace("向", "")
+             .replace("朝", "").replace("山", ""))
+        if len(s) >= 2 and s[0] in _MOUNTAINS_24 and s[1] in _MOUNTAINS_24:
+            sitting_mt, facing_mt = s[0], s[1]
+        elif len(s) >= 2 and s[0] in _CN_DIR and s[1] in _CN_DIR:
+            facing_deg = float(_CN_DIR[s[1]])
+            facing_mt = _bearing_to_mountain(facing_deg)
+
+    if facing_deg is None and facing_mt is None:
+        raise ValueError("坐向无法解析：请给罗盘度数、'子山午向' 或 '坐北朝南'")
+
+    if facing_mt is None:
+        facing_mt = _bearing_to_mountain(facing_deg)
+    if sitting_mt is None:
+        if facing_deg is not None:
+            sitting_mt = _bearing_to_mountain((facing_deg + 180) % 360)
+        else:
+            sitting_mt = _bearing_to_mountain((_CN_DIR.get(facing_mt, 0) + 180) % 360)
+
+    return {
+        "sitting": sitting_mt,
+        "facing": facing_mt,
+        "sitting_mountain": sitting_mt,
+        "facing_mountain": facing_mt,
+        "bearing_mag": facing_deg,
+        "sitting_facing": f"{sitting_mt}山{facing_mt}向",
+        "source": source,
+    }
+
+
+def _magnetic_declination(lat: float, lon: float, year: int) -> float:
+    """近似磁偏角（度，真北 − 磁北）。中国大致 −2°~−8°，此处用粗线性模型，仅演示。
+
+    生产环境应调用 WMM/IGRF 或在线磁偏角服务求得精确值。
+    """
+    decl = -5.0 + (105.0 - lon) * 0.06 + (lat - 35.0) * 0.04
+    return round(decl, 2)
+
+
+def geo_fengshui(orientation, gps: Dict = None, floor_plan: str = None) -> Dict:
+    """风水堪舆（看空间）规则引擎：
+      坐向(罗盘/24山) → 宅卦(八宅) → 四吉四凶方；叠加九宫绝对方位与 GPS 峦头/磁偏角校正。
+
+      注：户型图视觉识别属多模态范畴，本纯规则引擎仅处理坐向/GPS 与方位理气。
+    """
+    ori = _parse_orientation(orientation)
+    house_tri = _MT_TO_TRIGRAM.get(ori["sitting_mountain"], "坎")
+    ba = _BAZHAI.get(house_tri, {})
+
+    # 八宅吉凶方（按绝对罗盘方位）
+    mansions = []
+    for d, star in ba.items():
+        mansions.append({
+            "dir": d, "trigram": _DIR_TO_TRIGRAM[d],
+            "star": star, "lucky": star in _BAZHAI_JI,
+        })
+    ji = [m["dir"] for m in mansions if m["lucky"]]
+    xiong = [m["dir"] for m in mansions if not m["lucky"]]
+
+    # 九宫绝对方位（与坐向无关，作通用布局参考）
+    jiu_gong = [{"dir": d, "trigram": tri, "note": _JIUGONG_NOTE[tri]}
+                for d, tri in _DIR_TO_TRIGRAM.items()]
+    jiu_gong.append({"dir": "中", "trigram": "中", "note": _JIUGONG_NOTE["中"]})
+
+    # GPS：磁偏角校正 + 峦头占位
+    geo_info = None
+    if gps and isinstance(gps, dict) and "lat" in gps and "lon" in gps:
+        lat, lon = float(gps["lat"]), float(gps["lon"])
+        year = int(gps.get("year", datetime.date.today().year))
+        decl = _magnetic_declination(lat, lon, year)
+        bearing_true = (round((ori["bearing_mag"] + decl) % 360, 1)
+                        if ori["bearing_mag"] is not None else None)
+        geo_info = {
+            "lat": lat, "lon": lon,
+            "magnetic_declination": decl,
+            "bearing_true_north": bearing_true,
+            "luan_tou": "外部峦头需结合实地/地图（山形水势、路冲、邻栋），本引擎仅占位，建议配多模态识别。",
+        }
+
+    advice = [
+        f"本宅坐{ori['sitting_mountain']}向{ori['facing_mountain']}（{house_tri}宅），"
+        f"吉方：{'、'.join(ji)}；凶方：{'、'.join(xiong)}。",
+        "大门/主卧尽量落在吉方；灶台、卫生间避开凶方（尤其绝命、五鬼）。",
+        "西北乾位忌压卫生间/杂物，若已压，挂天然葫芦+盐灯化解。",
+        "灶台远离水龙头，以黄/棕色调和（土克水）。",
+    ]
+
+    return {
+        "kind": "geo_fengshui",
+        "orientation": ori,
+        "house_trigram": house_tri,
+        "east_west_zhai": "东四宅" if house_tri in ("坎", "离", "震", "巽") else "西四宅",
+        "bagua_mansions": mansions,
+        "lucky_dirs": ji,
+        "unlucky_dirs": xiong,
+        "jiu_gong": jiu_gong,
+        "geo": geo_info,
+        "advice": advice,
+        "floor_plan_note": floor_plan,
+        "disclaimer": "风水堪舆为传统人居环境文化，本结果为规则引擎演示，仅供娱乐与文化参考，不构成装修/人生决策依据。",
     }

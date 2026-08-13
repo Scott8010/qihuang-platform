@@ -1,7 +1,7 @@
 """命理运程 Agent · 请求/响应 Schema。"""
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Union, Optional
 
 from pydantic import BaseModel, Field
 
@@ -29,3 +29,18 @@ class ReportRequest(BaseModel):
     user_id: Optional[str] = Field(None, description="已建档用户标识")
     pillars: Optional[str] = Field(None, description="未建档时直接给四柱")
     year: Optional[int] = Field(None, description="默认今年")
+
+
+class GeoRequest(BaseModel):
+    orientation: Union[dict, str] = Field(
+        ..., description=(
+            "坐向（堪舆必填）："
+            "罗盘度数 {'facing_deg': 178.3, 'source': 'device'} / "
+            "24山 {'sitting': '子', 'facing': '午'} / "
+            "'子山午向' / '坐北朝南'"
+        ))
+    gps: Optional[dict] = Field(
+        None, description="定位 {'lat': 31.23, 'lon': 121.47, 'year': 2026}，用于磁偏角校正+外部峦头占位")
+    floor_plan: Optional[str] = Field(
+        None, description="户型图文案/备注（多模态视觉识别另走视觉通道）")
+    user_id: Optional[str] = Field(None, description="可选，回写个人档案")

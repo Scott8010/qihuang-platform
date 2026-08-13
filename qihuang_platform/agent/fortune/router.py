@@ -6,6 +6,7 @@
   POST /api/v1/agent/fortune/cast     六爻起卦（铜钱/时间）→ 本卦/变卦/动爻/解析
   GET  /api/v1/agent/fortune/daily    每日运程日签（五行穿衣/茶/宜忌/吉时方位…）
   POST /api/v1/agent/fortune/report   年运报告（八字 + 流年）
+  POST /api/v1/agent/fortune/geo      风水堪舆（看空间）：坐向+GPS → 宅卦/八宅/九宫
   GET  /api/v1/agent/fortune/dashboard 运营看板（按 user 聚合）
 
 隔离红线：数据落独立 JSONL（不入 Neo4j / 不污染中医库）；受 require_agent_in_plan 门控。
@@ -23,7 +24,7 @@ from qihuang_platform.gateway.response import success, error
 from qihuang_platform.agent.deps import require_agent_in_plan
 from qihuang_platform.db.config import get_db
 from qihuang_platform.agent.fortune.schema import (
-    ArchiveRequest, CastRequest, DailyRequest, ReportRequest,
+    ArchiveRequest, CastRequest, DailyRequest, ReportRequest, GeoRequest,
 )
 from qihuang_platform.agent.fortune import engine
 from qihuang_platform.agent.fortune.store import FortuneStore, make_material_id
@@ -139,6 +140,27 @@ async def fortune_report(
     _audit.append("report", operator=getattr(request.state, "user_id", "unknown"),
                   user_id=req.user_id)
     return success(data=data)
+
+
+@router.post("/fortune/geo")
+async def fortune_geo(
+    req: GeoRequest,
+    request: Request,
+    user: dict = Depends(get_current_user),
+    _agent=Depends(require_agent_in_plan("fortune")),
+):
+    """风水堪舆（看空间）：坐向(罗盘/24山) + GPS → 宅卦/八宅吉凶方/九宫/峦头。"""
+    try:
+        data = engine.geo_fengshui(req.orientation, gps=req.gps, floor_plan=req.floor_plan)
+    except (ValueError, KeyError, TypeError) as e:
+        return error(code_key="BAD_ORIENTATION", message=str(e))
+    data["user_id"] = req.user_id
+    material_key = f"fortune:geo:{req.user_id or 'anon'}"
+    material_id = make_material_id(material_key)
+    _store.upsert(material_id, data)
+    _audit.append("geo", operator=getattr(request.state, "user_id", "unknown"),
+                  user_id=req.user_id)
+    return success(data={"material_id": material_id, **data})
 
 
 @router.get("/fortune/dashboard")
