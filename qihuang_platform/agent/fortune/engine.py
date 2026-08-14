@@ -408,14 +408,20 @@ def bazi_dayun(pillars, gender: str, birth_date) -> Dict:
     start_age = days / 3.0
     months = int(round((days % 3) * 4))        # 一日 ≈ 四个月
     mi = _jiazi_index(mp[0], mp[1])
+    dm = pillars[2][0] if len(pillars) > 2 else None   # 日主（我）
     dayun = []
     for n in range(1, 9):
         k = (mi + n) % 60 if forward else (mi - n) % 60
-        dayun.append({
+        gz = _JIAZI[k]
+        step = {
             "seq": n,
-            "ganzhi": _JIAZI[k],
+            "ganzhi": gz,
             "start_age": round(start_age + (n - 1) * 10, 1),
-        })
+        }
+        if dm:   # 每步大运对日主的十神（干 + 支本气）
+            step["tenshen"] = shishen(dm, gz[0])
+            step["zhi_tenshen"] = shishen(dm, ZHI_BEN_GAN[gz[1]])
+        dayun.append(step)
     return {
         "forward": forward,
         "direction": "顺排" if forward else "逆排",
@@ -715,6 +721,24 @@ _NAJIA = {
 # 六神（六兽）：青龙/朱雀/勾陈/螣蛇/白虎/玄武，由占卦日干定初爻起神
 _LIUSHEN = ["青龙", "朱雀", "勾陈", "螣蛇", "白虎", "玄武"]
 
+# 六亲象义（供规则断语取用）
+_LIUQIN_MEAN = {
+    "兄弟": "同辈、朋友、同僚、竞争者，亦主耗财分利。",
+    "子孙": "福德、子孙、享乐、医药，克官鬼、利脱难解忧。",
+    "妻财": "财货、妻室、饮食、物资，谋财求利之所归。",
+    "官鬼": "功名、职位、官非、疾病、约束，亦主压力。",
+    "父母": "文书、长辈、学业、房屋、舟车，生我护我之源。",
+}
+# 六神象义（附爻之象）
+_LIUSHEN_MEAN = {
+    "青龙": "吉庆、喜庆、文书、佳音，临吉爻更吉。",
+    "朱雀": "口舌、文书、信息、争讼，主言谈消息。",
+    "勾陈": "迟滞、牵连、田土、牢狱，主阻留不前。",
+    "螣蛇": "虚惊、怪异、缠绕、变幻，主疑心反复。",
+    "白虎": "凶伤、血光、丧病、威权，主险急之象。",
+    "玄武": "暧昧、盗失、情私、暗昧，主隐伏不明。",
+}
+
 
 def _liushen_start(day_gan: str) -> int:
     if day_gan in ("甲", "乙"):
@@ -738,6 +762,9 @@ _YONG_MAP = [
     ("学", "父母"), ("考试", "父母"), ("文书", "父母"), ("名", "父母"), ("证", "父母"),
     ("病", "官鬼"), ("健康", "官鬼"), ("身体", "官鬼"),
     ("出行", "父母"), (" travel", "父母"), ("迁", "父母"),
+    ("友", "兄弟"), ("朋", "兄弟"), ("竞", "兄弟"), ("合伙", "兄弟"),
+    ("子", "子孙"), ("孩", "子孙"), ("孕", "子孙"), ("脱", "子孙"), ("讼", "官鬼"),
+    ("车", "父母"), ("房", "父母"), ("宅", "父母"), ("信", "朱雀"),
 ]
 
 
@@ -748,6 +775,108 @@ def _yongshen_hint(q: str, palace_wx: str):
         if k in q:
             return v
     return None
+
+
+def _liuyao_yongshen(question: str, zhuang: Dict) -> Dict:
+    """取用神定位：依问事定用神六亲，并在本卦中定位其实爻（自下而上）。
+
+    返回 {type, primary(主用神爻位), lines(全部匹配爻), note}。无问事或不上卦均安全返回。
+    """
+    yq = _yongshen_hint(question, zhuang.get("palace_wx", "")) if question else None
+    if not yq:
+        return {"type": None, "primary": None, "lines": [],
+                "note": "未提供问事，无法定位用神；可暂以世爻（自身）为用参看。"}
+    lines = [l for l in zhuang.get("lines", []) if l.get("liuqin") == yq]
+    primary = next((l for l in lines if l.get("shi")), None) or (lines[0] if lines else None)
+    out = [{
+        "pos": l["pos"], "name": l["name"], "gz": l["gz"],
+        "wx": l["wx"], "liushen": l["liushen"],
+        "old": l["old"], "shi": l.get("shi"), "ying": l.get("ying"),
+    } for l in lines]
+    if lines:
+        note = "用神「%s」上卦，共 %d 处" % (yq, len(lines))
+        if primary and primary.get("shi"):
+            note += "；持世最切，事与己身相连。"
+    else:
+        note = "用神「%s」不上卦（伏藏），须查伏神或借世应参看；事象隐伏，宜缓不宜急。" % yq
+    return {"type": yq, "primary": primary["pos"] if primary else None,
+            "lines": out, "note": note}
+
+
+def _liuyao_duanyu(zhuang: Dict, zhuang_bian: Dict, question: str) -> Dict:
+    """六爻规则断语（保底，不依赖 LLM）：基于世应 / 用神 / 动爻 / 六神做结构化研判。
+
+    以本宫五行为「我」，论各爻旺相休囚死，给出可读中文断语。仅供传统民俗娱乐参考。
+    """
+    lines = zhuang.get("lines", [])
+    pw = zhuang.get("palace_wx", "")
+    shi = next((l for l in lines if l["shi"]), None)
+    ying = next((l for l in lines if l["ying"]), None)
+
+    def strength(l):
+        w = l["wx"]
+        if w == pw:
+            return "旺"
+        if SHENG.get(pw) == w:
+            return "相"      # 我生
+        if KE.get(pw) == w:
+            return "休"      # 我克
+        if KE.get(w) == pw:
+            return "囚"      # 克我
+        if SHENG.get(w) == pw:
+            return "死"      # 生我
+        return "休"
+
+    body = []
+    # 世爻（求问者自身）
+    if shi:
+        s_w, s_mv = strength(shi), ("发动（主变）" if shi["old"] else "安静")
+        body.append("世爻：%s（%s·%s），%s、%s。世爻为求问者自身，%s"
+                    % (shi["name"], shi["liuqin"], shi["liushen"], s_w, s_mv,
+                       _LIUQIN_MEAN.get(shi["liuqin"], "")))
+    # 应爻（所问之事 / 对方）
+    if ying:
+        body.append("应爻：%s（%s·%s），%s。应爻为所问之事或对方。"
+                    % (ying["name"], ying["liuqin"], ying["liushen"], strength(ying)))
+    # 用神（依问事）
+    yq = _yongshen_hint(question, pw) if question else None
+    yl = [l for l in lines if yq and l["liuqin"] == yq]
+    if yq:
+        if yl:
+            l0 = yl[0]
+            yst, ymv = strength(l0), ("发动有变" if l0["old"] else "安静")
+            verdict = ("用神得%s，事多可成" % yst if yst in ("旺", "相")
+                       else "用神%s，事多迟滞" % yst if yst in ("囚", "死")
+                       else "用神休，进退须斟酌")
+            body.append("用神（%s）：在 %s 位（%s·%s），%s、%s；%s。"
+                        % (yq, l0["name"], l0["liuqin"], l0["liushen"], yst, ymv, verdict))
+        else:
+            body.append("用神（%s）：卦中不上卦（伏藏），须查伏神；事象隐伏，宜缓不宜急。" % yq)
+    # 动爻（变机）
+    dongs = [l for l in lines if l["old"]]
+    if dongs:
+        blk = ["动爻："]
+        for l in dongs:
+            bl = next((x for x in zhuang_bian.get("lines", []) if x["pos"] == l["pos"]), None) if zhuang_bian else None
+            binfo = ("变出 %s（%s）" % (bl["liuqin"], bl["wx"])) if bl else "发动"
+            blk.append("  · 第%s爻发动：%s（%s）临%s，%s。"
+                       % (l["pos"], l["liuqin"], l["wx"], l["liushen"], binfo))
+        blk.append("  动者机之将显，所临六亲六神即其象。")
+        body.append("\n".join(blk))
+    # 六神附世 / 用
+    seen = [shi] + yl
+    shen = []
+    for l in seen:
+        if l and l.get("liushen"):
+            shen.append("  · %s 临%s：%s" % (l["liuqin"], l["liushen"], _LIUSHEN_MEAN.get(l["liushen"], "")))
+    if shen:
+        body.append("六神之象：\n" + "\n".join(shen))
+    # 综合
+    sumup = ("六爻俱静，世应分明，宜守不宜妄动；依世应旺衰与用神定进退。"
+             if not dongs else
+             "卦有动爻，事在演变：以世爻为体、用神为用，观动爻所之可推吉凶趋向。")
+    body.append("断语：" + sumup + "（传统规则参考，仅供娱乐）")
+    return {"lines": body, "summary": sumup}
 
 
 def _zhuanggua(lines: List[int], when: datetime.datetime = None) -> Dict:
@@ -950,6 +1079,8 @@ def liuyao(method: str = "coin", question: str = "", seed_key: str = None,
         "is_static": len(dyn) == 0,
         "zhuanggua": zhuang,
         "zhuanggua_bian": zhuang_bian,
+        "yongshen_detail": _liuyao_yongshen(question, zhuang),
+        "duanyu": _liuyao_duanyu(zhuang, zhuang_bian, question),
     }
     # 卦象象义 + 解析（传统卦象参考，娱乐为主）
     by = _GUA_YIXIANG.get(ben, "")

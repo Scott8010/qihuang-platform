@@ -488,8 +488,9 @@ async function doArchive(){
       h += `<div class="block"><div class="bt">大运（${dy.direction}，起运 ${dy.start_age} 岁${dy.start_months?('零'+dy.start_months+'月'):''}）</div><div class="dayun-list">`;
       (dy.dayun||[]).forEach(x=>{
         const on = d.liunian && d.liunian.active_dayun===x.ganzhi;
+        const ts = x.tenshen ? `${x.tenshen}（支 ${x.zhi_tenshen||'-'}）` : '';
         h += `<div class="dayun-row ${on?'on':''}"><span class="gz">${x.ganzhi}</span>`
-           + `<span class="meta">第 ${x.seq} 运 · ${x.start_age} 岁起${on?' · 当前所在' : ''}</span></div>`;
+           + `<span class="meta">第 ${x.seq} 运 · ${x.start_age} 岁起${on?' · 当前所在' : ''}${ts?' · '+ts : ''}</span></div>`;
       });
       h += '</div></div>';
     }
@@ -594,6 +595,27 @@ async function doCast(){
     if(d.reading_detail) h += `<div class="detail">${esc(d.reading_detail)}</div>`;
     h += zhuangTbl(d.zhuanggua, '本卦装卦（纳甲·世应·六亲·六神）');
     if(!d.is_static) h += zhuangTbl(d.zhuanggua_bian, '变卦装卦');
+    // 用神定位（依问事在卦中定位实爻）
+    if(d.yongshen_detail && d.yongshen_detail.type){
+      const y = d.yongshen_detail;
+      h += `<div class="block"><div class="bt">用神定位（${esc(y.type)}）</div>`;
+      h += `<div class="detail">${esc(y.note||'')}</div>`;
+      if(y.lines && y.lines.length){
+        h += '<table class="zhg"><tr><th>爻位</th><th>干支</th><th>五行</th><th>六神</th><th>状态</th></tr>';
+        y.lines.forEach(l=>{
+          h += `<tr><td>${l.name}${l.shi?'（世）':''}${l.ying?'（应）':''}</td>`
+             + `<td>${l.gz}</td><td class="wx wx-${l.wx}">${l.wx}</td><td>${l.liushen}</td>`
+             + `<td>${l.old?'发动':'静'}</td></tr>`;
+        });
+        h += '</table>';
+      }
+      h += '</div>';
+    }
+    // 规则断语（传统保底，不依赖 AI）
+    if(d.duanyu && d.duanyu.lines && d.duanyu.lines.length){
+      h += `<div class="block"><div class="bt">规则断语（传统参考）</div>`
+         + `<div class="detail">${esc(d.duanyu.lines.join('\n')).replace(/\n/g,'<br>')}</div></div>`;
+    }
     // LLM 象义层（AI 详批）：mode=llm 显正文，pending/error 显回退说明
     if(d.narrative){
       const n = d.narrative;
