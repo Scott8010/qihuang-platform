@@ -739,7 +739,7 @@ async function doGeo(){
     if(gpsCache) body.gps = gpsCache;
     const fp = buildFloorPlan();
     if(fp) body.floor_plan = fp;
-    const d = await api('/api/v1/agent/fortune/geo', {method:'POST', body});
+    const d = await api('/api/v1/agent/geo', {method:'POST', body});
     let h = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">`
           + `<span class="badge gold">${d.house_trigram}宅</span>`
           + `<span class="badge ${d.east_west_zhai==='东四宅'?'green':'gold'}">${d.east_west_zhai}</span>`

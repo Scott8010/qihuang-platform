@@ -161,18 +161,9 @@ async def fortune_geo(
     user: dict = Depends(get_current_user),
     _agent=Depends(require_agent_in_plan("fortune")),
 ):
-    """风水堪舆（看空间）：坐向(罗盘/24山) + GPS → 宅卦/八宅吉凶方/九宫/峦头。"""
-    try:
-        data = engine.geo_fengshui(req.orientation, gps=req.gps, floor_plan=req.floor_plan)
-    except (ValueError, KeyError, TypeError) as e:
-        return error(code_key="BAD_ORIENTATION", message=str(e))
-    data["user_id"] = req.user_id
-    material_key = f"fortune:geo:{req.user_id or 'anon'}"
-    material_id = make_material_id(material_key)
-    _store.upsert(material_id, data)
-    _audit.append("geo", operator=getattr(request.state, "user_id", "unknown"),
-                  user_id=req.user_id)
-    return success(data={"material_id": material_id, **data})
+    """向后兼容端点：委托 geo Agent 处理，数据统一落独立 geo 库（隔离红线）。"""
+    from qihuang_platform.agent.geo.router import geo_analysis
+    return geo_analysis(req, request, operator=getattr(request.state, "user_id", "unknown"))
 
 
 @router.get("/fortune/dashboard")

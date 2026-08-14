@@ -13,6 +13,7 @@ from fastapi import APIRouter
 
 from qihuang_platform.agent.compliance.router import router as compliance_router
 from qihuang_platform.agent.fortune.router import router as fortune_router
+from qihuang_platform.agent.geo.router import router as geo_router
 
 agent_router = APIRouter()
 agent_router.include_router(
@@ -20,6 +21,9 @@ agent_router.include_router(
 )
 agent_router.include_router(
     fortune_router, prefix="/api/v1/agent", tags=["Agent-中台"]
+)
+agent_router.include_router(
+    geo_router, prefix="/api/v1/agent", tags=["Agent-中台"]
 )
 
 __all__ = ["agent_router"]

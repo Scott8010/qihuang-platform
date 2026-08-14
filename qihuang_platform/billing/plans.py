@@ -57,9 +57,9 @@ DEFAULT_PLANS = [
             "report_export": True,
             "priority_support": True,
             "custom_skin": False,
-            "agents": ["compliance", "fortune"],
+            "agents": ["compliance", "fortune", "geo"],
         },
-        "description": "专业健康服务，含3D经络穴位可视化+优先支持+内容合规审核Agent+命理运程Agent",
+        "description": "专业健康服务，含3D经络穴位可视化+优先支持+内容合规审核Agent+命理运程Agent+风水堪舆Agent",
     },
     {
         "plan_name": "enterprise",
@@ -75,9 +75,9 @@ DEFAULT_PLANS = [
             "report_export": True,
             "priority_support": True,
             "custom_skin": True,
-            "agents": ["compliance", "fortune"],
+            "agents": ["compliance", "fortune", "geo"],
         },
-        "description": "企业级全功能，含3D穴位+名医智能体+品牌定制+专属支持+内容合规审核Agent+命理运程Agent",
+        "description": "企业级全功能，含3D穴位+名医智能体+品牌定制+专属支持+内容合规审核Agent+命理运程Agent+风水堪舆Agent",
     },
 ]
 
@@ -123,12 +123,20 @@ def seed_plans(session):
         default_agents = (pdata.get("features_json") or {}).get("agents", [])
         existing = session.query(Plan).filter_by(plan_name=plan_name).first()
         if existing:
-            # 幂等合并：已存在套餐补 agents 字段（不覆盖运营端已定制的组合）
+            # 幂等合并：已存在套餐补 agents 字段；若已有 agents，则与内置默认做并集，
+            # 保证新增内置能力（如 geo）能纳入已播种的套餐（不覆盖运营端已定制的额外组合）。
             fj = existing.features_json or {}
-            if "agents" not in fj and default_agents:
-                fj["agents"] = list(default_agents)
-                existing.features_json = fj
-                session.flush()
+            if "agents" not in fj:
+                if default_agents:
+                    fj["agents"] = list(default_agents)
+                    existing.features_json = fj
+                    session.flush()
+            else:
+                merged = list(dict.fromkeys(list(fj.get("agents", [])) + list(default_agents)))
+                if merged != fj.get("agents"):
+                    fj["agents"] = merged
+                    existing.features_json = fj
+                    session.flush()
             created[plan_name] = existing
             continue
         plan = Plan(plan_name=plan_name, display_name=display_name, **pdata_copy)

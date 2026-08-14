@@ -14,9 +14,9 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 
-def make_material_id(seed: str) -> str:
+def make_material_id(seed: str, prefix: str = "FOR") -> str:
     digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()[:12]
-    return f"FOR-{digest.upper()}"
+    return f"{prefix}-{digest.upper()}"
 
 
 def now_iso() -> str:

@@ -37,6 +37,18 @@ BUILTIN_AGENTS: Dict[str, Dict[str, Any]] = {
                 "独立 JSONL 落盘（不入 Neo4j），钉业务实体（material_key→FOR-XXXX 幂等），"
                 "附免责声明，仅作传统文化娱乐参考。",
     },
+    "geo": {
+        "name": "风水堪舆",
+        "kind": "business_embedded",          # 功能业务型，非对话窗口型（与 fortune 平级，看空间）
+        "engine": "hb-geo-fengshui",           # 纯规则引擎（坐向/八宅/九宫/峦头）
+        "router_prefix": "/api/v1/agent/geo",
+        "capabilities": ["analysis", "dashboard"],
+        "status": "active",
+        "category": "mystic",                  # 玄学大类之「看空间」（与 fortune「看人」并列）
+        "desc": "风水堪舆趣味钩子：坐向(罗盘/24山)+GPS(磁偏角校正)+户型峦头 → 宅卦/八宅吉凶方/九宫，"
+                "独立 JSONL 落盘（不混 fortune 库），钉业务实体（material_key→GEO-XXXX 幂等），"
+                "附免责声明，仅作传统人居环境文化娱乐参考。",
+    },
 }
 
 # 运行时缓存（与 agent_def 表最终一致）
@@ -96,6 +108,30 @@ def sync_from_db() -> int:
             rows = db.query(AgentDef).all()
             print(f"[AgentRegistry] 已用内置样板播种 {len(rows)} 个 Agent 能力")
 
+        # 回补：已播种库若缺新增内置能力（如 geo），将 BUILTIN_AGENTS 中缺失项补入 DB + 缓存
+        existing_keys = {r.agent_key for r in rows}
+        backfilled = []
+        for key, spec in BUILTIN_AGENTS.items():
+            if key in existing_keys:
+                continue
+            db.add(AgentDef(
+                agent_key=key,
+                name=spec.get("name", key),
+                kind=spec.get("kind", "business_embedded"),
+                engine=spec.get("engine"),
+                category=spec.get("category", "general"),
+                router_prefix=spec.get("router_prefix"),
+                capabilities=spec.get("capabilities", []),
+                status=spec.get("status", "active"),
+                desc=spec.get("desc"),
+                features_json=spec.get("features_json", {}),
+            ))
+            backfilled.append(key)
+        if backfilled:
+            db.commit()
+            print(f"[AgentRegistry] 已回补新增内置能力：{', '.join(backfilled)}")
+
+        rows = db.query(AgentDef).all()
         AGENT_REGISTRY.clear()
         for row in rows:
             AGENT_REGISTRY[row.agent_key] = _row_to_spec(row)
