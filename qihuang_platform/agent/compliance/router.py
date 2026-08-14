@@ -2,7 +2,7 @@
 第一个 Agent 能力：内容合规审核（business_embedded，融入业务流，非对话窗口）。
 
 端点（全部需 JWT，tenant_id 由网关注入 request.state）：
-  POST /api/v1/agent/compliance/scan      门店送审文案 -> L0+L1+L2 三轨融合判定
+  POST /api/v1/agent/compliance/scan      门店送审文案/图片 -> L0+L1+L2 三轨融合判定（图片走视觉模型辅助，未配置自动降级）
   POST /api/v1/agent/compliance/feedback  人工结论回写（钉 material_id，客观真实）
   GET  /api/v1/agent/compliance/dashboard 四态看板（按门店行级隔离）
   GET  /api/v1/agent/compliance/audit     审计日志查询（仅管理员）
@@ -56,6 +56,12 @@ class ComplianceScanRequest(BaseModel):
     store_id: str = Field(..., description="门店 ID（颐掌柜业务租户，行级沙箱键）")
     material_type: Optional[str] = Field(None, description="物料类型，如 朋友圈/海报/直播话术")
     port: Optional[str] = Field(None, description="来源端，如 wechat/store_page")
+    image: Optional[str] = Field(
+        None, description="待检图片引用：data URI / http(s) URL / 本地路径；接视觉模型做图片审核（需 COMPLIANCE_VISION_* 或 GEO_VISION_* 配置，未配置自动降级）"
+    )
+    video: Optional[str] = Field(
+        None, description="待检视频引用（占位）：当前视觉客户端支持单图，视频逐帧解析待接入，提供后按文本审核并标记 video_unsupported"
+    )
     material_key: Optional[str] = Field(
         None, description="业务主键（同业务反复重提时给定，幂等覆盖同一条物料，避免看板堆积历史）"
     )
@@ -86,13 +92,15 @@ async def compliance_scan(
     user: dict = Depends(get_current_user),
     _agent=Depends(require_agent_in_plan("compliance")),
 ):
-    """门店送审：L0 硬红线 + L1 检索 + L2 推理三轨融合，回写钉业务实体。"""
+    """门店送审：L0 硬红线 + L1 检索 + L2 推理三轨融合；可选图片走视觉模型辅助审核，回写钉业务实体。"""
     tenant_id = getattr(request.state, "tenant_id", None)
     result = await compliance_engine.analyze(
         text=req.text,
         material_type=req.material_type,
         port=req.port,
         institution_id=req.store_id,
+        image=req.image,
+        video=req.video,
         material_key=req.material_key,
         persist=req.persist,
     )

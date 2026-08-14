@@ -23,6 +23,7 @@ import os
 import random
 import re
 import urllib.request
+from qihuang_platform.agent.clients.vision import to_image_url, vision_chat_json
 from typing import Dict, List, Optional
 
 # ═══════════════════════════════════════════════════════════════
@@ -1940,65 +1941,7 @@ def _norm_dir(v):
     return _DIR_ALIAS.get(str(v).strip().lower(), str(v).strip())
 
 
-def _to_image_url(ref: str) -> str:
-    """把图片引用转成视觉端点可用的 image_url。
 
-    - data URI：直用（已内联，最快、不依赖视觉端点跨网抓取）
-    - http(s) URL：服务端先下载转 base64 data URI，避免视觉端点（如 dashscope）
-      服务端去抓外链时因出网白名单/慢链路导致整体超时；下载失败则回退原样。
-    - 本地路径：读文件转 base64
-    - 其它：原样返回（可能失败，由上层捕获回退 image_pending）
-    """
-    if ref.startswith("data:"):
-        return ref
-    if ref.startswith(("http://", "https://")):
-        try:
-            import base64
-            req = urllib.request.Request(ref, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                ctype = resp.headers.get_content_type() or "image/jpeg"
-                b64 = base64.b64encode(resp.read()).decode("ascii")
-            return f"data:{ctype};base64,{b64}"
-        except Exception:
-            return ref  # 下载失败回退原样（交由视觉端点尝试，再失败上层回退）
-    if os.path.exists(ref):
-        import base64, mimetypes
-        mime = mimetypes.guess_type(ref)[0] or "image/jpeg"
-        with open(ref, "rb") as f:
-            b64 = base64.b64encode(f.read()).decode("ascii")
-        return f"data:{mime};base64,{b64}"
-    return ref  # 交给服务端，可能失败
-
-
-def _vision_chat_json(base: str, key: str, model: str, image_ref: str, prompt: str) -> str:
-    """调用 OpenAI 兼容视觉端点，返回模型文本（期望为 JSON）。"""
-    import json
-    import urllib.request
-
-    url = f"{base.rstrip('/')}/chat/completions"
-    payload = {
-        "model": model,
-        "messages": [{
-            "role": "user",
-            "content": [
-                {"type": "text", "text": prompt},
-                {"type": "image_url", "image_url": {"url": _to_image_url(image_ref)}},
-            ],
-        }],
-        # 注：不强制 response_format=json_object，通义千问 VL 兼容模式下不一定接受，
-        # 改为下游用正则逐级兜底提取首个 JSON 对象，跨厂商更稳。
-        "temperature": 0.2,
-    }
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json",
-                 "Authorization": f"Bearer {key}"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        out = json.loads(resp.read().decode("utf-8"))
-    return out["choices"][0]["message"]["content"]
 
 
 def _normalize_vision_floorplan(content: str) -> dict:
@@ -2069,7 +2012,7 @@ def _vision_analyze_floor_plan(image_ref: str, ji: List[str], xiong: List[str]) 
                         "当前仅按坐向理气叠加结论。",
                 "raw_hint": image_ref[:120]}
     try:
-        content = _vision_chat_json(base, key, model, image_ref, _VISION_PROMPT)
+        content = vision_chat_json(base, key, model, image_ref, _VISION_PROMPT)
         data = _normalize_vision_floorplan(content)
         inner = _analyze_floor_plan(data, ji, xiong)
         inner["mode"] = "vision"

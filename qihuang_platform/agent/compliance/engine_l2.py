@@ -33,6 +33,7 @@ from qihuang_platform.agent.compliance.schema import (
     SEVERITY_ORANGE,
     SEVERITY_YELLOW,
 )
+from qihuang_platform.agent.clients.vision import vision_analyze
 from qihuang_platform.agent.compliance.store import (
     ComplianceStore,
     make_material_id,
@@ -77,6 +78,19 @@ def _find_rules_dir() -> str | None:
 RULES_DIR = _find_rules_dir()
 
 _SEVERITY_RANK = {SEVERITY_RED: 0, SEVERITY_ORANGE: 1, SEVERITY_YELLOW: 2}
+
+# 视觉模型审核提示词：让视觉模型指出图片中与「中医/健康营销合规」相关的可见要素，
+# 输出为可读描述（非 JSON），由下游 L0/L1/L2 条款裁决——视觉只负责「看见」。
+COMPLIANCE_VISION_PROMPT = (
+    "你是内容合规审核助手。请仔细审视这张门店经营图片（海报/朋友圈配图/直播间截图/商品图等），\n"
+    "用中文逐条列出图片中与「健康/医疗营销合规」相关的可见要素，重点识别：\n"
+    "1) 是否出现夸大疗效、保证治愈、包治百病等绝对化表述；\n"
+    "2) 是否出现疑似医疗广告、处方药、诊疗建议、诊断结论；\n"
+    "3) 是否展示执业资质/许可证/专利等证照，及其是否清晰；\n"
+    "4) 是否出现违禁词、敏感人物/机构、未核实的数据或对比图；\n"
+    "5) 图片文字与产品/服务宣传是否一致。\n"
+    "仅描述你「在图中看到」的客观要素，不要下合规结论，不要解释，不要 markdown 代码块。"
+)
 
 
 def _now_iso() -> str:
@@ -132,14 +146,36 @@ class ComplianceEngineL2:
         material_type: str,
         port: str,
         institution_id: str,
+        image: str | None = None,
+        video: str | None = None,
         material_key: str | None = None,
         persist: bool = True,
     ) -> dict[str, Any]:
+        # 视觉模型（图片审核）：把图片交给视觉端点识别违规要素，作为辅助文本并入审核；
+        # 数据真实性原则——视觉只负责「看见」，最终判定仍由 L0/L1/L2 条款裁决。
+        analysis_text = text
+        vision_result = None
+        if image:
+            loop = asyncio.get_running_loop()
+            vision_result = await loop.run_in_executor(
+                None, vision_analyze, image, COMPLIANCE_VISION_PROMPT,
+                "COMPLIANCE_VISION", "GEO_VISION",
+            )
+            if vision_result.get("text"):
+                analysis_text = (
+                    text + "\n\n[图片视觉要素（视觉模型识别，仅供参考，最终判定以合规条款为准）]\n"
+                    + vision_result["text"]
+                )
+        elif video:
+            vision_result = {"provided": True, "mode": "video_unsupported",
+                             "note": "视频逐帧解析待接入（当前视觉客户端支持单图），已按文本审核；"
+                                     "如需视频审核请先抽帧为图片。"}
+
         # L0
         l0_ok = True
         try:
             rules = self._load_l0()
-            l0_hits = rules.scan_text(text)
+            l0_hits = rules.scan_text(analysis_text)
             judge = rules.judge_state
         except Exception:
             l0_hits = []
@@ -147,11 +183,11 @@ class ComplianceEngineL2:
             l0_ok = False
 
         # L1
-        clauses = await self.kb.retrieve(text, top_k=8)
+        clauses = await self.kb.retrieve(analysis_text, top_k=8)
         clause_map = {c.clause_id: c for c in clauses}
 
         # L2
-        l2_violations = await self._reason(text, clauses)
+        l2_violations = await self._reason(analysis_text, clauses)
 
         # 融合
         hits = self._merge(l0_hits, l2_violations, clause_map)
@@ -169,6 +205,8 @@ class ComplianceEngineL2:
             "hits": hits,
             "scanned_at": _now_iso(),
         }
+        if vision_result is not None:
+            body["vision"] = vision_result
         if persist:
             self.store.upsert(material_id, body)
         # L1 实体对齐（MVP）：桥接 8601 中医标签

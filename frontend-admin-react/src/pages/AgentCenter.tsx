@@ -179,89 +179,6 @@ export default function AgentCenter() {
         )}
       </section>
 
-      {/* ═══ 构件 C：各 Agent 看板 ═══ */}
-      <section>
-        <div className="flex items-center gap-2 mb-3">
-          <Gauge className="w-4 h-4" style={{ color: C.primary }} />
-          <span className="text-[14px] font-medium" style={{ color: C.ink }}>各 Agent 运营看板（构件 C）</span>
-        </div>
-        {!dashKey ? (
-          <Card className="border" style={{ borderColor: C.border }}>
-            <CardContent className="p-8 text-center" style={{ color: C.light }}>
-              <Gauge className="w-8 h-8 mx-auto mb-2 opacity-40" />
-              <div className="text-[13px]">在上方资源池点击「看板」查看对应能力的运营数据</div>
-            </CardContent>
-          </Card>
-        ) : dashLoading ? (
-          <Card className="border" style={{ borderColor: C.border }}>
-            <CardContent className="p-8 text-center"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />看板加载中…</CardContent>
-          </Card>
-        ) : dash ? (
-          <Card className="border" style={{ borderColor: C.border }}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[13px] font-medium" style={{ color: C.ink }}>{dashKey} 运营看板</span>
-                <Button size="sm" variant="outline" className="h-7 text-[12px]" onClick={() => openDash(dashKey!)}>
-                  <RefreshCw className="w-3.5 h-3.5 mr-1" /> 刷新
-                </Button>
-              </div>
-
-              {dash.__error ? (
-                <div className="text-[13px] text-red-600 flex items-center gap-2"><AlertTriangle className="w-4 h-4" />{dash.__error}</div>
-              ) : (
-                <>
-                  {/* 指标卡 */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                    {dash.total !== undefined && (
-                      <Metric label="总量" value={String(dash.total)} color={C.primary} />
-                    )}
-                    {dash.states && Object.entries(dash.states as Record<string, number>).map(([k, v]) => (
-                      <Metric key={k} label={stateLabel[k] || k} value={String(v)} color={stateColor[k] || C.mid} />
-                    ))}
-                  </div>
-
-                  {/* 近期记录 */}
-                  {Array.isArray(dash.recent) && dash.recent.length > 0 && (
-                    <div>
-                      <div className="text-[12px] mb-2" style={{ color: C.light }}>近期记录（最新 {dash.recent.length} 条）</div>
-                      <table className="w-full text-[12px]">
-                        <thead>
-                          <tr className="text-left text-[11px]" style={{ color: C.light }}>
-                            {["标识", "状态", "动作", "时间"].map((h) => <th key={h} className="pb-1.5 font-normal">{h}</th>)}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {dash.recent.map((m: any, i: number) => (
-                            <tr key={i} className="border-t" style={{ borderColor: C.border }}>
-                              <td className="py-2 font-mono" style={{ color: C.mid }}>{m.material_key || m.key || m.id || "—"}</td>
-                              <td className="py-2">
-                                <span className="text-[11px] px-1.5 py-0.5 rounded" style={{
-                                  background: (stateColor[m.state] ? stateColor[m.state] : C.mid) + "22",
-                                  color: stateColor[m.state] || C.mid,
-                                }}>{stateLabel[m.state] || m.state || "—"}</span>
-                              </td>
-                              <td className="py-2" style={{ color: C.mid }}>{m.action_taken || m.action || "—"}</td>
-                              <td className="py-2 text-[11px]" style={{ color: C.light }}>{m.updated_at || m.created_at || "—"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-
-                  {/* 兜底：非合规结构时展示原始 JSON */}
-                  {dash.total === undefined && !dash.states && (
-                    <pre className="text-[11px] bg-[#F8FAF9] rounded-lg p-3 overflow-auto max-h-64" style={{ color: C.mid }}>
-                      {JSON.stringify(dash, null, 2)}
-                    </pre>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-        ) : null}
-      </section>
-
       {/* ═══ 构件 B：套餐专家团组合 ═══ */}
       <section>
         <div className="flex items-center justify-between mb-3">
@@ -350,6 +267,89 @@ export default function AgentCenter() {
             </CardContent>
           </Card>
         )}
+      </section>
+
+      {/* ═══ 构件 C：各 Agent 看板 ═══ */}
+      <section>
+        <div className="flex items-center gap-2 mb-3">
+          <Gauge className="w-4 h-4" style={{ color: C.primary }} />
+          <span className="text-[14px] font-medium" style={{ color: C.ink }}>各 Agent 运营看板（构件 C）</span>
+        </div>
+        {!dashKey ? (
+          <Card className="border" style={{ borderColor: C.border }}>
+            <CardContent className="p-8 text-center" style={{ color: C.light }}>
+              <Gauge className="w-8 h-8 mx-auto mb-2 opacity-40" />
+              <div className="text-[13px]">在上方资源池点击「看板」查看对应能力的运营数据</div>
+            </CardContent>
+          </Card>
+        ) : dashLoading ? (
+          <Card className="border" style={{ borderColor: C.border }}>
+            <CardContent className="p-8 text-center"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />看板加载中…</CardContent>
+          </Card>
+        ) : dash ? (
+          <Card className="border" style={{ borderColor: C.border }}>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[13px] font-medium" style={{ color: C.ink }}>{dashKey} 运营看板</span>
+                <Button size="sm" variant="outline" className="h-7 text-[12px]" onClick={() => openDash(dashKey!)}>
+                  <RefreshCw className="w-3.5 h-3.5 mr-1" /> 刷新
+                </Button>
+              </div>
+
+              {dash.__error ? (
+                <div className="text-[13px] text-red-600 flex items-center gap-2"><AlertTriangle className="w-4 h-4" />{dash.__error}</div>
+              ) : (
+                <>
+                  {/* 指标卡 */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                    {dash.total !== undefined && (
+                      <Metric label="总量" value={String(dash.total)} color={C.primary} />
+                    )}
+                    {dash.states && Object.entries(dash.states as Record<string, number>).map(([k, v]) => (
+                      <Metric key={k} label={stateLabel[k] || k} value={String(v)} color={stateColor[k] || C.mid} />
+                    ))}
+                  </div>
+
+                  {/* 近期记录 */}
+                  {Array.isArray(dash.recent) && dash.recent.length > 0 && (
+                    <div>
+                      <div className="text-[12px] mb-2" style={{ color: C.light }}>近期记录（最新 {dash.recent.length} 条）</div>
+                      <table className="w-full text-[12px]">
+                        <thead>
+                          <tr className="text-left text-[11px]" style={{ color: C.light }}>
+                            {["标识", "状态", "动作", "时间"].map((h) => <th key={h} className="pb-1.5 font-normal">{h}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dash.recent.map((m: any, i: number) => (
+                            <tr key={i} className="border-t" style={{ borderColor: C.border }}>
+                              <td className="py-2 font-mono" style={{ color: C.mid }}>{m.material_key || m.key || m.id || "—"}</td>
+                              <td className="py-2">
+                                <span className="text-[11px] px-1.5 py-0.5 rounded" style={{
+                                  background: (stateColor[m.state] ? stateColor[m.state] : C.mid) + "22",
+                                  color: stateColor[m.state] || C.mid,
+                                }}>{stateLabel[m.state] || m.state || "—"}</span>
+                              </td>
+                              <td className="py-2" style={{ color: C.mid }}>{m.action_taken || m.action || "—"}</td>
+                              <td className="py-2 text-[11px]" style={{ color: C.light }}>{m.updated_at || m.created_at || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* 兜底：非合规结构时展示原始 JSON */}
+                  {dash.total === undefined && !dash.states && (
+                    <pre className="text-[11px] bg-[#F8FAF9] rounded-lg p-3 overflow-auto max-h-64" style={{ color: C.mid }}>
+                      {JSON.stringify(dash, null, 2)}
+                    </pre>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        ) : null}
       </section>
     </div>
   );
