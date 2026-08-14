@@ -230,6 +230,7 @@
     <div class="card">
       <h3>每日日签</h3>
       <p class="muted">带 User ID 且已建档则按你的喜用神个性化穿衣/配色。</p>
+      <label class="f chk"><input type="checkbox" id="dailyAI"> AI 详批（LLM 象义层散文解读，需平台已配置文本模型）</label>
       <button class="btn ghost" onclick="doDaily()">生成今日日签</button>
       <div class="out" id="o-daily"></div>
     </div>
@@ -253,6 +254,7 @@
       <h3>年运报告</h3>
       <label class="f">年份（可选，默认今年）</label>
       <input id="repYear" type="number" placeholder="2026">
+      <label class="f chk"><input type="checkbox" id="repAI"> AI 详批（LLM 象义层散文解读，需平台已配置文本模型）</label>
       <button class="btn ghost" onclick="doReport()">生成年运报告</button>
       <div class="out" id="o-report"></div>
     </div>
@@ -382,6 +384,14 @@ function show(id, html, isErr){
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 function pills(arr, cls){ return (arr||[]).map(x=>`<span class="pill ${cls||''}">${esc(x)}</span>`).join(''); }
+// LLM 象义层（AI 详批）通用渲染块：mode=llm 显正文，pending/error 显回退说明
+function narrBlock(n){
+  if(!n) return '';
+  const label = n.mode==='llm' ? 'AI 详批（'+esc(n.model||'')+'）'
+              : (n.mode==='pending' ? 'AI 详批（未启用）' : 'AI 详批（回退）');
+  return '<div class="narr"><div class="narr-h">'+label+'</div>'
+       + '<div class="narr-b">'+esc(n.text||'')+'</div></div>';
+}
 
 const GAN_WX = {甲:"木",乙:"木",丙:"火",丁:"火",戊:"土",己:"土",庚:"金",辛:"金",壬:"水",癸:"水"};
 const SHEN = {比肩:"同",劫财:"同",正印:"生",偏印:"生",食神:"我生",伤官:"我生",正财:"我克",偏财:"我克",正官:"克我",七杀:"克我"};
@@ -508,8 +518,10 @@ async function doArchive(){
 // ---------- 日签 ----------
 async function doDaily(){
   const uid = document.getElementById('uid').value.trim() || 'demo-user';
+  const ai = document.getElementById('dailyAI').checked;
   try{
-    const d = await api('/api/v1/agent/fortune/daily?user_id='+encodeURIComponent(uid));
+    const qs = 'user_id='+encodeURIComponent(uid) + (ai ? '&ai=true' : '');
+    const d = await api('/api/v1/agent/fortune/daily?'+qs);
     let h = `<div class="hero"><div><div class="date">${d.date}</div><div class="gz">${d.day_ganzhi}</div>`
           + `<div class="date" style="margin-top:4px">日干五行 ${d.day_wx}</div></div>`
           + `<div class="score"><b>${d.scores.综合}</b><span>综合评分</span></div></div>`;
@@ -541,6 +553,7 @@ async function doDaily(){
     if(d.personal_advice && d.personal_advice.text){
       h += '<div class="adv">'+esc(d.personal_advice.text)+'</div>';
     }
+    h += narrBlock(d.narrative);
     show('o-daily', h);
   }catch(e){ show('o-daily', '错误：'+esc(e.message), true); }
 }
@@ -616,14 +629,8 @@ async function doCast(){
       h += `<div class="block"><div class="bt">规则断语（传统参考）</div>`
          + `<div class="detail">${esc(d.duanyu.lines.join('\n')).replace(/\n/g,'<br>')}</div></div>`;
     }
-    // LLM 象义层（AI 详批）：mode=llm 显正文，pending/error 显回退说明
-    if(d.narrative){
-      const n = d.narrative;
-      const label = n.mode==='llm' ? 'AI 详批（'+esc(n.model||'')+'）'
-                  : (n.mode==='pending' ? 'AI 详批（未启用）' : 'AI 详批（回退）');
-      h += `<div class="narr"><div class="narr-h">${label}</div>`
-         + `<div class="narr-b">${esc(n.text||'')}</div></div>`;
-    }
+    // LLM 象义层（AI 详批）：复用通用 narrBlock
+    h += narrBlock(d.narrative);
     show('o-cast', h);
   }catch(e){ show('o-cast', '错误：'+esc(e.message), true); }
   finally{ btn.disabled = false; }
@@ -635,6 +642,7 @@ async function doReport(){
   const y = document.getElementById('repYear').value.trim();
   const body = {user_id: uid};
   if(y) body.year = parseInt(y,10);
+  body.ai = document.getElementById('repAI').checked;
   try{
     const d = await api('/api/v1/agent/fortune/report', {method:'POST', body});
     let h = `<div class="kv"><b>流年</b><span>${d.year_ganzhi}（${d.year}）</span></div>`;
@@ -644,6 +652,15 @@ async function doReport(){
       h += `<div class="kv"><b>流年十神</b><span>${d.advice.流年天干十神}（天干）· ${d.advice.流年地支十神}（地支）</span></div>`;
     }
     h += '<div style="margin:6px 0">喜用：'+pills(d.favorable,'good')+'　忌：'+pills(d.unfavorable,'bad')+'</div>';
+    // 大运 × 流年 十神交互（#390）：有当前大运则展示传统参断
+    if(d.dayun_interaction){
+      const di = d.dayun_interaction;
+      h += `<div class="block"><div class="bt">大运 × 流年</div>`
+         + `<div class="kv"><b>当前大运</b><span>${di.dayun}（天干 ${di.dayun_gan_tenshen||'-'} · 地支 ${di.dayun_zhi_tenshen||'-'}）</span></div>`
+         + `<div class="kv"><b>天干层面</b><span>${di.relation_gan}</span></div>`
+         + `<div class="kv"><b>地支层面</b><span>${di.relation_zhi}</span></div>`
+         + `<div class="detail">${esc(di.note||'')}</div></div>`;
+    }
     if(d.advice){
       h += `<div class="kv"><b>重点五行</b><span>${(d.advice.重点五行||[]).join('、')}</span></div>`;
       h += `<div class="kv"><b>宜</b><span>${esc(d.advice.宜)}</span></div>`;
@@ -673,6 +690,7 @@ async function doReport(){
       bx += '</div>';
       h += bx;
     }
+    h += narrBlock(d.narrative);
     show('o-report', h);
   }catch(e){ show('o-report', '错误：'+esc(e.message), true); }
 }

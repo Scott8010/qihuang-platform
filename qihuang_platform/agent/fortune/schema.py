@@ -25,6 +25,7 @@ class CastRequest(BaseModel):
 class DailyRequest(BaseModel):
     user_id: Optional[str] = Field(None, description="可选，带入个人喜用神做个性化")
     pillars: Optional[str] = Field(None, description="可选，四柱用于个性化喜用")
+    ai: bool = Field(False, description="是否启用 LLM 象义层（AI 散文详批，需平台配置 FORTUNE_LLM_*）")
 
 
 class ReportRequest(BaseModel):
@@ -32,6 +33,7 @@ class ReportRequest(BaseModel):
     pillars: Optional[str] = Field(None, description="未建档时直接给四柱")
     gender: Optional[str] = Field(None, description="性别：男 / 女（大运所需）")
     year: Optional[int] = Field(None, description="默认今年")
+    ai: bool = Field(False, description="是否启用 LLM 象义层（AI 散文详批，需平台配置 FORTUNE_LLM_*）")
 
 
 class GeoRequest(BaseModel):

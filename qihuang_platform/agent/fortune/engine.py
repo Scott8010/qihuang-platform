@@ -871,6 +871,13 @@ def _liuyao_duanyu(zhuang: Dict, zhuang_bian: Dict, question: str) -> Dict:
             shen.append("  · %s 临%s：%s" % (l["liuqin"], l["liushen"], _LIUSHEN_MEAN.get(l["liushen"], "")))
     if shen:
         body.append("六神之象：\n" + "\n".join(shen))
+    # 卦身 / 卦气（京房派，辅助参断）
+    gq = zhuang.get("guaqi")
+    gs = zhuang.get("guashen")
+    if gq and gs:
+        body.append("卦身（世身）：%s（第%s爻），卦气：%s月令中本宫%s为%s。"
+                    "事之体用宜参此旺衰——旺则势张、相则得助、休囚死则宜守。"
+                    % (gs["gz"], gs["pos"], gq["month_ganzhi"], gq["palace_wx"], gq["state"]))
     # 综合
     sumup = ("六爻俱静，世应分明，宜守不宜妄动；依世应旺衰与用神定进退。"
              if not dongs else
@@ -926,6 +933,29 @@ def _zhuanggua(lines: List[int], when: datetime.datetime = None) -> Dict:
             "yang": yang,
             "old": old,
         })
+    # 卦身（世身）：世爻所临地支 —— 京房派以世爻之地支为卦身，主事之体
+    shi_line = next((l for l in out if l["shi"]), None)
+    guashen = None
+    if shi_line:
+        guashen = {"zhi": shi_line["gz"][1], "pos": shi_line["pos"],
+                   "name": shi_line["name"], "gz": shi_line["gz"]}
+    # 卦气旺衰：本宫五行相对起卦月令（月建）的旺相休囚死
+    # 当令者旺；月令生我者相；我生月令者休；月令克我者囚；我克月令者死
+    mp = month_pillar(when.date())
+    month_zhi = mp[1]
+    month_wx = ZHI_WX[month_zhi]
+    if palace_wx == month_wx:
+        gq_state = "旺"
+    elif SHENG.get(month_wx) == palace_wx:
+        gq_state = "相"
+    elif SHENG.get(palace_wx) == month_wx:
+        gq_state = "休"
+    elif KE.get(month_wx) == palace_wx:
+        gq_state = "囚"
+    else:
+        gq_state = "死"
+    guaqi = {"month_ganzhi": mp, "month_wx": month_wx,
+             "palace_wx": palace_wx, "state": gq_state}
     return {
         "ben_gua": ben_name,
         "lower": lower,
@@ -934,8 +964,51 @@ def _zhuanggua(lines: List[int], when: datetime.datetime = None) -> Dict:
         "palace_wx": palace_wx,
         "shi_pos": shi,
         "ying_pos": ying,
+        "guashen": guashen,
+        "guaqi": guaqi,
         "lines": out,
     }
+
+
+def _fushen(zhuang: Dict, yongshen_type: str = None,
+            when: datetime.datetime = None) -> Dict:
+    """六爻伏神 / 飞神：用神不上卦（伏藏）时，查本宫八纯卦补全伏神与飞神。
+
+    本宫八纯卦六爻六亲齐备；测卦某六亲缺失，则取本宫同爻位之六亲为伏神，
+    测卦该位（同爻位）之六亲/地支为飞神。返回 {found, yongshen_type, items, note}。
+    """
+    if not yongshen_type:
+        return {"found": False, "yongshen_type": None, "items": [],
+                "note": "未提供问事（无明确用神），暂不论伏神；若需查伏，请补充问事。"}
+    palace = zhuang.get("palace")
+    bits = _TRI_BITS.get(palace)
+    if not bits:
+        return {"found": False, "yongshen_type": yongshen_type, "items": [],
+                "note": "本宫信息缺失，无法推算伏神。"}
+    lines_pure = [int(c) for c in bits] * 2  # 八纯卦：下上皆本宫三爻
+    pure = _zhuanggua(lines_pure, when or datetime.datetime.now())
+    items = []
+    for l in pure["lines"]:
+        if l["liuqin"] != yongshen_type:
+            continue
+        p = l["pos"]
+        fei = next((x for x in zhuang.get("lines", []) if x["pos"] == p), None)
+        items.append({
+            "pos": p,
+            "name": l["name"],
+            "fushen": {"liuqin": l["liuqin"], "gz": l["gz"], "wx": l["wx"]},
+            "feishen": ({"liuqin": fei["liuqin"], "gz": fei["gz"], "wx": fei["wx"]}
+                        if fei else None),
+        })
+    if items:
+        f0 = items[0]["feishen"]
+        fei_desc = ("%s（%s）" % (f0["gz"], f0["liuqin"])) if f0 else "—"
+        note = ("用神「%s」不上卦（伏藏），已查本宫得伏神：于第%s爻伏出，"
+                "飞神为%s。伏神出而事象方显，宜细参之。"
+                % (yongshen_type, "、".join(str(i["pos"]) for i in items), fei_desc))
+        return {"found": True, "yongshen_type": yongshen_type, "items": items, "note": note}
+    return {"found": False, "yongshen_type": yongshen_type, "items": [],
+            "note": "用神「%s」在本宫无可伏之处，当另参世应。" % yongshen_type}
 
 
 # ───────────────────────────────────────────────────────────
@@ -1011,6 +1084,12 @@ def _liuyao_zhuang_text(z: Dict) -> str:
                z.get("shi_pos"), z.get("ying_pos")))
     if z.get("yongshen"):
         head += "　用神提示：%s" % z.get("yongshen")
+    if z.get("guashen"):
+        g = z["guashen"]
+        head += "　卦身（世身）：%s（第%s爻·%s）" % (g["zhi"], g["pos"], g["gz"])
+    if z.get("guaqi"):
+        q = z["guaqi"]
+        head += "　卦气：%s月令下本宫%s为%s" % (q["month_ganzhi"], q["palace_wx"], q["state"])
     return head + "\n" + "\n".join(rows)
 
 
@@ -1084,6 +1163,101 @@ def _liuyao_narrative(zhuang: Dict, zhuang_bian: Dict,
                         f"已回退为规则引擎装卦与卦象参考。"}
 
 
+def _daily_narrative(data: Dict, day_master: str = None,
+                     favorable=None, unfavorable=None) -> Dict:
+    """每日日签 AI 详批（散文）。复用 _LLM_SYSTEM_PROMPT / _llm_chat_text，安全回退。"""
+    base = os.environ.get("FORTUNE_LLM_API_BASE", "").rstrip("/")
+    key = os.environ.get("FORTUNE_LLM_API_KEY", "")
+    model = os.environ.get("FORTUNE_LLM_MODEL", "gpt-4o-mini")
+    if not (base and key):
+        return {"mode": "pending", "model": None,
+                "text": "未配置 LLM 象义层（FORTUNE_LLM_API_BASE/KEY），"
+                        "当前仅展示规则引擎日签。开启 AI 详批需平台配置文本模型。"}
+    try:
+        ctx = []
+        ctx.append("日期：%s（日柱 %s，日干五行 %s）"
+                   % (data.get("date"), data.get("day_ganzhi"), data.get("day_wx")))
+        if day_master:
+            ctx.append("求问者日主：%s（天干）" % day_master)
+            ctx.append("当日日干十神：%s（%s）"
+                       % (data.get("day_tenshen"), data.get("day_tenshen_note")))
+            ctx.append("当日日支十神：%s" % data.get("day_zhi_tenshen"))
+        ctx.append("喜用五行：%s；忌五行：%s" % (favorable or [], unfavorable or []))
+        ctx.append("综合评分：%s" % data.get("scores", {}).get("综合"))
+        ctx.append("宜：%s；忌：%s"
+                   % ("、".join(data.get("yi", [])), "、".join(data.get("ji", []))))
+        ctx.append("幸运色：%s；幸运数：%s"
+                   % ("、".join(data.get("lucky_colors", [])),
+                      "、".join(map(str, data.get("lucky_numbers", [])))))
+        if data.get("personal_advice"):
+            ctx.append("个人化建议：%s" % data["personal_advice"].get("text", ""))
+        prompt = (
+            "你是一位通晓传统黄历与八字日运的命理师。下面是一份『每日日签』的规则引擎结果"
+            "（干支、五行、十神、宜忌、喜用已算出），请据此为求问者撰写一篇通俗有温度的中文日运散文。\n\n"
+            "【日签数据】\n" + "\n".join(ctx) + "\n\n"
+            "【撰写要求】\n"
+            "1. 语言：简体中文、通俗流畅、有温度，避免堆砌术语；可适度引经据典。\n"
+            "2. 结构：用小标题分段（如『今日总览』『事业财运』『人际情感』『穿搭与宜忌』『一句提醒』）。\n"
+            "3. 必须基于上方数据推演，不得凭空捏造干支；保持理性、正向、娱乐向。\n"
+            "4. 总篇幅约 400-700 字。直接输出正文，不要外层 JSON、不要代码块。"
+        )
+        text = _llm_chat_text(base, key, model, prompt, system=_LLM_SYSTEM_PROMPT)
+        if not text or not text.strip():
+            return {"mode": "error", "model": model,
+                    "text": "LLM 象义层返回为空，请稍后重试或查看规则引擎日签。"}
+        return {"mode": "llm", "model": model, "text": text.strip()}
+    except Exception as e:
+        return {"mode": "error", "model": model,
+                "text": f"LLM 象义层调用失败（{_redact_secret(e)}），已回退为规则引擎日签。"}
+
+
+def _year_narrative(data: Dict, prof: Dict, cur_dayun: str = None) -> Dict:
+    """年运报告 AI 详批（散文）。复用 _LLM_SYSTEM_PROMPT / _llm_chat_text，安全回退。"""
+    base = os.environ.get("FORTUNE_LLM_API_BASE", "").rstrip("/")
+    key = os.environ.get("FORTUNE_LLM_API_KEY", "")
+    model = os.environ.get("FORTUNE_LLM_MODEL", "gpt-4o-mini")
+    if not (base and key):
+        return {"mode": "pending", "model": None,
+                "text": "未配置 LLM 象义层（FORTUNE_LLM_API_BASE/KEY），"
+                        "当前仅展示规则引擎年运。开启 AI 详批需平台配置文本模型。"}
+    try:
+        ctx = []
+        ctx.append("流年：%s（年干五行 %s）" % (data.get("year_ganzhi"),
+                                           GAN_WX.get(data.get("year_ganzhi", "甲乙")[0], "")))
+        ctx.append("日主：%s（五行 %s），身强弱：%s"
+                   % (data.get("day_master"), prof.get("day_master_wx"), data.get("strength")))
+        ctx.append("流年与日主关系：%s" % data.get("liunian_relation"))
+        adv = data.get("advice", {})
+        ctx.append("流年天干十神：%s；流年地支十神：%s"
+                   % (adv.get("流年天干十神"), adv.get("流年地支十神")))
+        ctx.append("喜用五行：%s" % data.get("favorable"))
+        ctx.append("宜：%s" % adv.get("宜"))
+        ctx.append("忌：%s" % adv.get("忌"))
+        if cur_dayun:
+            di = data.get("dayun_interaction")
+            ctx.append("当前大运：%s"
+                       % (di.get("note") if isinstance(di, dict) else cur_dayun))
+        prompt = (
+            "你是一位深谙八字流年与大运的命理师。下面是一份『年运报告』的规则引擎结果"
+            "（流年干支、日主、十神、喜用、宜忌、大运交互已算出），请据此为求问者撰写一篇"
+            "通俗有温度的中文年运散文。\n\n"
+            "【年运数据】\n" + "\n".join(ctx) + "\n\n"
+            "【撰写要求】\n"
+            "1. 语言：简体中文、通俗流畅、有温度，避免堆砌术语；可适度引经据典。\n"
+            "2. 结构：用小标题分段（如『流年总览』『事业财运』『人际情感』『健康与修身』『趋吉建议』）。\n"
+            "3. 必须基于上方数据推演，不得凭空捏造干支；保持理性、正向、娱乐向。\n"
+            "4. 总篇幅约 500-900 字。直接输出正文，不要外层 JSON、不要代码块。"
+        )
+        text = _llm_chat_text(base, key, model, prompt, system=_LLM_SYSTEM_PROMPT)
+        if not text or not text.strip():
+            return {"mode": "error", "model": model,
+                    "text": "LLM 象义层返回为空，请稍后重试或查看规则引擎年运。"}
+        return {"mode": "llm", "model": model, "text": text.strip()}
+    except Exception as e:
+        return {"mode": "error", "model": model,
+                "text": f"LLM 象义层调用失败（{_redact_secret(e)}），已回退为规则引擎年运。"}
+
+
 def liuyao(method: str = "coin", question: str = "", seed_key: str = None,
            when: datetime.datetime = None, ai: bool = False) -> Dict:
     if method == "time":
@@ -1111,6 +1285,7 @@ def liuyao(method: str = "coin", question: str = "", seed_key: str = None,
         "zhuanggua_bian": zhuang_bian,
         "yongshen_detail": _liuyao_yongshen(question, zhuang),
         "duanyu": _liuyao_duanyu(zhuang, zhuang_bian, question),
+        "fushen": _fushen(zhuang, _liuyao_yongshen(question, zhuang).get("type"), when),
     }
     # 卦象象义 + 解析（传统卦象参考，娱乐为主）
     by = _GUA_YIXIANG.get(ben, "")
@@ -1228,8 +1403,10 @@ _DAY_TENSHEN_NOTE = {
 
 
 def daily_sign(date: datetime.date = None, favorable: List[str] = None,
-               unfavorable: List[str] = None, day_master: str = None) -> Dict:
-    """每日日签。带 day_master（本人日主天干）时，额外给出「当日日干/日支对本人的十神」个人化解读。"""
+               unfavorable: List[str] = None, day_master: str = None,
+               ai: bool = False) -> Dict:
+    """每日日签。带 day_master（本人日主天干）时，额外给出「当日日干/日支对本人的十神」个人化解读。
+    ai=True 时额外挂 narrative（AI 散文详批，规则引擎保底，未配置或失败均安全回退）。"""
     date = date or datetime.date.today()
     dg = day_ganzhi(date)
     dgan, dzhi = dg[0], dg[1]
@@ -1282,7 +1459,7 @@ def daily_sign(date: datetime.date = None, favorable: List[str] = None,
     # 个人化补充：穿衣/茶表维持通行口径（以当日日干为我），此处按本人喜用再收一刀
     personal = _personal_advice(dwx, fav, unfav, rank)
 
-    return {
+    result = {
         "date": date.isoformat(),
         "day_ganzhi": dg,
         # 注意：这是「当日日干五行」，不是本人日主五行（本人日主见 bazi_profile.day_master_wx）
@@ -1306,6 +1483,11 @@ def daily_sign(date: datetime.date = None, favorable: List[str] = None,
         "lucky_numbers": lucky_numbers,
         "disclaimer": "传统文化娱乐参考，不作为医疗/投资/人生决策依据。",
     }
+    # AI 详批（可选增厚）：规则引擎保底，不阻断主流程
+    if ai:
+        result["narrative"] = _daily_narrative(
+            result, day_master=day_master, favorable=fav, unfavorable=unfav)
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1329,11 +1511,15 @@ def _year_advice_text(fav, unfav, rel):
     return yi, ji
 
 
-def year_report(pillars, year: int = None) -> Dict:
+def year_report(pillars, year: int = None, cur_dayun: str = None,
+                ai: bool = False) -> Dict:
+    """年运报告。cur_dayun 为当前所处大运干支（如 '甲子'），传入则附『大运×流年』十神交互；
+    ai=True 时额外挂 narrative（AI 散文详批，规则引擎保底，未配置或失败均安全回退）。"""
     prof = bazi_profile(pillars)
     year = year or datetime.date.today().year
     yg = year_ganzhi(year)
     y_gan_wx = GAN_WX[yg[0]]
+    y_zhi_wx = ZHI_WX[yg[1]]
     dwx = prof["day_master_wx"]
     fav = prof["favorable"]
 
@@ -1353,7 +1539,54 @@ def year_report(pillars, year: int = None) -> Dict:
     yt = shishen(prof["day_master"], yg[0])
     yz = shishen(prof["day_master"], ZHI_BEN_GAN[yg[1]])
     yi_text, ji_text = _year_advice_text(fav, prof["unfavorable"], rel)
-    return {
+
+    # 大运 × 流年 十神交互（可选）：以五行生克论天干见天干、地支见地支
+    dayun_interaction = None
+    if cur_dayun and len(cur_dayun) == 2:
+        du_gan_wx = GAN_WX.get(cur_dayun[0])
+        du_zhi_wx = ZHI_WX.get(cur_dayun[1])
+        du_gan_ts = shishen(prof["day_master"], cur_dayun[0])
+        du_zhi_ts = shishen(prof["day_master"], ZHI_BEN_GAN.get(cur_dayun[1], ""))
+
+        def _rel(a, b):
+            if not (a and b):
+                return ""
+            if a == b:
+                return "比和（势同）"
+            if SHENG.get(b) == a:
+                return "得大运生扶"
+            if SHENG.get(a) == b:
+                return "生大运"
+            if KE.get(b) == a:
+                return "受大运克制"
+            if KE.get(a) == b:
+                return "克大运"
+            return "无直接生克"
+
+        g_rel = _rel(y_gan_wx, du_gan_wx)
+        z_rel = _rel(y_zhi_wx, du_zhi_wx)
+        good = ("得大运生扶", "比和（势同）", "生大运")
+        bad = ("受大运克制", "克大运")
+        sc = sum(1 if r in good else (-1 if r in bad else 0) for r in (g_rel, z_rel))
+        if sc > 0:
+            verdict = "大运流年多相生相和，此年可得运程助推，宜顺势进取、借势成事。"
+        elif sc < 0:
+            verdict = "大运流年多见冲克，此年宜守不宜攻，防波动与无谓损耗，稳扎稳打为上。"
+        else:
+            verdict = "大运流年平气相当，宜按部就班、静观其变，蓄势待时。"
+        dayun_interaction = {
+            "dayun": cur_dayun,
+            "dayun_gan_tenshen": du_gan_ts,
+            "dayun_zhi_tenshen": du_zhi_ts,
+            "relation_gan": g_rel,
+            "relation_zhi": z_rel,
+            "verdict": verdict,
+            "note": ("当前正行大运 %s（天干十神%s、地支十神%s）。流年 %s 与之相参："
+                     "天干层面——流年天干%s；地支层面——流年地支%s。%s"
+                     % (cur_dayun, du_gan_ts, du_zhi_ts, yg, g_rel, z_rel, verdict)),
+        }
+
+    result = {
         "year": year,
         "year_ganzhi": yg,
         "day_master": prof["day_master"],
@@ -1377,9 +1610,15 @@ def year_report(pillars, year: int = None) -> Dict:
             "忌": ji_text,
             "流年天干十神": yt,
             "流年地支十神": yz,
+            "大运×流年": dayun_interaction["note"] if dayun_interaction else None,
         },
+        "dayun_interaction": dayun_interaction,
         "disclaimer": "传统文化娱乐参考，不作为医疗/投资/人生决策依据。",
     }
+    # AI 详批（可选增厚）：规则引擎保底，不阻断主流程
+    if ai:
+        result["narrative"] = _year_narrative(result, prof, cur_dayun=cur_dayun)
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════

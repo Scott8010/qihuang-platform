@@ -98,11 +98,12 @@ async def fortune_cast(
 async def fortune_daily(
     user_id: str = None,
     pillars: str = None,
+    ai: bool = False,
     request: Request = None,
     user: dict = Depends(get_current_user),
     _agent=Depends(require_agent_in_plan("fortune")),
 ):
-    """每日运程日签：默认通用；带 user_id/四柱则做个性化喜用。"""
+    """每日运程日签：默认通用；带 user_id/四柱则做个性化喜用；ai=true 附 AI 散文详批。"""
     fav = unfav = dm = None
     if user_id:
         recs = _store.all(kind="archive", user_id=user_id)
@@ -117,7 +118,8 @@ async def fortune_daily(
             dm = prof.get("day_master")
         except ValueError:
             fav = unfav = dm = None
-    data = engine.daily_sign(date=date.today(), favorable=fav, unfavorable=unfav, day_master=dm)
+    data = engine.daily_sign(date=date.today(), favorable=fav, unfavorable=unfav,
+                             day_master=dm, ai=ai)
     _audit.append("daily", operator=getattr(request.state, "user_id", "unknown"),
                   user_id=user_id)
     return success(data=data)
@@ -130,18 +132,21 @@ async def fortune_report(
     user: dict = Depends(get_current_user),
     _agent=Depends(require_agent_in_plan("fortune")),
 ):
-    """年运报告：优先用已建档 user_id，否则四柱直输。"""
+    """年运报告：优先用已建档 user_id，否则四柱直输；ai=true 附 AI 散文详批。"""
     pillars = None
+    cur_dayun = None
     if req.user_id:
         recs = _store.all(kind="archive", user_id=req.user_id)
         if recs:
             pillars = " ".join(recs[-1]["pillars"])
+            # 建档时已排大运，取当前所处大运步（年运×大运交互所需）
+            cur_dayun = recs[-1].get("liunian", {}).get("active_dayun")
     if not pillars and req.pillars:
         pillars = req.pillars
     if not pillars:
         return error(code_key="NO_PROFILE", message="需提供 user_id（已建档）或四柱 pillars")
     try:
-        data = engine.year_report(pillars, year=req.year)
+        data = engine.year_report(pillars, year=req.year, cur_dayun=cur_dayun, ai=req.ai)
     except ValueError as e:
         return error(code_key="BAD_PILLARS", message=str(e))
     _audit.append("report", operator=getattr(request.state, "user_id", "unknown"),
