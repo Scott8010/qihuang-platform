@@ -597,13 +597,13 @@ export async function fetchReviews(): Promise<TodoReviewItem[]> {
     const roleMap: Record<string, string> = { DZ: "大张(临床)", XZ: "小张(典籍)" };
     return items.map((x: any) => {
       const c = x.content && typeof x.content === "object" ? x.content : {};
-      const rawName = c.name || c.clause_text || c.title || x.item_id_in_kg || x.id || "";
+      const rawName = c.entity_name || c.name || c.clause_text || c.title || x.item_id_in_kg || x.id || "";
       const name = typeof rawName === "string"
         ? (rawName.length > 60 ? rawName.slice(0, 60) + "…" : rawName)
         : String(rawName);
       return {
         id: x.id || "",
-        type: x.item_type || x.type || "知识条目",
+        type: x.item_type || c.entity_type || c.type || x.type || "知识条目",
         name,
         conf: x.confidence ?? x.conf ?? 0,
         // 来源列展示原始任务类别（证候提纲/方证对应/方剂信息/知识审核/自生长审核）

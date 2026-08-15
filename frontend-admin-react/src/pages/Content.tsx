@@ -38,6 +38,7 @@ function typeStyle(t: string) {
 /** 审核队列类型中文标签（item_type 英文字段 → 中文展示） */
 const TYPE_LABEL: Record<string, string> = {
   Formula: "经方", Drug: "西药", Knowledge: "知识", Syndrome: "证候",
+  classic: "典籍", Classic: "典籍", formula: "经方", syndrome: "证候",
 };
 
 function actionStyle(a: string) {
@@ -56,6 +57,15 @@ function isMostlyEnglish(text: string): boolean {
 /** 万方等站点抓取混入的浏览器警告垃圾文本 */
 function isJunkText(text: string): boolean {
   return /检测到您的浏览器版本过低|万方数据知识服务平台|Google Chrome|Microsoft Edge|Firefox|Safari 浏览器|建议使用更高版本的浏览器/.test(text || "");
+}
+
+/** 是否为「典籍抽取」来源的待审条目（与后端 is_classics_content 对齐：有 entity_name 且非自生长文献） */
+function isClassicsContent(c: any): boolean {
+  if (!c || typeof c !== "object") return false;
+  const hasEntityName = typeof c.entity_name === "string" && c.entity_name.trim().length > 0;
+  if (!hasEntityName) return false;
+  const isAutoGrowth = !!(c.clause_text || c.ai_extracted);
+  return !isAutoGrowth;
 }
 
 export default function Content() {
@@ -364,6 +374,11 @@ function ReviewDetailDrawer({
   const refined = c._refined;
   const hasRefined = !!refined && !refined.error;
 
+  const isClassics = isClassicsContent(c);
+  const classicsSource = (isClassics && c.props && typeof c.props.source_text === "string") ? c.props.source_text : "";
+  const hasClassicsSource = !!classicsSource.trim();
+  const classicsRefined = hasRefined && refined.entry_kind === "classics";
+
   const rawClause = typeof c.clause_text === "string" ? c.clause_text : "";
   const rawAi = typeof c.ai_extracted === "string" ? c.ai_extracted : "";
   const rawOriginal = typeof c.original_text === "string" ? c.original_text : "";
@@ -377,7 +392,7 @@ function ReviewDetailDrawer({
 
   const sourceText = !clauseIsJunk && hasClause ? rawClause : (hasAiExtracted ? rawAi : (rawOriginal.trim() || ""));
   const sourceLikelyEnglish = isMostlyEnglish(sourceText);
-  const needRefine = !refined && (hasClause || hasAiExtracted || rawOriginal.trim().length > 0);
+  const needRefine = !refined && (hasClause || hasAiExtracted || rawOriginal.trim().length > 0 || hasClassicsSource);
   const llmUnavailable = !!refined && refined.error === "LLM_UNAVAILABLE";
 
   return (
@@ -432,7 +447,11 @@ function ReviewDetailDrawer({
                 {needRefine && !refining && !hasRefined && (
                   <div className="flex items-center justify-between gap-2 p-3 rounded-lg border" style={{ borderColor: C.primary, background: C.soft }}>
                     <div className="text-[12px]" style={{ color: C.ink }}>
-                      {sourceLikelyEnglish ? "检测到英文原文，建议 AI 翻译并提炼结论" : "建议 AI 提炼研究题目 / 结论 / 共识分歧"}
+                      {isClassics
+                        ? "典籍条目，建议 AI 提炼方义 / 出处 / 主治"
+                        : sourceLikelyEnglish
+                          ? "检测到英文原文，建议 AI 翻译并提炼结论"
+                          : "建议 AI 提炼研究题目 / 结论 / 共识分歧"}
                     </div>
                     <Button size="sm" className="h-7 px-2.5 text-[12px] shrink-0 flex items-center gap-1" style={{ background: C.primary }} onClick={() => onRefine(detail.id)}>
                       <Sparkles className="w-3.5 h-3.5" /> AI 提炼
@@ -454,12 +473,31 @@ function ReviewDetailDrawer({
                 {hasRefined && (
                   <>
                     <Separator />
-                    <Section title="AI 提炼 · 中文审核摘要">
+                    <Section title={classicsRefined ? "AI 提炼 · 典籍审校摘要" : "AI 提炼 · 中文审核摘要"}>
                       <div className="flex items-center gap-1.5 mb-2">
                         <Sparkles className="w-3.5 h-3.5" style={{ color: C.primary }} />
                         <span className="text-[12px]" style={{ color: C.primary }}>由 AI 生成，供审核参考</span>
                       </div>
-                      <RefinedBlock refined={refined} />
+                      {classicsRefined ? <ClassicsRefinedBlock refined={refined} /> : <RefinedBlock refined={refined} />}
+                    </Section>
+                  </>
+                )}
+
+                {/* 3.5 典籍原文摘录（典籍抽取条目专用，避免只剩底 JSON） */}
+                {isClassics && (
+                  <>
+                    <Separator />
+                    <Section title="典籍原文摘录">
+                      {hasClassicsSource ? (
+                        <div className="text-[13px] leading-relaxed p-3 rounded whitespace-pre-wrap break-words" style={{ background: "#F8FAF9", color: C.ink }}>
+                          {classicsSource}
+                        </div>
+                      ) : (
+                        <div className="text-[11px]" style={{ color: C.light }}>（该条目无 props.source_text 原文摘录）</div>
+                      )}
+                      {c.entity_type && (
+                        <div className="text-[11px] mt-1.5" style={{ color: C.light }}>条目类型：{c.entity_type}</div>
+                      )}
                     </Section>
                   </>
                 )}
@@ -610,6 +648,63 @@ function RefinedBlock({ refined }: { refined: any }) {
       <PointsList title="核心发现" items={findings} color="#2E5A4C" />
       <PointsList title="共识点" items={consensus} color="#2C5F87" />
       <PointsList title="分歧点" items={divergence} color="#B03A2E" />
+      {refined?.provider && (
+        <div className="text-[10px]" style={{ color: C.light }}>
+          由 {refined.provider}（{refined.model}）提炼于 {(refined.refined_at || "").slice(0, 19)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── 典籍抽取条目：AI 提炼结构化渲染（方义/出处/组成/主治）── */
+function ClassicsRefinedBlock({ refined }: { refined: any }) {
+  const name: string = refined?.entry_name_zh || "";
+  const type: string = refined?.entry_type_zh || "";
+  const source: string = refined?.source_text_zh || "";
+  const fangyi: string = refined?.fangyi_zh || "";
+  const attribution: string = refined?.source_attribution_zh || "";
+  const components: string[] = Array.isArray(refined?.key_components_zh) ? refined.key_components_zh : [];
+  const indication: string = refined?.indication_zh || "";
+  return (
+    <div className="space-y-3">
+      {name && (
+        <div>
+          <div className="text-[11px] mb-0.5" style={{ color: C.light }}>条目名称</div>
+          <div className="text-[13px] font-semibold" style={{ color: C.ink }}>{name}</div>
+        </div>
+      )}
+      {type && (
+        <div>
+          <div className="text-[11px] mb-0.5" style={{ color: C.light }}>条目类型</div>
+          <div className="text-[13px]" style={{ color: C.ink }}>{type}</div>
+        </div>
+      )}
+      {source && (
+        <div>
+          <div className="text-[11px] mb-0.5" style={{ color: C.light }}>原文摘录（精校）</div>
+          <div className="text-[12px] leading-relaxed p-2 rounded" style={{ background: "#F8FAF9", color: C.ink }}>{source}</div>
+        </div>
+      )}
+      {fangyi && (
+        <div>
+          <div className="text-[11px] mb-0.5" style={{ color: C.light }}>方义 / 释义</div>
+          <div className="text-[13px] leading-relaxed" style={{ color: C.ink }}>{fangyi}</div>
+        </div>
+      )}
+      {attribution && (
+        <div>
+          <div className="text-[11px] mb-0.5" style={{ color: C.light }}>出处</div>
+          <div className="text-[13px] leading-relaxed" style={{ color: C.ink }}>{attribution}</div>
+        </div>
+      )}
+      <PointsList title="关键组成 / 要点" items={components} color="#7A4E8C" />
+      {indication && (
+        <div>
+          <div className="text-[11px] mb-0.5" style={{ color: C.light }}>主治 / 适用</div>
+          <div className="text-[13px] leading-relaxed" style={{ color: C.ink }}>{indication}</div>
+        </div>
+      )}
       {refined?.provider && (
         <div className="text-[10px]" style={{ color: C.light }}>
           由 {refined.provider}（{refined.model}）提炼于 {(refined.refined_at || "").slice(0, 19)}
