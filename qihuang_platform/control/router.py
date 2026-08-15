@@ -10,7 +10,7 @@
 7. 容器管理: 容器状态监控 + 自动恢复
 """
 import os
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, Query, Body, Request, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -36,7 +36,7 @@ from qihuang_platform.gateway.llm_fallback import llm_fallback
 from qihuang_platform.control.container_mgr import container_mgr
 from qihuang_platform.control.cost_mgr import router as cost_router
 from qihuang_platform.billing.billing import get_bill_detail
-from qihuang_platform.agent.registry import list_agents, get_agent, set_agent_status
+from qihuang_platform.agent.registry import list_agents, get_agent, set_agent_status, is_active
 from qihuang_platform.agent import dashboard as agent_dashboard
 
 router = APIRouter(prefix="/admin/v1", tags=["管理端-全功能"])
@@ -324,6 +324,76 @@ async def cancel_pending_subscription(tenant_id: str, admin: dict = Depends(get_
         db.commit()
         return success(data={"tenant_id": tenant_id, "cancelled_subscription_id": pend.id},
                         message="已取消待生效预约，当前套餐保持不变")
+    except Exception as e:
+        db.rollback()
+        return error("INTERNAL_ERROR", message=str(e))
+    finally:
+        db.close()
+
+
+class TenantAgentAddonsRequest(BaseModel):
+    add: List[str] = Field(default_factory=list, description="要在套餐之外叠加的 Agent key 列表")
+    remove: List[str] = Field(default_factory=list, description="要从租户叠加项中移除的 Agent key 列表")
+
+
+@router.get("/tenants/{tenant_id}/agent-addons", summary="查询租户叠加的额外 Agent（套餐之外）")
+async def get_tenant_agent_addons(tenant_id: str, admin: dict = Depends(get_current_admin)):
+    """返回该租户在套餐 agents 基础上额外叠加的 Agent 列表（存于 tenant.extra.agent_addons）。"""
+    db = SessionLocal()
+    try:
+        t = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not t:
+            return error("NOT_FOUND", message="租户不存在")
+        addons = (t.extra or {}).get("agent_addons", []) or []
+        return success(data={
+            "tenant_id": tenant_id,
+            "agent_addons": addons,
+            "all_active": all(is_active(k) for k in addons),
+        })
+    finally:
+        db.close()
+
+
+@router.post("/tenants/{tenant_id}/agent-addons", summary="叠加/移除租户级额外 Agent（套餐之外精准授权）")
+async def set_tenant_agent_addons(
+    tenant_id: str,
+    req: TenantAgentAddonsRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    """在用户已到最高套餐的基础上，仍可给单个租户精准叠加/移除 Agent 能力。
+
+    - 仅允许叠加「已注册且启用态」的能力（is_active 校验，防注入非法 key 或已停用能力）；
+    - 写 tenant.extra["agent_addons"]（dict 副本，与 extra 内其它键互不影响）；
+    - 鉴权侧 require_agent_in_plan 自动合并「套餐 agents + 租户叠加」。
+    """
+    db = SessionLocal()
+    try:
+        t = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not t:
+            return error("NOT_FOUND", message="租户不存在")
+
+        # 校验 add：仅允许已注册且启用态的能力
+        invalid = [k for k in req.add if not is_active(k)]
+        if invalid:
+            return error("INVALID_PARAM", message=f"以下 Agent key 不存在或已停用，禁止叠加：{invalid}")
+
+        extra = dict(t.extra or {})
+        current = list(extra.get("agent_addons", []) or [])
+        new_set = list(current)
+        for k in req.add:
+            if k not in new_set:
+                new_set.append(k)
+        for k in req.remove:
+            if k in new_set:
+                new_set.remove(k)
+
+        extra["agent_addons"] = new_set
+        t.extra = extra
+        db.commit()
+        return success(data={
+            "tenant_id": tenant_id,
+            "agent_addons": new_set,
+        }, message="租户级 Agent 叠加已更新（在套餐 agents 基础上生效）")
     except Exception as e:
         db.rollback()
         return error("INTERNAL_ERROR", message=str(e))

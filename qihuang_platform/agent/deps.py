@@ -42,7 +42,7 @@ def require_agent_in_plan(agent_key: str):
         # 解析套餐权限
         try:
             from qihuang_platform.db.config import SessionLocal
-            from qihuang_platform.db.models import Subscription, Plan
+            from qihuang_platform.db.models import Subscription, Plan, Tenant
             db = SessionLocal()
         except Exception as e:
             raise HTTPException(
@@ -63,12 +63,22 @@ def require_agent_in_plan(agent_key: str):
                 )
             plan = db.query(Plan).filter_by(id=sub.plan_id).first()
             agents = (plan.features_json or {}).get("agents", []) if plan else []
-            if agent_key not in agents:
+            # 租户级精准叠加：在套餐 agents 基础上，叠加该租户额外授权的能力
+            # （Tenant.extra["agent_addons"]，去重保序，仅计启用态能力，防注入/停用项生效）
+            tenant = db.query(Tenant).filter_by(id=tenant_id).first()
+            addons = (tenant.extra or {}).get("agent_addons", []) if tenant else []
+            addons = [k for k in addons if is_active(k)]
+            merged = list(agents)
+            for k in addons:
+                if k not in merged:
+                    merged.append(k)
+            if agent_key not in merged:
                 raise HTTPException(
                     status_code=403,
                     detail=error(
                         "AGENT_FORBIDDEN",
-                        f"当前套餐未包含 Agent 能力「{agent_key}」",
+                        f"当前套餐未包含 Agent 能力「{agent_key}」"
+                        + ("（含租户叠加项）" if addons else ""),
                     ),
                 )
         finally:
