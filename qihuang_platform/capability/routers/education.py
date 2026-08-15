@@ -70,9 +70,10 @@ async def classics_search(
     if classic and classic not in valid_classics:
         return error("INVALID_PARAM", f"不支持的经典来源: {classic}，有效值: {valid_classics}")
 
-    params = {"keyword": keyword, "page": page, "page_size": page_size}
+    # 8601 /api/v1/classics 参数为 q(全文搜索)/source(来源)/limit(数量)
+    params = {"q": keyword, "limit": page_size}
     if classic:
-        params["classic"] = classic
+        params["source"] = classic
 
     result = await proxy.forward("GET", "/api/v1/classics", params=params)
 
@@ -82,8 +83,11 @@ async def classics_search(
 
     raw = result.get("data")
     # 兼容8601返回格式：可能是列表或带分页的字典
-    if isinstance(raw, dict) and "items" in raw:
-        return paginated(raw["items"], raw.get("total", len(raw["items"])), page, page_size)
+    # 8601 /api/v1/classics 返回 {"total": N, "classics": [...]}
+    if isinstance(raw, dict):
+        items = raw.get("items") or raw.get("classics") or []
+        total = raw.get("total", len(items))
+        return paginated(items, total, page, page_size)
     elif isinstance(raw, list):
         total = len(raw)
         start = (page - 1) * page_size
@@ -241,9 +245,9 @@ async def exam_generate(req: ExamGenerateRequest, user: dict = Depends(get_curre
     tenant_id = user.get("tenant_id")
     user_id = user.get("user_id")
 
-    # 透传到8601获取题目素材
+    # 透传到8601获取题目素材 (8601 参数为 q/limit)
     result = await proxy.forward("GET", "/api/v1/classics", params={
-        "keyword": req.category,
+        "q": req.category,
         "limit": req.question_count,
     })
 
@@ -251,9 +255,9 @@ async def exam_generate(req: ExamGenerateRequest, user: dict = Depends(get_curre
         return result
 
     raw = result.get("data")
-    # 提取素材列表
-    if isinstance(raw, dict) and "items" in raw:
-        source_items = raw["items"]
+    # 提取素材列表 (兼容8601返回的 items / classics / 列表)
+    if isinstance(raw, dict):
+        source_items = raw.get("items") or raw.get("classics") or []
     elif isinstance(raw, list):
         source_items = raw
     else:

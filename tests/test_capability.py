@@ -272,6 +272,73 @@ class TestEducation:
 
 
 # ═══════════════════════════════════════════════════════════
+# 需求7 回归测试: 经典检索/组卷透传参数名 + 响应解析
+# ═══════════════════════════════════════════════════════════
+
+class TestEducationClassicsTransitRegression:
+    """
+    需求7 (P0回归): 8602→8601 经典检索透传的硬契约
+    - 透传参数名必须是 q (8601 /api/v1/classics 认 q/source/limit)，禁止 keyword
+    - 8601 返回 {"total":N, "classics":[...]}，响应解析须认 classics 键，否则 total=0 回归
+    此测试用 monkeypatch 拦截 proxy.forward，不依赖 8601 真实可达。
+    """
+
+    async def _fake_classics(self, method, path, params=None, json_body=None, headers=None):
+        self.captured_path = path
+        self.captured_params = dict(params or {})
+        return {
+            "code": 0,
+            "message": "ok",
+            "data": {
+                "total": 2,
+                "classics": [
+                    {"source": "伤寒论", "chapter": "太阳病", "text": "太阳之为病，脉浮，头项强痛而恶寒。"},
+                    {"source": "金匮要略", "chapter": "脏腑经络", "text": "胸痹心痛，不得卧。"},
+                ],
+            },
+        }
+
+    def test_classics_search_uses_q_not_keyword(self, client, user_headers, monkeypatch):
+        inst = TestEducationClassicsTransitRegression()
+        import qihuang_platform.capability.proxy as _px
+        monkeypatch.setattr(_px.proxy, "forward", inst._fake_classics)
+
+        resp = client.get("/api/v1/edu/classics/search", params={
+            "keyword": "桂枝",
+        }, headers=user_headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["code"] == 0
+
+        # 透传硬契约: 必须打到 /api/v1/classics 且用 q
+        assert inst.captured_path == "/api/v1/classics", f"透传路径错误: {inst.captured_path}"
+        assert "keyword" not in inst.captured_params, "回归: 透传参数误用 keyword (8601 认 q)"
+        assert inst.captured_params.get("q") == "桂枝", "透传参数缺少 q"
+        assert "limit" in inst.captured_params, "透传缺少 limit 分页参数"
+
+        # 响应解析须认 classics 键 (不能只认 items，否则 total=0 回归)
+        data = body["data"]
+        assert "items" in data and len(data["items"]) == 2, "回归: 响应未解析 classics 键，total=0"
+        assert data["pagination"]["total"] == 2
+
+    def test_exams_generate_uses_q_not_keyword(self, client, user_headers, monkeypatch):
+        inst = TestEducationClassicsTransitRegression()
+        import qihuang_platform.capability.proxy as _px
+        monkeypatch.setattr(_px.proxy, "forward", inst._fake_classics)
+
+        resp = client.post("/api/v1/edu/exams/generate", json={
+            "category": "伤寒论",
+            "difficulty": "medium",
+            "question_count": 3,
+        }, headers=user_headers)
+        # 状态码接受 200/500 (500=CI无预置租户外键，与透传无关)；重点是透传参数
+        assert resp.status_code in [200, 500, 502, 503]
+        assert inst.captured_path == "/api/v1/classics", f"组卷透传路径错误: {inst.captured_path}"
+        assert "keyword" not in inst.captured_params, "回归: 组卷透传误用 keyword"
+        assert inst.captured_params.get("q") == "伤寒论", "组卷透传缺少 q"
+
+
+# ═══════════════════════════════════════════════════════════
 # 3D穴位 /api/v1/core/acupoint/* (6 端点)
 # ═══════════════════════════════════════════════════════════
 
