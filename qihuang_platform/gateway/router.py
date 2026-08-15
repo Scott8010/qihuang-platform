@@ -22,10 +22,12 @@ router = APIRouter(prefix="/api/v1/auth", tags=["认证"])
 
 class LoginRequest(BaseModel):
     """登录请求"""
-    login_type: str = "wechat"  # wechat / sms / phone
+    login_type: str = "wechat"  # wechat / sms / phone / password
     code: Optional[str] = None  # 微信授权码
     phone: Optional[str] = None
     sms_code: Optional[str] = None
+    username: Optional[str] = None  # password 登录用户名
+    password: Optional[str] = None  # password 登录密码
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -43,6 +45,43 @@ class UserProfile(BaseModel):
     roles: List[str]
     extra: dict = {}
 
+
+
+# ========== 试点 password 白名单登录（仅白名单租户可走真实用户态） ==========
+_PILOT_TENANT_IDS = (
+    set(os.getenv("QH_PILOT_TENANT_IDS").split(","))
+    if os.getenv("QH_PILOT_TENANT_IDS") else {
+        "b4514735-daeb-4faf-bb93-37478746c0ef",  # edu-pilot
+        "4a371e2e-047f-4607-8fa3-c401f9f91a2c",  # med-pilot
+    }
+)
+_PASSWORD_LOGIN_ENABLED = os.getenv("QH_PASSWORD_LOGIN_ENABLED", "true").lower() in ("1", "true", "yes", "on")
+
+def _db_password_login(req: LoginRequest):
+    """试点期 password 登录：查真实用户 + bcrypt 校验 + 返回真实租户/机构/角色"""
+    from qihuang_platform.db.config import SessionLocal
+    from qihuang_platform.db.models import User
+    from qihuang_platform.rbac.service import RBACService
+    if not _PASSWORD_LOGIN_ENABLED:
+        return {"error": "LOGIN_DISABLED", "msg": "password 登录已关闭"}
+    if not req.username or not req.password:
+        return {"error": "MISSING_PARAM", "msg": "缺少用户名或密码"}
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(username=req.username).first()
+        if not user:
+            return {"error": "USER_NOT_FOUND", "msg": "用户不存在"}
+        if user.status != "active":
+            return {"error": "USER_DISABLED", "msg": "用户已禁用"}
+        rbac = RBACService(db)
+        if not rbac.verify_password(user, req.password):
+            return {"error": "INVALID_CREDENTIAL", "msg": "用户名或密码错误"}
+        if not user.tenant_id or user.tenant_id not in _PILOT_TENANT_IDS:
+            return {"error": "NOT_IN_PILOT", "msg": "不在试点白名单"}
+        roles = rbac.get_user_effective_roles(user.id, user.org_id) or ["user"]
+        return (user.id, user.tenant_id, user.org_id, roles)
+    finally:
+        db.close()
 
 # ========== 认证端点 ==========
 
@@ -70,10 +109,15 @@ async def login(req: LoginRequest):
         tenant_id = "tenant_demo"
         org_id = "org_default"
         roles = ["user"]
+    elif req.login_type == "password":
+        res = _db_password_login(req)
+        if isinstance(res, dict) and "error" in res:
+            return error(res["error"], res.get("msg", ""))
+        user_id, tenant_id, org_id, roles = res
     else:
         return error("INVALID_PARAM", f"不支持的登录方式: {req.login_type}")
 
-    # 注册/更新用户
+    # 注册/更新用户态（真实用户也写入内存身份缓存，供 profile / 受保护接口 get_user 使用）
     register_user(user_id, tenant_id, org_id, roles)
 
     # 签发 token
@@ -85,6 +129,10 @@ async def login(req: LoginRequest):
         "refresh_token": refresh_token_str,
         "token_type": "bearer",
         "expires_in": 7200,
+        "tenant_id": tenant_id,
+        "org_id": org_id,
+        "roles": roles,
+        "auth_source": req.login_type,
     })
 
 

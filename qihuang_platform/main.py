@@ -26,6 +26,18 @@ from qihuang_platform.gateway.middleware import (
     RateLimitHeaderMiddleware,
 )
 
+
+class NoCacheStaticFiles(StaticFiles):
+    """静态文件挂载，但强制不缓存（入口 HTML 文件名固定，避免浏览器缓存旧版管理台）。"""
+
+    async def get_response(self, path: str, scope):
+        resp = await super().get_response(path, scope)
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+        return resp
+
+
 # ─── 路径配置 ───
 BASE_DIR = Path(__file__).resolve().parent.parent  # Claw/qihuang-brain/
 load_dotenv(BASE_DIR / ".env")
@@ -188,6 +200,19 @@ app.add_middleware(TimingMiddleware)             # 计时
 app.add_middleware(TraceMiddleware)              # Trace ID
 app.add_middleware(MeteringMiddleware)           # 计量埋点
 app.add_middleware(RateLimitHeaderMiddleware)    # 限流响应头
+
+# ─── 运营控制台 /admin 不缓存 ───
+# 入口 index.html 文件名固定（不带 hash），浏览器一旦缓存旧版就看不到新构建
+# （如 Agent 中台「套餐专家团组合」构件 B）。对 /admin 与 /admin-static 全路径禁用缓存。
+@app.middleware("http")
+async def no_cache_admin_console(request: Request, call_next):
+    resp = await call_next(request)
+    p = request.url.path
+    if p == "/admin" or p.startswith("/admin/") or p.startswith("/admin-static/"):
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+    return resp
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -408,12 +433,12 @@ ADMIN_DIR = Path(__file__).resolve().parent.parent / "frontend-admin-react" / "d
 LEGACY_ADMIN_DIR = Path(__file__).resolve().parent / "frontend-admin"
 
 if ADMIN_DIR.exists():
-    app.mount("/admin", StaticFiles(directory=str(ADMIN_DIR), html=True), name="admin-console")
+    app.mount("/admin", NoCacheStaticFiles(directory=str(ADMIN_DIR), html=True), name="admin-console")
     print(f"[Platform] 运营控制台(React)已挂载 → /admin/ (目录: {ADMIN_DIR})")
 
 if LEGACY_ADMIN_DIR.exists():
     # 旧版 HTML 入口（控制端反馈审核台等）始终并行挂载，不依赖 React 是否存在
-    app.mount("/admin-static", StaticFiles(directory=str(LEGACY_ADMIN_DIR)), name="admin-static")
+    app.mount("/admin-static", NoCacheStaticFiles(directory=str(LEGACY_ADMIN_DIR)), name="admin-static")
     print(f"[Platform] 管理端(旧版HTML)已挂载 → /admin-static/ (目录: {LEGACY_ADMIN_DIR})")
 
 
@@ -441,7 +466,6 @@ async def business_page():
     return JSONResponse({"detail": "请访问 /admin"}, status_code=404)
 
 
-# ═══════════════════════════════════════════════════════════════
 # 启动入口
 # ═══════════════════════════════════════════════════════════════
 if __name__ == "__main__":
@@ -453,3 +477,5 @@ if __name__ == "__main__":
         reload=False,
         log_level="info",
     )
+
+

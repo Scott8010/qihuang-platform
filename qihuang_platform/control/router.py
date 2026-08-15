@@ -124,6 +124,210 @@ async def list_plans(admin: dict = Depends(get_current_admin)):
         db.close()
 
 
+# ──────────────────────────────────────────────────────────────
+# 订阅管理（含「次月生效」的预约升级）
+# ──────────────────────────────────────────────────────────────
+
+def _utcnow_naive():
+    """naive UTC 时间，用于与库中 naive 时间比较"""
+    return datetime.utcnow()
+
+
+def _norm_dt(dt):
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def _next_month_first_utc(now=None):
+    """返回 now 所在月的下一月 1 号 00:00 (naive UTC)，作为订阅生效/失效的边界"""
+    now = now or _utcnow_naive()
+    if now.month == 12:
+        return datetime(now.year + 1, 1, 1)
+    return datetime(now.year, now.month + 1, 1)
+
+
+def _effective_subscription(db, tenant_id: str, now=None):
+    """当前生效的订阅：status in (active, scheduled) 且 start_date <= now < end_date(可空)"""
+    now = now or _utcnow_naive()
+    rows = (
+        db.query(Subscription)
+        .filter(
+            Subscription.tenant_id == tenant_id,
+            Subscription.status.in_(["active", "scheduled"]),
+            Subscription.start_date <= now,
+        )
+        .order_by(Subscription.start_date.desc())
+        .all()
+    )
+    for s in rows:
+        end = _norm_dt(s.end_date)
+        if end is None or end > now:
+            return s
+    return None
+
+
+def _scheduled_subscription(db, tenant_id: str, now=None):
+    """尚未生效的预约订阅（status=scheduled 且 start_date 在未来）"""
+    now = now or _utcnow_naive()
+    return (
+        db.query(Subscription)
+        .filter(
+            Subscription.tenant_id == tenant_id,
+            Subscription.status == "scheduled",
+            Subscription.start_date > now,
+        )
+        .order_by(Subscription.start_date.asc())
+        .first()
+    )
+
+
+def _plan_summary(p: Plan) -> dict:
+    fj = p.features_json or {}
+    return {
+        "id": p.id,
+        "plan_name": p.plan_name,
+        "display_name": p.display_name,
+        "price_cents": int(p.price_cents or 0),
+        "month_calls": int(p.month_calls or 0),
+        "month_tokens": int(p.month_tokens or 0),
+        "agents": fj.get("agents", []),
+        "status": p.status,
+    }
+
+
+class SubscriptionUpgradeRequest(BaseModel):
+    plan_id: str = Field(..., description="目标套餐ID")
+
+
+@router.get("/tenants/{tenant_id}/subscription", summary="查询租户订阅（当前+待生效）")
+async def get_tenant_subscription(tenant_id: str, admin: dict = Depends(get_current_admin)):
+    """返回租户当前生效套餐与预约（次月生效）套餐，供运营台展示。"""
+    db = SessionLocal()
+    try:
+        t = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not t:
+            return error("NOT_FOUND", message="租户不存在")
+        now = _utcnow_naive()
+        cur = _effective_subscription(db, tenant_id, now)
+        pend = _scheduled_subscription(db, tenant_id, now)
+
+        def sub_view(s):
+            if not s:
+                return None
+            plan = db.query(Plan).filter(Plan.id == s.plan_id).first()
+            return {
+                "subscription_id": s.id,
+                "plan_id": s.plan_id,
+                "plan_name": plan.plan_name if plan else s.plan_id,
+                "display_name": plan.display_name if plan else "",
+                "status": s.status,
+                "start_date": _norm_dt(s.start_date).isoformat() if s.start_date else None,
+                "end_date": _norm_dt(s.end_date).isoformat() if s.end_date else None,
+                "auto_renew": bool(s.auto_renew),
+                "price_cents": int(plan.price_cents or 0) if plan else 0,
+                "agents": (plan.features_json or {}).get("agents", []) if plan else [],
+            }
+
+        return success(data={
+            "tenant_id": tenant_id,
+            "tenant_name": t.display_name or t.id,
+            "current": sub_view(cur),
+            "pending": sub_view(pend),
+            "effective_date": _next_month_first_utc(now).strftime("%Y-%m-%d"),
+            "note": "预约升级将于 effective_date（次月1号）生效，当月仍按当前套餐执行",
+        })
+    except Exception as e:
+        return error("INTERNAL_ERROR", message=str(e))
+    finally:
+        db.close()
+
+
+@router.post("/tenants/{tenant_id}/subscription/upgrade", summary="预约升级套餐（次月生效）")
+async def upgrade_subscription(
+    tenant_id: str,
+    req: SubscriptionUpgradeRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    """升级/变更套餐：次月1号生效，当月仍按原套餐计费与鉴权。
+
+    - 若已存在待生效预约，则覆盖（取消旧的，按新目标重排）。
+    - 当前生效订阅的 end_date 设为次月1号（开区间上界），新订阅 status=scheduled。
+    """
+    db = SessionLocal()
+    try:
+        t = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not t:
+            return error("NOT_FOUND", message="租户不存在")
+        plan = db.query(Plan).filter(Plan.id == req.plan_id, Plan.status == "active").first()
+        if not plan:
+            return error("NOT_FOUND", message="目标套餐不存在或未启用")
+
+        now = _utcnow_naive()
+        effective_date = _next_month_first_utc(now)
+        cur = _effective_subscription(db, tenant_id, now)
+        if cur and cur.plan_id == plan.id:
+            return error("INVALID_PARAM", message="目标套餐与当前生效套餐相同，无需变更")
+
+        # 取消已有待生效预约（若有），避免多条 scheduled 叠加
+        for old in db.query(Subscription).filter(
+            Subscription.tenant_id == tenant_id,
+            Subscription.status == "scheduled",
+        ).all():
+            old.status = "cancelled"
+
+        # 当前生效订阅在次月1号截止
+        if cur:
+            cur.end_date = effective_date
+
+        new_sub = Subscription(
+            tenant_id=tenant_id,
+            plan_id=plan.id,
+            status="scheduled",
+            start_date=effective_date,
+            end_date=None,
+            auto_renew=True,
+        )
+        db.add(new_sub)
+        db.commit()
+        db.refresh(new_sub)
+
+        return success(data={
+            "tenant_id": tenant_id,
+            "subscription_id": new_sub.id,
+            "target_plan_id": plan.id,
+            "target_plan_name": plan.plan_name,
+            "effective_date": effective_date.strftime("%Y-%m-%d"),
+            "current_plan_until": _norm_dt(cur.end_date).isoformat() if cur and cur.end_date else None,
+        }, message=f"已预约升级，将于 {effective_date.strftime('%Y-%m-%d')}（次月1号）生效，当月仍按原套餐执行")
+    except Exception as e:
+        db.rollback()
+        return error("INTERNAL_ERROR", message=str(e))
+    finally:
+        db.close()
+
+
+@router.post("/tenants/{tenant_id}/subscription/cancel-pending", summary="取消待生效的预约升级")
+async def cancel_pending_subscription(tenant_id: str, admin: dict = Depends(get_current_admin)):
+    """在次月1号生效前，可取消待生效预约，保持当前套餐不变。"""
+    db = SessionLocal()
+    try:
+        pend = _scheduled_subscription(db, tenant_id)
+        if not pend:
+            return error("NOT_FOUND", message="该租户没有待生效的预约升级")
+        pend.status = "cancelled"
+        db.commit()
+        return success(data={"tenant_id": tenant_id, "cancelled_subscription_id": pend.id},
+                        message="已取消待生效预约，当前套餐保持不变")
+    except Exception as e:
+        db.rollback()
+        return error("INTERNAL_ERROR", message=str(e))
+    finally:
+        db.close()
+
+
 @router.put("/plans/{plan_id}", summary="更新套餐")
 async def update_plan(plan_id: str, req: PlanUpdateRequest, admin: dict = Depends(get_current_admin)):
     db = SessionLocal()
@@ -1049,6 +1253,10 @@ async def admin_dashboard(admin: dict = Depends(get_current_admin)):
             trend_dates.append(day.strftime("%m/%d"))
             trend_values.append(cnt)
 
+
+        # 场景分布（按租户 scene 字段真实聚合）
+        scene_rows = db.query(Tenant.scene, func.count(Tenant.id)).group_by(Tenant.scene).all()
+        scene_distribution = { (row[0] or "unknown"): row[1] for row in scene_rows }
         # 系统服务状态
         services = [
             {"name": "API 网关", "key": "api_gateway", "status": "normal", "latency_ms": 42, "uptime": "99.98%"},
@@ -1066,6 +1274,7 @@ async def admin_dashboard(admin: dict = Depends(get_current_admin)):
             "recent_ops": recent_ops if recent_ops else [],
             "trend": {"dates": trend_dates, "values": trend_values},
             "services": services,
+            "scene_distribution": scene_distribution,
         })
     except Exception as e:
         return error("INTERNAL_ERROR", message=str(e))
@@ -1654,29 +1863,39 @@ async def list_features(
     tenant_id: str = Query(..., description="租户ID"),
     admin: dict = Depends(get_current_admin),
 ):
-    """获取租户的功能开关状态 (存储在 tenant.extra.features)"""
+    """获取租户的功能开关状态 (真值源 = active_subscription.plan.features_json)
+
+    修复记录 2026-08-15: 原实现读 tenant.extra.features，是租户级人工覆盖字段，
+    与 plan.features_json 不一致，导致 7e188ba9（专业版）显示成"5特性全不包含"。
+    现改为：active subscription 的 plan.features_json 作为权威特性矩阵。
+    """
     db = SessionLocal()
     try:
         t = db.query(Tenant).filter_by(id=tenant_id).first()
         if not t:
             return error("NOT_FOUND", message="租户不存在")
 
-        extra = t.extra or {}
-        features = extra.get("features", {})
+        now = _utcnow_naive()
+        cur = _effective_subscription(db, tenant_id, now)
+        plan = db.query(Plan).filter(Plan.id == cur.plan_id).first() if cur else None
+        plan_features = (plan.features_json if plan else {}) or {}
 
-        # 默认功能列表（如果未配置则使用默认值）
+        # 默认功能列表（plan.features_json 缺字段时回退到 False，避免“全 True”假象）
         defaults = {
-            "module_3d": features.get("module_3d", False),
-            "module_agent": features.get("module_agent", False),
-            "report_export": features.get("report_export", True),
-            "priority_support": features.get("priority_support", False),
-            "custom_skin": features.get("custom_skin", False),
-            "api_access": features.get("api_access", True),
-            "webhook": features.get("webhook", False),
+            "module_3d": bool(plan_features.get("module_3d", False)),
+            "module_agent": bool(plan_features.get("module_agent", False)),
+            "report_export": bool(plan_features.get("report_export", False)),
+            "priority_support": bool(plan_features.get("priority_support", False)),
+            "custom_skin": bool(plan_features.get("custom_skin", False)),
+            "api_access": bool(plan_features.get("api_access", False)),
+            "webhook": bool(plan_features.get("webhook", False)),
         }
 
         return success(data={
             "tenant_id": tenant_id,
+            "plan_id": plan.id if plan else "",
+            "plan_name": plan.plan_name if plan else "",
+            "display_name": plan.display_name if plan else "",
             "features": defaults,
         })
     except Exception as e:

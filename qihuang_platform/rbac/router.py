@@ -11,7 +11,7 @@ from qihuang_platform.db.config import get_db, init_db
 from qihuang_platform.rbac.service import RBACService, validate_password
 from qihuang_platform.gateway.deps import get_current_user, get_current_admin
 from qihuang_platform.gateway.response import success, error
-from qihuang_platform.db.models import seed_preset_data, Plan, UserRole, Role
+from qihuang_platform.db.models import seed_preset_data, Plan, Subscription, UserRole, Role
 
 rbac_router = APIRouter(prefix="/admin/v1", tags=["RBAC管理"])
 
@@ -103,12 +103,21 @@ async def create_tenant(
 async def list_tenants(
     user: dict = Depends(get_current_admin),
     rbac: RBACService = Depends(get_rbac),
+    db: Session = Depends(get_db),
 ):
-    """列出所有租户"""
+    """列出所有租户（含当前套餐，与 /tenants-extended 对齐，修复列表套餐显示缺失）"""
     tenants = rbac.list_tenants()
+    # 批量拉取 active subscription -> plan，避免 N+1
+    subs = db.query(Subscription).filter(Subscription.status == "active").all()
+    plan_ids = {s.plan_id for s in subs}
+    plans = {p.id: p for p in db.query(Plan).filter(Plan.id.in_(plan_ids)).all()} if plan_ids else {}
+    sub_map = {s.tenant_id: plans.get(s.plan_id) for s in subs}
     return success([{
         "id": t.id, "name": t.name, "display_name": t.display_name,
         "scene": t.scene, "status": t.status, "created_at": t.created_at.isoformat() if t.created_at else None,
+        "plan_id": (sub_map.get(t.id).id if sub_map.get(t.id) else ""),
+        "plan_name": (sub_map.get(t.id).plan_name if sub_map.get(t.id) else ""),
+        "plan": ((sub_map.get(t.id).display_name or sub_map.get(t.id).plan_name) if sub_map.get(t.id) else ""),
     } for t in tenants])
 
 
@@ -497,6 +506,7 @@ async def list_plans(
     """管理端：查询所有套餐及功能开关"""
     plans = db.query(Plan).all()
     return success([{
+        "id": p.id,
         "plan_name": p.plan_name,
         "display_name": p.display_name,
         "features_json": p.features_json or {},

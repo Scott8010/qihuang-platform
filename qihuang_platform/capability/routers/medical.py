@@ -380,17 +380,50 @@ async def prescription_review(
 # 3. 方剂推荐
 # ═══════════════════════════════════════════════════════════════
 
+
+
+# 方剂名有效性判定（需求6 P1(a) 推荐过滤：排除爬虫杂文噪声）
+import re as _re
+_FORMULA_MARKERS = ("汤", "散", "丸", "饮", "膏", "丹", "合剂", "汤剂")
+_NOISE_HINTS = ("氯化钠", "注射液", "输液", "受体", "提取物", "混合物", "乙醇", "中医药", "中药", "丸药")
+
+
+def _is_valid_formula(f: dict) -> bool:
+    """有效方剂 = 含中文名 + (含方剂名特征 或 herbs_count>0)，且非西药/泛化噪声。"""
+    if not isinstance(f, dict):
+        return False
+    name = (f.get("name") or "")
+    if not name or not _re.search(r"[\u4e00-\u9fff]", name):
+        return False  # 纯英文/数字缩写 (BYP/CPT/0.9%...) 排除
+    if any(h in name for h in _NOISE_HINTS):
+        return False  # 西药/泛化非方剂 (氯化钠/受体/中药/丸药...) 排除
+    if any(m in name for m in _FORMULA_MARKERS):
+        return True
+    if (f.get("herbs_count") or 0) > 0:
+        return True
+    return False
+
+
 @router.get("/formula/recommend", summary="方剂推荐")
 async def formula_recommend(
     syndrome: str = Query(..., description="证候"),
     category: Optional[str] = Query(None, description="方剂类别"),
     user: dict = Depends(get_current_user),
 ):
-    """根据证候推荐方剂，透传 GET /api/v1/formulas?syndrome=xxx"""
+    """根据证候推荐方剂，透传 GET /api/v1/formulas?syndrome=xxx，并过滤非方剂噪声"""
     params = {"syndrome": syndrome}
     if category:
         params["category"] = category
-    return await proxy.forward("GET", "/api/v1/formulas", params=params)
+    result = await proxy.forward("GET", "/api/v1/formulas", params=params)
+    _data = result.get("data") if isinstance(result, dict) else None
+    if isinstance(_data, dict):
+        _raw = _data.get("formulas") or []
+        if isinstance(_raw, list):
+            _kept = [f for f in _raw if _is_valid_formula(f)]
+            _data["formulas"] = _kept
+            _data["total"] = len(_kept)
+            _data["filtered_noise"] = len(_raw) - len(_kept)
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════

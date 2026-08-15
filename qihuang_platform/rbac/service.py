@@ -29,8 +29,6 @@ def validate_password(pwd: str) -> tuple[bool, str]:
         return False, "密码须包含大写字母"
     if not re.search(r"\d", pwd):
         return False, "密码须包含数字"
-    if not re.search(r"[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/`~]", pwd):
-        return False, "密码须包含特殊字符（如 !@#$%^&*）"
     return True, ""
 
 
@@ -51,6 +49,7 @@ class RBACService:
             scene=scene, extra=extra or {},
         )
         self.db.add(t)
+        self.db.flush()  # 先落租户行，确保后续根机构 org 的外键依赖可见
         # 自动创建根机构
         org = Org(
             id=_uid(), tenant_id=t.id,

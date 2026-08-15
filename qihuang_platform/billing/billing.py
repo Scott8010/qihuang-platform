@@ -77,19 +77,43 @@ def _serialize_bill(bill: Bill) -> Dict[str, Any]:
     }
 
 
-def _get_active_subscription(session, tenant_id: str) -> Optional[Subscription]:
-    """获取租户的有效订阅（active状态）"""
-    return (
+def _norm_dt(dt):
+    """统一时间：aware 转 naive UTC，便于与库中 naive 时间比较"""
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def _get_active_subscription(session, tenant_id: str, now=None) -> Optional[Subscription]:
+    """获取租户「当前生效」的订阅（按时间区间生效，兼容次月生效的预约升级）。
+
+    生效条件：status in (active, scheduled) 且 start_date <= now < (end_date 或无限)。
+      - 普通订阅 end_date 为空 → 一直生效。
+      - 预约升级：新建 status=scheduled，start_date=次月1号；当前订阅 end_date 设为次月1号。
+        当月仍按旧套餐计费/出账；跨月后新订阅自动生效，无需 cron。
+    """
+    if now is None:
+        now = _now()
+    now = _norm_dt(now)
+    rows = (
         session.query(Subscription)
         .filter(
             and_(
                 Subscription.tenant_id == tenant_id,
-                Subscription.status == "active",
+                Subscription.status.in_(["active", "scheduled"]),
+                Subscription.start_date <= now,
             )
         )
-        .order_by(Subscription.created_at.desc())
-        .first()
+        .order_by(Subscription.start_date.desc())
+        .all()
     )
+    for s in rows:
+        end = _norm_dt(s.end_date)
+        if end is None or end > now:
+            return s
+    return None
 
 
 def _get_period_usage(session, tenant_id: str, start: datetime, end: datetime) -> Dict[str, int]:
