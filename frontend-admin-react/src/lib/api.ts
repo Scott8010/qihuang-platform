@@ -620,6 +620,11 @@ export async function reviewAction(id: string, action: "approve" | "reject") {
   return post(`/admin/v1/kg/review/action`, { review_id: id, action, note: "" });
 }
 
+/** POST /admin/v1/kg/review/{id}/refine — AI 翻译+提炼（研究题目/结论/共识分歧），写回 content._refined */
+export async function refineReview(id: string): Promise<MutateResult<{ refined: any }>> {
+  return mutate<{ refined: any }>("POST", `/admin/v1/kg/review/${encodeURIComponent(id)}/refine`);
+}
+
 export async function fetchSensitiveWords(): Promise<SensitiveWordItem[]> {
   try {
     const r = await get<{ code: number; data: { items?: any[] } }>("/admin/v1/content/words");

@@ -7,17 +7,18 @@ import { Separator } from "@/components/ui/separator";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
-import { BookOpenCheck, ShieldAlert, Search, Check, X, Bell, Loader2, Eye } from "lucide-react";
+import { BookOpenCheck, ShieldAlert, Search, Check, X, Bell, Loader2, Eye, Sparkles } from "lucide-react";
 import { C } from "@/lib/types";
 import type { TodoReviewItem, SensitiveWordItem } from "@/lib/types";
-import { fetchReviews, fetchSensitiveWords, reviewAction } from "@/lib/api";
+import { fetchReviews, fetchSensitiveWords, reviewAction, refineReview } from "@/lib/api";
 
 /* ═══════════════════════════════════════════
    内容管控 — 真实接口驱动
    审核队列 → GET /admin/v1/kg/review/pending
    通过/驳回 → POST /admin/v1/kg/review/action
+   AI 提炼   → POST /admin/v1/kg/review/{id}/refine
    敏感词库 → GET /admin/v1/content/words
-   ═══════════════════════════════════════════ */
+   ═════════════════════════════════════════ */
 
 const confColor = (v: number) => (v < 0.4 ? "#B03A2E" : v < 0.6 ? "#8A6A1F" : "#2E5A4C");
 
@@ -45,12 +46,25 @@ function actionStyle(a: string) {
   return { color: "#8A6A1F", background: "#FBF4E4" };
 }
 
+/** 中文字符占比以外的「是否以英文为主」（字母占比 > 30% 视为英文） */
+function isMostlyEnglish(text: string): boolean {
+  if (!text) return false;
+  const letters = (text.match(/[A-Za-z]/g) || []).length;
+  return text.length > 0 && letters / text.length > 0.3;
+}
+
+/** 万方等站点抓取混入的浏览器警告垃圾文本 */
+function isJunkText(text: string): boolean {
+  return /检测到您的浏览器版本过低|万方数据知识服务平台|Google Chrome|Microsoft Edge|Firefox|Safari 浏览器|建议使用更高版本的浏览器/.test(text || "");
+}
+
 export default function Content() {
   const [tab, setTab] = useState<"review" | "words">("review");
   const [reviews, setReviews] = useState<TodoReviewItem[]>([]);
   const [words, setWords] = useState<SensitiveWordItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string>("");
+  const [refiningId, setRefiningId] = useState<string>("");
   const [detail, setDetail] = useState<TodoReviewItem | null>(null);
 
   const loadReviews = () => fetchReviews().then(setReviews);
@@ -65,10 +79,29 @@ export default function Content() {
     try {
       await reviewAction(id, action);
       await loadReviews();   // 以后端为准重新拉取，不做本地假删除
-      // 若详情抽屉打开的就是当前审核项，操作后自动关闭（避免对已审核项再点）
       if (detail?.id === id) setDetail(null);
     } finally {
       setBusyId("");
+    }
+  };
+
+  /** AI 提炼成功后，把 _refined 写回列表项与当前详情，避免重开抽屉丢失 */
+  const handleRefined = (id: string, refined: any) => {
+    setReviews((rs) => rs.map((r) => (r.id === id ? { ...r, content: { ...r.content, _refined: refined } } : r)));
+    setDetail((d) => (d && d.id === id ? { ...d, content: { ...d.content, _refined: refined } } : d));
+  };
+
+  const handleRefine = async (id: string) => {
+    setRefiningId(id);
+    try {
+      const r = await refineReview(id);
+      if (r.ok && r.data?.refined) {
+        handleRefined(id, r.data.refined);
+      } else {
+        alert(r.msg || "AI 提炼失败");
+      }
+    } finally {
+      setRefiningId("");
     }
   };
 
@@ -151,6 +184,7 @@ export default function Content() {
                 {reviews.map((r) => {
                   const ts = typeStyle(r.type);
                   const busy = busyId === r.id;
+                  const hasRefined = !!(r.content && r.content._refined && !r.content._refined.error);
                   return (
                     <tr
                       key={r.id}
@@ -178,7 +212,12 @@ export default function Content() {
                       <td className="py-3 text-[12px]" style={{ color: C.mid }}>{r.source || "—"}</td>
                       <td className="py-3 text-[12px]" style={{ color: C.mid }}>{r.reviewer || "—"}</td>
                       <td className="py-3">
-                        <div className="flex gap-1.5">
+                        <div className="flex gap-1.5 items-center">
+                          {hasRefined && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded flex items-center gap-0.5" style={{ background: C.soft, color: C.primary }}>
+                              <Sparkles className="w-3 h-3" />已提炼
+                            </span>
+                          )}
                           <Button
                             size="sm" variant="ghost" className="h-7 px-2 text-[12px]"
                             disabled={busy}
@@ -298,6 +337,8 @@ export default function Content() {
       <ReviewDetailDrawer
         detail={detail}
         busy={!!(detail && busyId === detail.id)}
+        refining={!!(detail && refiningId === detail.id)}
+        onRefine={handleRefine}
         onAction={handleAction}
         onClose={() => setDetail(null)}
       />
@@ -306,21 +347,38 @@ export default function Content() {
 }
 
 /* ═══════════════════════════════════════════
-   详情抽屉 — 右侧滑入，分层呈现待审条目完整内容
-   后端列表接口已透传 content JSON，无需额外请求
-   ═══════════════════════════════════════════ */
+   详情抽屉 — 右侧滑入，分层呈现待审条目
+   优先级：AI 提炼摘要 > 原文/AI萃取 > 结构化实体关系 > 来源 > 模型投票 > 完整 JSON(折叠)
+   ═════════════════════════════════════════ */
 function ReviewDetailDrawer({
-  detail, busy, onAction, onClose,
+  detail, busy, refining, onRefine, onAction, onClose,
 }: {
   detail: TodoReviewItem | null;
   busy: boolean;
+  refining: boolean;
+  onRefine: (id: string) => void;
   onAction: (id: string, a: "approve" | "reject") => void;
   onClose: () => void;
 }) {
   const c: any = detail?.content || {};
-  const hasClause = !!(c.clause_text || c.text);
+  const refined = c._refined;
+  const hasRefined = !!refined && !refined.error;
+
+  const rawClause = typeof c.clause_text === "string" ? c.clause_text : "";
+  const rawAi = typeof c.ai_extracted === "string" ? c.ai_extracted : "";
+  const rawOriginal = typeof c.original_text === "string" ? c.original_text : "";
+  const hasClause = !!rawClause.trim();
+  const hasAiExtracted = !!rawAi.trim();
+  const clauseIsJunk = isJunkText(rawClause);
   const hasSource = !!(c.source_doc || c.source_url);
-  const hasVotes = !!(c.model_votes || c.confidence_breakdown);
+  const entitiesDetail: any[] = Array.isArray(c.entities_detail) ? c.entities_detail : [];
+  const relationsDetail: any[] = Array.isArray(c.relations_detail) ? c.relations_detail : [];
+  const votes = c.model_votes || c.confidence_breakdown;
+
+  const sourceText = !clauseIsJunk && hasClause ? rawClause : (hasAiExtracted ? rawAi : (rawOriginal.trim() || ""));
+  const sourceLikelyEnglish = isMostlyEnglish(sourceText);
+  const needRefine = !refined && (hasClause || hasAiExtracted || rawOriginal.trim().length > 0);
+  const llmUnavailable = !!refined && refined.error === "LLM_UNAVAILABLE";
 
   return (
     <Dialog open={!!detail} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -336,7 +394,7 @@ function ReviewDetailDrawer({
                 <DialogTitle className="text-[15px] font-semibold">待审条目详情</DialogTitle>
               </div>
               <DialogDescription className="text-[12px] mt-1" style={{ color: C.mid }}>
-                完整内容仅管理员可见 — 审核前请仔细核对原文、来源与置信度
+                内容已 AI 预处理，审核前请重点核对「研究题目 / 结论 / 共识分歧」
               </DialogDescription>
             </DialogHeader>
 
@@ -370,19 +428,93 @@ function ReviewDetailDrawer({
                   )}
                 </Section>
 
-                {/* 2. 原文摘录 */}
+                {/* 2. AI 提炼入口 / 状态 */}
+                {needRefine && !refining && !hasRefined && (
+                  <div className="flex items-center justify-between gap-2 p-3 rounded-lg border" style={{ borderColor: C.primary, background: C.soft }}>
+                    <div className="text-[12px]" style={{ color: C.ink }}>
+                      {sourceLikelyEnglish ? "检测到英文原文，建议 AI 翻译并提炼结论" : "建议 AI 提炼研究题目 / 结论 / 共识分歧"}
+                    </div>
+                    <Button size="sm" className="h-7 px-2.5 text-[12px] shrink-0 flex items-center gap-1" style={{ background: C.primary }} onClick={() => onRefine(detail.id)}>
+                      <Sparkles className="w-3.5 h-3.5" /> AI 提炼
+                    </Button>
+                  </div>
+                )}
+                {refining && (
+                  <div className="flex items-center gap-2 text-[12px] p-3 rounded-lg" style={{ background: C.soft, color: C.primary }}>
+                    <Loader2 className="w-4 h-4 animate-spin" /> AI 正在翻译并提炼，请稍候…
+                  </div>
+                )}
+                {llmUnavailable && (
+                  <div className="text-[12px] p-3 rounded-lg" style={{ background: "#FDECEA", color: "#B03A2E" }}>
+                    AI 提炼暂不可用（模型未配置或调用失败），可凭原文人工审核。
+                  </div>
+                )}
+
+                {/* 3. AI 提炼结果（结构化中文摘要） */}
+                {hasRefined && (
+                  <>
+                    <Separator />
+                    <Section title="AI 提炼 · 中文审核摘要">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Sparkles className="w-3.5 h-3.5" style={{ color: C.primary }} />
+                        <span className="text-[12px]" style={{ color: C.primary }}>由 AI 生成，供审核参考</span>
+                      </div>
+                      <RefinedBlock refined={refined} />
+                    </Section>
+                  </>
+                )}
+
+                {/* 4. 原文摘录 */}
                 {hasClause && (
                   <>
                     <Separator />
                     <Section title="原文摘录">
                       <div className="text-[13px] leading-relaxed p-3 rounded whitespace-pre-wrap break-words" style={{ background: "#F8FAF9", color: C.ink }}>
-                        {c.clause_text || c.text}
+                        {rawClause}
+                      </div>
+                      {clauseIsJunk && (
+                        <div className="text-[11px] mt-1" style={{ color: "#B03A2E" }}>⚠️ 疑似站点抓取噪声（浏览器警告等），提炼以 AI 萃取摘要为准</div>
+                      )}
+                      {sourceLikelyEnglish && !hasRefined && (
+                        <div className="text-[11px] mt-1" style={{ color: C.light }}>原文为英文，点击上方「AI 提炼」可翻译</div>
+                      )}
+                    </Section>
+                  </>
+                )}
+
+                {/* 5. AI 萃取摘要 */}
+                {hasAiExtracted && (
+                  <>
+                    <Separator />
+                    <Section title="AI 萃取摘要（自生长引擎）">
+                      <div className="text-[13px] leading-relaxed p-3 rounded whitespace-pre-wrap break-words" style={{ background: "#F8FAF9", color: C.ink }}>
+                        {rawAi}
                       </div>
                     </Section>
                   </>
                 )}
 
-                {/* 3. 来源文献 */}
+                {/* 6. 模型候选实体 */}
+                {entitiesDetail.length > 0 && (
+                  <>
+                    <Separator />
+                    <Section title={`模型候选实体（${entitiesDetail.length}）`}>
+                      <EntityCards items={entitiesDetail} />
+                    </Section>
+                  </>
+                )}
+
+                {/* 7. 模型候选关系 */}
+                {relationsDetail.length > 0 && (
+                  <>
+                    <Separator />
+                    <Section title={`模型候选关系（${relationsDetail.length}）`}>
+                      <RelationCards items={relationsDetail} />
+                    </Section>
+                  </>
+                )}
+
+                {/* 8. 来源文献 */}
                 {hasSource && (
                   <>
                     <Separator />
@@ -390,11 +522,7 @@ function ReviewDetailDrawer({
                       {c.source_doc && <Row label="文献" value={c.source_doc} />}
                       {c.source_url && (
                         <Row label="链接" value={
-                          <a
-                            href={c.source_url}
-                            target="_blank" rel="noopener noreferrer"
-                            className="text-blue-600 underline break-all"
-                          >
+                          <a href={c.source_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline break-all">
                             {c.source_url}
                           </a>
                         } />
@@ -403,25 +531,26 @@ function ReviewDetailDrawer({
                   </>
                 )}
 
-                {/* 4. 模型投票明细 */}
-                {hasVotes && (
+                {/* 9. 模型投票明细 */}
+                {votes && (
                   <>
                     <Separator />
                     <Section title="模型投票明细">
-                      <pre className="text-[11px] p-3 rounded font-mono whitespace-pre-wrap break-all max-h-48 overflow-auto" style={{ background: "#F8FAF9", color: C.ink }}>
-                        {JSON.stringify(c.model_votes || c.confidence_breakdown, null, 2)}
-                      </pre>
+                      <VoteTable votes={votes} />
                     </Section>
                   </>
                 )}
 
-                {/* 5. 完整 content JSON */}
+                {/* 10. 完整 content JSON（默认折叠） */}
                 <Separator />
-                <Section title="完整内容 (content)">
-                  <pre className="text-[11px] p-3 rounded font-mono whitespace-pre-wrap break-all max-h-72 overflow-auto" style={{ background: "#F8FAF9", color: C.mid }}>
+                <details className="group">
+                  <summary className="cursor-pointer text-[11px] uppercase tracking-wider select-none" style={{ color: C.light }}>
+                    完整内容 (content) — 点击展开
+                  </summary>
+                  <pre className="text-[11px] p-3 rounded font-mono whitespace-pre-wrap break-all max-h-72 overflow-auto mt-2" style={{ background: "#F8FAF9", color: C.mid }}>
                     {JSON.stringify(c, null, 2)}
                   </pre>
-                </Section>
+                </details>
               </div>
             </ScrollArea>
 
@@ -447,6 +576,123 @@ function ReviewDetailDrawer({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ── AI 提炼结构化渲染 ── */
+function RefinedBlock({ refined }: { refined: any }) {
+  const title: string = refined?.research_title_zh || "";
+  const conclusion: string = refined?.final_conclusion_zh || "";
+  const translation: string = refined?.original_text_zh || "";
+  const findings: string[] = Array.isArray(refined?.key_findings_zh) ? refined.key_findings_zh : [];
+  const consensus: string[] = Array.isArray(refined?.consensus_points) ? refined.consensus_points : [];
+  const divergence: string[] = Array.isArray(refined?.divergence_points) ? refined.divergence_points : [];
+  return (
+    <div className="space-y-3">
+      {title && (
+        <div>
+          <div className="text-[11px] mb-0.5" style={{ color: C.light }}>研究题目</div>
+          <div className="text-[13px] font-semibold leading-snug" style={{ color: C.ink }}>{title}</div>
+        </div>
+      )}
+      {conclusion && (
+        <div>
+          <div className="text-[11px] mb-0.5" style={{ color: C.light }}>最终结论</div>
+          <div className="text-[13px] leading-relaxed" style={{ color: C.ink }}>{conclusion}</div>
+        </div>
+      )}
+      {translation && (
+        <div>
+          <div className="text-[11px] mb-0.5" style={{ color: C.light }}>原文中文翻译</div>
+          <div className="text-[12px] leading-relaxed p-2 rounded" style={{ background: "#F8FAF9", color: C.ink }}>{translation}</div>
+        </div>
+      )}
+      <PointsList title="核心发现" items={findings} color="#2E5A4C" />
+      <PointsList title="共识点" items={consensus} color="#2C5F87" />
+      <PointsList title="分歧点" items={divergence} color="#B03A2E" />
+      {refined?.provider && (
+        <div className="text-[10px]" style={{ color: C.light }}>
+          由 {refined.provider}（{refined.model}）提炼于 {(refined.refined_at || "").slice(0, 19)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PointsList({ title, items, color }: { title: string; items: string[]; color: string }) {
+  if (!items.length) return null;
+  return (
+    <div>
+      <div className="text-[11px] mb-1 font-medium" style={{ color }}>{title}</div>
+      <ul className="space-y-1">
+        {items.map((it, i) => (
+          <li key={i} className="text-[12px] leading-relaxed pl-3 relative" style={{ color: C.ink }}>
+            <span className="absolute left-0 top-0" style={{ color }}>•</span>{it}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function EntityCards({ items }: { items: any[] }) {
+  return (
+    <div className="space-y-2">
+      {items.map((e, i) => (
+        <div key={i} className="p-2.5 rounded-lg border" style={{ borderColor: C.border, background: "#fff" }}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[13px] font-medium" style={{ color: C.ink }}>{e.name}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: C.soft, color: C.primary }}>{e.type}</span>
+          </div>
+          <div className="flex items-center gap-3 mt-1.5 text-[10px] flex-wrap" style={{ color: C.light }}>
+            {Array.isArray(e.models) && e.models.length > 0 && <span>模型：{e.models.join(" / ")}</span>}
+            {e.confidence != null && <span>置信 {Number(e.confidence).toFixed(2)}</span>}
+            {e.level && <span>等级 {e.level}</span>}
+            {e.count != null && <span>出现 {e.count} 次</span>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RelationCards({ items }: { items: any[] }) {
+  return (
+    <div className="space-y-2">
+      {items.map((r, i) => (
+        <div key={i} className="p-2.5 rounded-lg border text-[12px]" style={{ borderColor: C.border, background: "#fff" }}>
+          <div className="flex items-center gap-1.5 flex-wrap" style={{ color: C.ink }}>
+            <span className="font-medium">{r.source}</span>
+            <span style={{ color: C.primary }}>— {r.type} →</span>
+            <span className="font-medium">{r.target}</span>
+          </div>
+          {r.evidence && <div className="mt-1.5 text-[11px] leading-relaxed" style={{ color: C.light }}>证据：{r.evidence}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function VoteTable({ votes }: { votes: any }) {
+  if (Array.isArray(votes)) {
+    return (
+      <pre className="text-[11px] p-3 rounded font-mono whitespace-pre-wrap break-all max-h-48 overflow-auto" style={{ background: "#F8FAF9", color: C.ink }}>
+        {JSON.stringify(votes, null, 2)}
+      </pre>
+    );
+  }
+  const entries = Object.entries(votes as Record<string, any>);
+  return (
+    <table className="w-full text-[12px]">
+      <tbody>
+        {entries.map(([k, v]) => (
+          <tr key={k} className="border-t" style={{ borderColor: C.border }}>
+            <td className="py-1.5 pr-3 w-1/3" style={{ color: C.light }}>{k}</td>
+            <td className="py-1.5" style={{ color: C.ink }}>{typeof v === "object" ? JSON.stringify(v) : String(v)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

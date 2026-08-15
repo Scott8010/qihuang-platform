@@ -18,6 +18,7 @@ from sqlalchemy import func
 import logging
 
 from qihuang_platform.gateway.deps import get_current_admin
+from qihuang_platform.agent.refine_llm import refine_review_content
 from qihuang_platform.control.kg_bridge import write_review_to_kg
 from qihuang_platform.gateway.response import success, error, paginated
 from qihuang_platform.db.config import SessionLocal
@@ -869,6 +870,38 @@ async def ingest_kg_review(
         return success(
             data={"review_id": item.id, "status": "PENDING"},
             message="已摄入待审队列",
+        )
+    except Exception as e:
+        db.rollback()
+        return error("INTERNAL_ERROR", message=str(e))
+    finally:
+        db.close()
+
+
+@router.post("/kg/review/{review_id}/refine", summary="AI 提炼审核内容(翻译+结论+共识分歧)")
+async def refine_review(
+    review_id: str,
+    admin: dict = Depends(get_current_admin),
+):
+    """把待审条目原始 content 经 LLM 翻译+提炼，写回 content._refined，
+    供审核人在详情抽屉直接看到中文研究题目/结论/共识点/分歧点。
+    字段缺失或 LLM 不可用都优雅降级，不阻断审核台。"""
+    db = SessionLocal()
+    try:
+        item = db.query(KgReviewItem).filter_by(id=review_id).first()
+        if not item:
+            return error("NOT_FOUND", message="审核项不存在")
+        if item.status != "PENDING":
+            return error("INVALID_PARAM", message=f"审核项状态为{item.status}，无法提炼")
+        refined = await refine_review_content(item.content or {})
+        content = dict(item.content or {})
+        content["_refined"] = refined
+        item.content = content
+        db.add(item)
+        db.commit()
+        return success(
+            data={"review_id": review_id, "refined": refined, "content": content},
+            message="AI 提炼完成",
         )
     except Exception as e:
         db.rollback()
