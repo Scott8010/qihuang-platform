@@ -578,17 +578,6 @@ function ReviewDetailDrawer({
                     </Section>
                   </>
                 )}
-
-                {/* 10. 完整 content JSON（默认折叠） */}
-                <Separator />
-                <details className="group">
-                  <summary className="cursor-pointer text-[11px] uppercase tracking-wider select-none" style={{ color: C.light }}>
-                    完整内容 (content) — 点击展开
-                  </summary>
-                  <pre className="text-[11px] p-3 rounded font-mono whitespace-pre-wrap break-all max-h-72 overflow-auto mt-2" style={{ background: "#F8FAF9", color: C.mid }}>
-                    {JSON.stringify(c, null, 2)}
-                  </pre>
-                </details>
               </div>
             </ScrollArea>
 
