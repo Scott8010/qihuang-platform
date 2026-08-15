@@ -55,7 +55,8 @@ _PILOT_TENANT_IDS = (
         "4a371e2e-047f-4607-8fa3-c401f9f91a2c",  # med-pilot
     }
 )
-_PASSWORD_LOGIN_ENABLED = os.getenv("QH_PASSWORD_LOGIN_ENABLED", "true").lower() in ("1", "true", "yes", "on")
+# 默认关闭(fail-closed): password 登录仅试点期开放, 需显式设置 QH_PASSWORD_LOGIN_ENABLED=true 才启用
+_PASSWORD_LOGIN_ENABLED = os.getenv("QH_PASSWORD_LOGIN_ENABLED", "false").lower() in ("1", "true", "yes", "on")
 
 def _db_password_login(req: LoginRequest):
     """试点期 password 登录：查真实用户 + bcrypt 校验 + 返回真实租户/机构/角色"""
