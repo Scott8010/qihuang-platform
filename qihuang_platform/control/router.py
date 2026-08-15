@@ -717,7 +717,11 @@ async def review_action(req: ReviewActionRequest, admin: dict = Depends(get_curr
             return error("INVALID_PARAM", message=f"审核项状态为{item.status}，无法重复审核")
 
         item.status = "APPROVED" if req.action == "approve" else "REJECTED"
-        item.reviewer_id = admin.get("sub", "system")
+        # reviewer_id 有 FK 约束指向 user.id；admin token 的 sub 常为 "system"(非用户记录)，
+        # 直接写入会触发外键违反导致审核失败。sub 非真实用户 id 时置 None，
+        # 审核人身份由 reviewer_role(DZ/XZ) 承载。
+        _sub = admin.get("sub")
+        item.reviewer_id = _sub if _sub and _sub != "system" else None
         item.review_note = req.note
         item.reviewed_at = _now()
 
