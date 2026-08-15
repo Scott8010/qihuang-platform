@@ -9,13 +9,16 @@
 6. 敏感词库: 分场景维护
 7. 容器管理: 容器状态监控 + 自动恢复
 """
+import os
 from typing import Optional
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, Depends, Query, Body, Request
+from fastapi import APIRouter, Depends, Query, Body, Request, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func
+import logging
 
 from qihuang_platform.gateway.deps import get_current_admin
+from qihuang_platform.control.kg_bridge import write_review_to_kg
 from qihuang_platform.gateway.response import success, error, paginated
 from qihuang_platform.db.config import SessionLocal
 from qihuang_platform.db.models import (
@@ -718,6 +721,15 @@ async def review_action(req: ReviewActionRequest, admin: dict = Depends(get_curr
         item.review_note = req.note
         item.reviewed_at = _now()
 
+        # ── 回流桥：审核通过 → 回写 Neo4j（仅增量项，存量已标 _migrated）──
+        # 异常隔离：回写失败绝不回滚审核，仅记日志。
+        if req.action == "approve":
+            try:
+                bridge_res = write_review_to_kg(item.content, item.item_type)
+                logging.info("kg_review approve 回流桥: %s", bridge_res)
+            except Exception as _e:
+                logging.error("kg_review 回流桥未阻断审核: %s", _e)
+
         db.add(AuditLog(
             id=_uid(), tenant_id=item.tenant_id, user_id=admin.get("sub", "system"),
             action=f"KG_REVIEW_{item.status}", target_type="KG_REVIEW_ITEM", target_id=item.id,
@@ -726,6 +738,64 @@ async def review_action(req: ReviewActionRequest, admin: dict = Depends(get_curr
         ))
         db.commit()
         return success(data={"review_id": item.id, "status": item.status}, message=f"审核{'通过' if req.action == 'approve' else '拒绝'}")
+    except Exception as e:
+        db.rollback()
+        return error("INTERNAL_ERROR", message=str(e))
+    finally:
+        db.close()
+
+
+# ═══════════════════════════════════════════
+# 跨服务摄入通道：8601 自生长引擎 → 8602 审核队列
+# ═══════════════════════════════════════════
+
+_QH_INTERNAL_KEY = os.environ.get("QH_INTERNAL_API_KEY", "qh_key_default_2026")
+_DEFAULT_TENANT = os.environ.get("QH_DEFAULT_TENANT", "tenant_default")
+
+
+async def _verify_internal_key(
+    api_key: str = Query(None, alias="api_key"),
+    x_internal_key: str = Header(None, alias="X-Internal-Key"),
+):
+    """服务间内部调用鉴权（8601 自生长引擎 → 8602 审核台）。"""
+    provided = api_key or x_internal_key
+    if provided != _QH_INTERNAL_KEY:
+        raise HTTPException(status_code=401, detail=error("API_KEY_INVALID", "内部调用密钥错误"))
+    return True
+
+
+class KgReviewIngestRequest(BaseModel):
+    item_type: str = Field(..., description="证候提纲/方证对应/方剂信息/自生长审核 等")
+    content: dict = Field(default_factory=dict, description="知识条目内容(JSON)")
+    confidence: float = Field(0.0, ge=0.0, le=1.0)
+    reviewer_role: str = Field("", description="DZ(大张/临床)/XZ(小张/典籍)")
+    source: str = Field("auto_growth", description="来源标识")
+
+
+@router.post("/kg/review/ingest", summary="跨服务摄入新知识待审项(8601自生长→8602)")
+async def ingest_kg_review(
+    req: KgReviewIngestRequest,
+    _: bool = Depends(_verify_internal_key),
+):
+    """8601 自生长引擎经此接口把中置信度新知识推入 8602 审核队列，
+    替代旧的 8601/annotation 写 JSON 通道。"""
+    db = SessionLocal()
+    try:
+        item = KgReviewItem(
+            id=_uid(),
+            tenant_id=_DEFAULT_TENANT,
+            item_type=req.item_type,
+            content=req.content,
+            confidence=req.confidence,
+            status="PENDING",
+            reviewer_role=req.reviewer_role,
+        )
+        db.add(item)
+        db.commit()
+        return success(
+            data={"review_id": item.id, "status": "PENDING"},
+            message="已摄入待审队列",
+        )
     except Exception as e:
         db.rollback()
         return error("INTERNAL_ERROR", message=str(e))
