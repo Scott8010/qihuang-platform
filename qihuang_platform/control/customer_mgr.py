@@ -122,7 +122,7 @@ async def customer_list(
             Subscription.status.in_(["active", "scheduled"]),
             Subscription.start_date <= now,
         ).filter(
-            (Subscription.end_date == None) | (Subscription.end_date > now)
+            (Subscription.end_date.is_(None)) | (Subscription.end_date > now)
         ).order_by(Subscription.start_date.desc()).first()
 
         plan_display = "无"
@@ -204,7 +204,7 @@ async def customer_detail(
         Subscription.status.in_(["active", "scheduled"]),
         Subscription.start_date <= now,
     ).filter(
-        (Subscription.end_date == None) | (Subscription.end_date > now)
+        (Subscription.end_date.is_(None)) | (Subscription.end_date > now)
     ).order_by(Subscription.start_date.desc()).first()
 
     pending = db.query(Subscription).filter(
