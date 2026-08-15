@@ -594,14 +594,23 @@ export async function fetchReviews(): Promise<TodoReviewItem[]> {
   try {
     const r = await get<{ code: number; data: { items?: any[] } }>("/admin/v1/kg/review/pending");
     const items = r?.data?.items || [];
-    return items.map((x: any) => ({
-      id: x.id || "",
-      type: x.entry_type || x.type || "知识条目",
-      name: x.content || x.name || x.title || "",
-      conf: x.confidence ?? x.conf ?? 0,
-      source: x.source || "",
-      reviewer: x.reviewer_role || x.reviewer || "",
-    }));
+    const roleMap: Record<string, string> = { DZ: "大张(临床)", XZ: "小张(典籍)" };
+    return items.map((x: any) => {
+      const c = x.content && typeof x.content === "object" ? x.content : {};
+      const rawName = c.name || c.clause_text || c.title || x.item_id_in_kg || x.id || "";
+      const name = typeof rawName === "string"
+        ? (rawName.length > 60 ? rawName.slice(0, 60) + "…" : rawName)
+        : String(rawName);
+      return {
+        id: x.id || "",
+        type: x.item_type || x.type || "知识条目",
+        name,
+        conf: x.confidence ?? x.conf ?? 0,
+        // 来源列展示原始任务类别（证候提纲/方证对应/方剂信息/知识审核/自生长审核）
+        source: c.type || c._src || "历史标注",
+        reviewer: roleMap[x.reviewer_role] || x.reviewer_role || x.reviewer || "—",
+      };
+    });
   } catch { return []; }
 }
 

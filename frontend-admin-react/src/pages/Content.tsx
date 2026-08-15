@@ -19,11 +19,19 @@ const confColor = (v: number) => (v < 0.4 ? "#B03A2E" : v < 0.6 ? "#8A6A1F" : "#
 function typeStyle(t: string) {
   const key = (t || "").toLowerCase();
   if (key.includes("herb") || key.includes("药")) return { color: "#2E5A4C", background: "#EAF2EE" };
+  if (key.includes("formula") || key.includes("方")) return { color: "#2E5A4C", background: "#EAF2EE" }; // 经方
+  if (key.includes("drug") || key.includes("西药")) return { color: "#B03A2E", background: "#FDECEA" }; // 西药
+  if (key.includes("knowledge") || key.includes("知识")) return { color: "#2C5F87", background: "#E8F1F8" }; // 知识
   if (key.includes("syndrome") || key.includes("证")) return { color: "#8A6A1F", background: "#FBF4E4" };
   if (key.includes("case") || key.includes("案")) return { color: "#2C5F87", background: "#E8F1F8" };
   if (key.includes("classic") || key.includes("典")) return { color: "#7A4E8C", background: "#F3EBF7" };
   return { color: C.mid, background: "#F5F5F5" };
 }
+
+/** 审核队列类型中文标签（item_type 英文字段 → 中文展示） */
+const TYPE_LABEL: Record<string, string> = {
+  Formula: "经方", Drug: "西药", Knowledge: "知识", Syndrome: "证候",
+};
 
 function actionStyle(a: string) {
   if (a === "拦截") return { color: "#B03A2E", background: "#FDECEA" };
@@ -138,7 +146,7 @@ export default function Content() {
                     <tr key={r.id} className="border-t hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
                       <td className="py-3 font-mono text-[12px]" style={{ color: C.mid }}>{r.id}</td>
                       <td className="py-3">
-                        <span className="text-[11px] px-2 py-0.5 rounded" style={ts}>{r.type}</span>
+                        <span className="text-[11px] px-2 py-0.5 rounded" style={ts}>{TYPE_LABEL[r.type] || r.type}</span>
                       </td>
                       <td className="py-3" style={{ color: C.ink }}>{r.name}</td>
                       <td className="py-3">
