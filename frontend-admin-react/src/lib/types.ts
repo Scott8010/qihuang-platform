@@ -47,7 +47,7 @@ export const billStatus: Record<string, { label: string; cls: string }> = {
 
 export interface Tenant {
   id: string; name: string; scene: "MED" | "HEALTH" | "EDU";
-  plan: string; orgs: number; users: number;
+  plan: string; planId?: string; orgs: number; users: number;
   usedCalls: number; quotaCalls: number; status: string; expires: string; module3d: boolean;
 }
 
@@ -156,9 +156,27 @@ export interface PlanFeatures {
 }
 
 export interface PlanItem {
+  id: string;            // 套餐 UUID，升级接口 /tenants/{id}/subscription/upgrade 需要
   planName: string;      // trial / standard / professional / enterprise
   name: string;          // 体验版 / 标准版 / ...
   features: PlanFeatures;
+}
+
+/** 对应 GET /admin/v1/tenants-extended → data.items[]（套餐升级页用） */
+export interface TenantPlanItem {
+  id: string;
+  name: string;            // display_name
+  displayName: string;
+  scene: string;           // HEALTH / MED / EDU
+  status: string;
+  plan: string;            // 当前套餐显示名（可能为空）
+  planId: string;          // 当前套餐 UUID（可能为空）
+  orgs: number;
+  users: number;
+  usedCalls: number;
+  quotaCalls: number;
+  expires: string | null;
+  module3d: boolean;
 }
 
 /** 对应 GET /admin/v1/subscriptions → data.items[] */

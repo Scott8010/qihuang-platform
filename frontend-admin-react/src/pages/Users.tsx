@@ -27,8 +27,6 @@ function validatePassword(pwd: string): string | null {
   if (!/[a-z]/.test(pwd)) return '密码须包含小写字母';
   if (!/[A-Z]/.test(pwd)) return '密码须包含大写字母';
   if (!/\d/.test(pwd)) return '密码须包含数字';
-  const SPECIAL = '!@#$%^&*()_+-=[]{}|;:,.<>?/`~';
-  if (![...pwd].some(c => SPECIAL.includes(c))) return '密码须包含特殊字符（如 !@#$%^&*）';
   return null;
 }
 
@@ -399,7 +397,7 @@ export default function Users() {
                 />
                 {k === 'password' && (
                   <div className='text-[11px] mt-1.5 leading-relaxed' style={{ color: C.light }}>
-                    需 8-64 位，且必须同时包含大小写字母、数字及特殊字符（如 !@#$%^&*）；留空由系统生成随机强密码。
+                    需 8-64 位，须同时包含大小写字母与数字；特殊字符可选。留空由系统生成随机强密码。
                   </div>
                 )}
               </div>
@@ -507,7 +505,7 @@ export default function Users() {
                 placeholder="留空自动生成" className="h-8 text-sm" />
               <div className="text-[11px] mt-1.5 leading-relaxed" style={{ color: pwdInput && validatePassword(pwdInput) ? "#B03A2E" : C.light }}>
                 {!pwdInput
-                  ? '留空则由系统生成随机强密码；自定义需 8-64 位，且必须同时含大小写字母、数字及特殊字符（如 !@#$%^&*）。'
+                  ? '留空则由系统生成随机强密码；自定义需 8-64 位，须同时含大小写字母与数字，特殊字符可选。'
                   : (validatePassword(pwdInput)
                       ? validatePassword(pwdInput)
                       : '✓ 密码强度符合要求（留空则由系统生成随机强密码）')}

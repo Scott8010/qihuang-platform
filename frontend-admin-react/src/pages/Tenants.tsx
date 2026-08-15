@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -14,7 +14,8 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Plus, Search, Boxes, Loader2 } from "lucide-react";
 import { C, sceneMap, statusMap } from "@/lib/types";
-import { fetchTenants, createTenant } from "@/lib/api";
+import { fetchTenants, createTenant, deleteTenant } from "@/lib/api";
+import { toast } from "sonner";
 import type { Tenant } from "@/lib/types";
 import TenantDetail from "./TenantDetail";
 
@@ -33,6 +34,24 @@ export default function Tenants() {
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<Tenant | null>(null);
   const [form, setForm] = useState({ name: "", scene: "HEALTH", plan: "标准版", contact: "", m3d: false });
+
+  // 删除
+  const [delTenant, setDelTenant] = useState<Tenant | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const doDelete = async () => {
+    if (!delTenant) return;
+    setDeleting(true);
+    const r = await deleteTenant(delTenant.id);
+    setDeleting(false);
+    if (r.ok) {
+      toast.success(`已删除租户 ${delTenant.name}`);
+      setDelTenant(null);
+      await load();
+    } else {
+      toast.error(r.msg || "删除失败");
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -216,6 +235,7 @@ export default function Tenants() {
                     <td className="px-5 py-3.5 text-right">
                       <Button variant="ghost" size="sm" className="text-[12px]" style={{ color: C.primary }} onClick={() => setDetail(t)}>详情</Button>
                       <Button variant="ghost" size="sm" className="text-[12px]" style={{ color: C.mid }}>续费</Button>
+                      <Button variant="ghost" size="sm" className="text-[12px]" style={{ color: "#B03A2E" }} onClick={() => setDelTenant(t)}>删除</Button>
                     </td>
                   </tr>
                 );
@@ -225,6 +245,25 @@ export default function Tenants() {
         </CardContent>
       </Card>
       <div className="text-[12px]" style={{ color: C.light }}>共 {shown.length} 家租户 · 数据权限按 tenant_id 行级隔离</div>
+
+      {/* 删除确认 */}
+      <Dialog open={!!delTenant} onOpenChange={(o) => !o && setDelTenant(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle style={{ color: "#B03A2E" }}>删除租户</DialogTitle>
+            <DialogDescription className="text-xs">
+              将软删除 <b>{delTenant?.name}</b>（{delTenant?.id}），操作不可撤销，相关机构与用户将一并进入停用态。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setDelTenant(null)}>取消</Button>
+            <Button size="sm" className="text-white" style={{ background: "#B03A2E" }}
+              disabled={deleting} onClick={doDelete}>
+              {deleting && <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />}确认删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -141,16 +141,23 @@ export async function fetchDashboard(): Promise<{
     const todayCalls = d.api?.today_calls || 0;
     const revenueCents = d.revenue?.total_cents || 0;
 
-    // 场景分布：按真实租户 scene 聚合；若后端未返回则按 active 租户数拆分
-    const sceneCounts: Record<string, number> = {};
-    if (d.scene_distribution && typeof d.scene_distribution === "object") {
-      Object.entries(d.scene_distribution).forEach(([k, v]) => { sceneCounts[k] = Number(v) || 0; });
-    }
-    const sceneDist: SceneDistItem[] = [
-      { name: "大健康", value: sceneCounts.HEALTH || sceneCounts.health || Math.max(0, Math.round(activeTenants * 0.5)), fill: "#2E5A4C" },
-      { name: "医疗", value: sceneCounts.MED || sceneCounts.med || Math.max(0, Math.round(activeTenants * 0.3)), fill: "#B03A2E" },
-      { name: "培训", value: sceneCounts.EDU || sceneCounts.edu || Math.max(0, Math.round(activeTenants * 0.2)), fill: "#C8A45D" },
-    ].filter((s) => s.value > 0);
+    // 场景分布：直接基于后端 scene_distribution 真实聚合（键为 health/medical/edu 等），不再臆造比例
+    const SCENE_META: Record<string, { name: string; fill: string }> = {
+      health: { name: "大健康", fill: "#2E5A4C" },
+      medical: { name: "医疗", fill: "#B03A2E" },
+      edu: { name: "培训", fill: "#C8A45D" },
+      unknown: { name: "未分类", fill: "#8FA9A0" },
+    };
+    const sceneDist: SceneDistItem[] = (
+      d.scene_distribution && typeof d.scene_distribution === "object"
+        ? Object.entries(d.scene_distribution)
+        : []
+    )
+      .map(([k, v]) => {
+        const meta = SCENE_META[k] || SCENE_META.unknown;
+        return { name: meta.name, value: Number(v) || 0, fill: meta.fill };
+      })
+      .filter((s) => s.value > 0);
 
     // 告警：优先用 recent_calls， fallback 到 recent_ops
     const alerts: AlertItem[] = [];
@@ -206,7 +213,11 @@ export async function fetchTenants(): Promise<Tenant[]> {
     if (r?.code !== 0 || !r.data) return [];
     return (r.data || []).map((t: any) => {
       const sceneUpper = (t.scene || "HEALTH").toUpperCase();
-      const planName = t.plan_name || t.plan || "体验版";
+      // 修复 2026-08-15: 去掉"体验版"硬兜底，避免 plan 字段暂时为空时误导为体验版；
+      // 空值显示 "—"，让用户看到"未配置"而不是误判为最低套餐。
+      // 2026-08-15 补充：列表接口现已返回中文 plan（display_name），优先用 t.plan；
+      // plan_name 为英文标识，作为兜底；空值才显示 "—"
+      const planName = t.plan || t.plan_name || "—";
       const statusUpper = (t.status || "active").toUpperCase();
       return {
         id: t.id || t.code || "",
@@ -237,6 +248,11 @@ export async function createTenant(body: {
     contact_name: body.contact,
     module_3d: body.module3d,
   });
+}
+
+/** DELETE /admin/v1/tenants/{id} — 软删除租户（后端记录审计日志） */
+export async function deleteTenant(tenantId: string) {
+  return mutate("DELETE", `/admin/v1/tenants/${tenantId}`);
 }
 
 // ═══ 角色 ═══
@@ -432,6 +448,7 @@ export async function fetchPlans(): Promise<PlanItem[]> {
     return r.data.map((p: any) => {
       const f = p.features_json || {};
       return {
+        id: p.id || "",
         planName: p.plan_name || "",
         name: p.display_name || p.plan_name || "",
         features: {
@@ -444,6 +461,61 @@ export async function fetchPlans(): Promise<PlanItem[]> {
       };
     });
   } catch { return []; }
+}
+
+// ═══ 套餐升级（租户订阅变更）═══
+// 真实接口：GET /admin/v1/tenants-extended?page_size=20（正确分页，避免 422）
+//           POST /admin/v1/tenants/{id}/subscription/upgrade  { plan_id }
+// 旧版崩溃根因：前端写死 page_size=200 → 后端上限 100 → 422 整页崩。
+
+export interface TenantPlanItem {
+  id: string;
+  name: string;            // display_name
+  displayName: string;
+  scene: string;           // HEALTH / MED / EDU
+  status: string;
+  plan: string;            // 当前套餐显示名（可能空）
+  planId: string;          // 当前套餐 UUID（可能空）
+  orgs: number;
+  users: number;
+  usedCalls: number;
+  quotaCalls: number;
+  expires: string | null;
+  module3d: boolean;
+}
+
+/** GET /admin/v1/tenants-extended?page_size=20 — 拉租户 + 当前套餐（正确分页，不崩） */
+export async function fetchTenantExtended(pageSize = 20): Promise<TenantPlanItem[]> {
+  try {
+    const r = await get<{ code: number; data: { items?: any[] } }>(
+      `/admin/v1/tenants-extended?page_size=${pageSize}`,
+    );
+    const items = r?.data?.items || [];
+    return items.map((t: any) => ({
+      id: t.id || "",
+      name: t.display_name || t.name || "",
+      displayName: t.display_name || t.name || "",
+      scene: (t.scene || "health").toUpperCase(),
+      status: (t.status || "active").toUpperCase(),
+      plan: t.plan || "",
+      planId: t.plan_id || "",
+      orgs: t.orgs || 0,
+      users: t.users || 0,
+      usedCalls: t.usedCalls || t.used_calls || 0,
+      quotaCalls: t.quotaCalls ?? t.quota_calls ?? 0,
+      expires: t.expires || null,
+      module3d: t.module_3d || false,
+    }));
+  } catch (e) { console.error("fetchTenantExtended error", e); return []; }
+}
+
+/** POST /admin/v1/tenants/{tenantId}/subscription/upgrade — 预约次月1号生效升级 */
+export async function upgradeSubscription(tenantId: string, planId: string): Promise<MutateResult> {
+  return mutate<{ subscription_id: string; target_plan_name: string; effective_date: string }>(
+    "POST",
+    `/admin/v1/tenants/${encodeURIComponent(tenantId)}/subscription/upgrade`,
+    { plan_id: planId },
+  );
 }
 
 /** GET /admin/v1/subscriptions — 真实返回的是订阅记录，不是分场景用量 */

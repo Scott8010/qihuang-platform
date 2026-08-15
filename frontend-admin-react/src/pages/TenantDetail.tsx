@@ -43,7 +43,10 @@ export default function TenantDetail({ tenant, onBack }: { tenant: Tenant; onBac
     ]).finally(() => setLoading(false));
   }, [t.id]);
 
+  // 修复 2026-08-15: 改用 plan_id 精确匹配（plan 字符串在不同来源间存在别名差异）。
+  // 同时保留 plan 字符串 fallback 兜底。
   const myPlan =
+    (t.planId && plans.find((p) => p.id === t.planId)) ||
     plans.find((p) => p.planName === t.plan) ||
     plans.find((p) => p.name === t.plan) ||
     null;

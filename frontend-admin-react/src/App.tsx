@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import {
   LayoutDashboard, Building2, ShieldCheck, KeyRound, BarChart3,
   BookOpenCheck, Activity, Search, Bell, Sprout, ChevronDown, LogOut,
-  Users as UsersIcon, Eye, EyeOff, Lock, Bot,
+  Users as UsersIcon, Eye, EyeOff, Lock, Bot, CreditCard,
 } from "lucide-react";
 import { C } from "@/lib/types";
 import { login, logout, getToken, changePassword, getIdentity } from "@/lib/api";
@@ -15,6 +15,7 @@ import Billing from "@/pages/Billing";
 import Content from "@/pages/Content";
 import Monitor from "@/pages/Monitor";
 import AgentCenter from "@/pages/AgentCenter";
+import PlanUpgrade from "@/pages/PlanUpgrade";
 
 const nav = [
   { id: "dashboard", label: "工作台", icon: LayoutDashboard },
@@ -26,6 +27,7 @@ const nav = [
   { id: "billing", label: "计量计费", icon: BarChart3 },
   { id: "content", label: "内容管控", icon: BookOpenCheck },
   { id: "monitor", label: "监控运维", icon: Activity },
+  { id: "planupgrade", label: "套餐升级", icon: CreditCard },
 ];
 
 export default function App() {
@@ -254,6 +256,7 @@ export default function App() {
           {page === "billing" && <Billing />}
           {page === "content" && <Content />}
           {page === "monitor" && <Monitor />}
+          {page === "planupgrade" && <PlanUpgrade />}
         </main>
       </div>
 
