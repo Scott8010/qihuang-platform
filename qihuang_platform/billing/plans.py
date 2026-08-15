@@ -23,8 +23,11 @@ DEFAULT_PLANS = [
             "report_export": False,
             "priority_support": False,
             "custom_skin": False,
+            # 试点租户（edu-pilot / med-pilot）均订阅 trial：开放命理+风水 Agent 能力
+            # 由 seed_plans 在每次启动幂等合入，重启不丢（需求8）
+            "agents": ["fortune", "geo"],
         },
-        "description": "免费试用30天，含基础辨证+体质辨识",
+        "description": "免费试用30天，含基础辨证+体质辨识+命理运程+风水堪舆趣味体验",
     },
     {
         "plan_name": "standard",
