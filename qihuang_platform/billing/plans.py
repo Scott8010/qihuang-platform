@@ -43,8 +43,9 @@ DEFAULT_PLANS = [
             "report_export": True,
             "priority_support": False,
             "custom_skin": False,
+            "agents": ["fortune", "geo"],
         },
-        "description": "标准健康服务，含辨证推理+方剂分析+体质辨识+养生方案",
+        "description": "标准健康服务，含辨证推理+方剂分析+体质辨识+养生方案+命理运程+风水堪舆",
     },
     {
         "plan_name": "professional",
