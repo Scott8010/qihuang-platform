@@ -609,6 +609,8 @@ export async function fetchReviews(): Promise<TodoReviewItem[]> {
         // 来源列展示原始任务类别（证候提纲/方证对应/方剂信息/知识审核/自生长审核）
         source: c.type || c._src || "历史标注",
         reviewer: roleMap[x.reviewer_role] || x.reviewer_role || x.reviewer || "—",
+        // 详情抽屉需要完整 content（后端列表接口已透传）
+        content: c,
       };
     });
   } catch { return []; }

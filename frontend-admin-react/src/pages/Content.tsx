@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BookOpenCheck, ShieldAlert, Search, Check, X, Bell, Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import { BookOpenCheck, ShieldAlert, Search, Check, X, Bell, Loader2, Eye } from "lucide-react";
 import { C } from "@/lib/types";
 import type { TodoReviewItem, SensitiveWordItem } from "@/lib/types";
 import { fetchReviews, fetchSensitiveWords, reviewAction } from "@/lib/api";
@@ -45,6 +51,7 @@ export default function Content() {
   const [words, setWords] = useState<SensitiveWordItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string>("");
+  const [detail, setDetail] = useState<TodoReviewItem | null>(null);
 
   const loadReviews = () => fetchReviews().then(setReviews);
 
@@ -58,6 +65,8 @@ export default function Content() {
     try {
       await reviewAction(id, action);
       await loadReviews();   // 以后端为准重新拉取，不做本地假删除
+      // 若详情抽屉打开的就是当前审核项，操作后自动关闭（避免对已审核项再点）
+      if (detail?.id === id) setDetail(null);
     } finally {
       setBusyId("");
     }
@@ -143,7 +152,12 @@ export default function Content() {
                   const ts = typeStyle(r.type);
                   const busy = busyId === r.id;
                   return (
-                    <tr key={r.id} className="border-t hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
+                    <tr
+                      key={r.id}
+                      className="border-t hover:bg-[#F8FAF9] cursor-pointer"
+                      style={{ borderColor: C.border }}
+                      onClick={() => { if (!busy) setDetail(r); }}
+                    >
                       <td className="py-3 font-mono text-[12px]" style={{ color: C.mid }}>{r.id}</td>
                       <td className="py-3">
                         <span className="text-[11px] px-2 py-0.5 rounded" style={ts}>{TYPE_LABEL[r.type] || r.type}</span>
@@ -164,18 +178,26 @@ export default function Content() {
                       <td className="py-3 text-[12px]" style={{ color: C.mid }}>{r.source || "—"}</td>
                       <td className="py-3 text-[12px]" style={{ color: C.mid }}>{r.reviewer || "—"}</td>
                       <td className="py-3">
-                        <div className="flex gap-2">
+                        <div className="flex gap-1.5">
                           <Button
-                            size="sm" className="h-7 px-3 text-[12px]" disabled={busy}
+                            size="sm" variant="ghost" className="h-7 px-2 text-[12px]"
+                            disabled={busy}
+                            style={{ color: C.primary }}
+                            onClick={(e) => { e.stopPropagation(); setDetail(r); }}
+                          >
+                            <Eye className="w-3.5 h-3.5 mr-0.5" /> 详情
+                          </Button>
+                          <Button
+                            size="sm" className="h-7 px-2 text-[12px]" disabled={busy}
                             style={{ background: C.primary }}
-                            onClick={() => handleAction(r.id, "approve")}
+                            onClick={(e) => { e.stopPropagation(); handleAction(r.id, "approve"); }}
                           >
                             {busy ? <Loader2 className="w-3.5 h-3.5 mr-0.5 animate-spin" /> : <Check className="w-3.5 h-3.5 mr-0.5" />} 通过
                           </Button>
                           <Button
-                            size="sm" variant="outline" className="h-7 px-3 text-[12px]" disabled={busy}
+                            size="sm" variant="outline" className="h-7 px-2 text-[12px]" disabled={busy}
                             style={{ borderColor: "#B03A2E", color: "#B03A2E" }}
-                            onClick={() => handleAction(r.id, "reject")}
+                            onClick={(e) => { e.stopPropagation(); handleAction(r.id, "reject"); }}
                           >
                             <X className="w-3.5 h-3.5 mr-0.5" /> 驳回
                           </Button>
@@ -271,6 +293,177 @@ export default function Content() {
           </CardContent>
         </Card>
       )}
+
+      {/* 详情抽屉（右侧滑入） */}
+      <ReviewDetailDrawer
+        detail={detail}
+        busy={!!(detail && busyId === detail.id)}
+        onAction={handleAction}
+        onClose={() => setDetail(null)}
+      />
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   详情抽屉 — 右侧滑入，分层呈现待审条目完整内容
+   后端列表接口已透传 content JSON，无需额外请求
+   ═══════════════════════════════════════════ */
+function ReviewDetailDrawer({
+  detail, busy, onAction, onClose,
+}: {
+  detail: TodoReviewItem | null;
+  busy: boolean;
+  onAction: (id: string, a: "approve" | "reject") => void;
+  onClose: () => void;
+}) {
+  const c: any = detail?.content || {};
+  const hasClause = !!(c.clause_text || c.text);
+  const hasSource = !!(c.source_doc || c.source_url);
+  const hasVotes = !!(c.model_votes || c.confidence_breakdown);
+
+  return (
+    <Dialog open={!!detail} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent
+        className="fixed top-0 right-0 left-auto translate-x-0 translate-y-0 h-screen max-w-md w-full sm:max-w-lg rounded-none border-l p-0 gap-0 overflow-hidden"
+        style={{ background: "white" }}
+      >
+        {detail && (
+          <>
+            <DialogHeader className="px-5 py-4 border-b" style={{ borderColor: C.border }}>
+              <div className="flex items-center gap-2">
+                <Eye className="w-4 h-4" style={{ color: C.primary }} />
+                <DialogTitle className="text-[15px] font-semibold">待审条目详情</DialogTitle>
+              </div>
+              <DialogDescription className="text-[12px] mt-1" style={{ color: C.mid }}>
+                完整内容仅管理员可见 — 审核前请仔细核对原文、来源与置信度
+              </DialogDescription>
+            </DialogHeader>
+
+            <ScrollArea className="h-[calc(100vh-180px)]">
+              <div className="px-5 py-4 space-y-5">
+                {/* 1. 基础信息 */}
+                <Section title="基础信息">
+                  <Row label="编号" value={<span className="font-mono">{detail.id}</span>} />
+                  <Row label="类型" value={
+                    <span className="text-[11px] px-2 py-0.5 rounded" style={typeStyle(detail.type)}>
+                      {TYPE_LABEL[detail.type] || detail.type}
+                    </span>
+                  } />
+                  <Row label="名称" value={detail.name} />
+                  <Row label="审核人" value={detail.reviewer || "—"} />
+                  <Row label="置信度" value={
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-semibold" style={{ color: confColor(detail.conf) }}>
+                        {detail.conf.toFixed(2)}
+                      </span>
+                      {detail.conf < 0.4 && (
+                        <Badge style={{ background: "#FDECEA", color: "#B03A2E", border: "none" }}>
+                          需双人复核
+                        </Badge>
+                      )}
+                    </div>
+                  } />
+                  <Row label="来源" value={detail.source || "—"} />
+                  {c.item_id_in_kg && (
+                    <Row label="KG ID" value={<span className="font-mono text-[11px]">{c.item_id_in_kg}</span>} />
+                  )}
+                </Section>
+
+                {/* 2. 原文摘录 */}
+                {hasClause && (
+                  <>
+                    <Separator />
+                    <Section title="原文摘录">
+                      <div className="text-[13px] leading-relaxed p-3 rounded whitespace-pre-wrap break-words" style={{ background: "#F8FAF9", color: C.ink }}>
+                        {c.clause_text || c.text}
+                      </div>
+                    </Section>
+                  </>
+                )}
+
+                {/* 3. 来源文献 */}
+                {hasSource && (
+                  <>
+                    <Separator />
+                    <Section title="来源文献">
+                      {c.source_doc && <Row label="文献" value={c.source_doc} />}
+                      {c.source_url && (
+                        <Row label="链接" value={
+                          <a
+                            href={c.source_url}
+                            target="_blank" rel="noopener noreferrer"
+                            className="text-blue-600 underline break-all"
+                          >
+                            {c.source_url}
+                          </a>
+                        } />
+                      )}
+                    </Section>
+                  </>
+                )}
+
+                {/* 4. 模型投票明细 */}
+                {hasVotes && (
+                  <>
+                    <Separator />
+                    <Section title="模型投票明细">
+                      <pre className="text-[11px] p-3 rounded font-mono whitespace-pre-wrap break-all max-h-48 overflow-auto" style={{ background: "#F8FAF9", color: C.ink }}>
+                        {JSON.stringify(c.model_votes || c.confidence_breakdown, null, 2)}
+                      </pre>
+                    </Section>
+                  </>
+                )}
+
+                {/* 5. 完整 content JSON */}
+                <Separator />
+                <Section title="完整内容 (content)">
+                  <pre className="text-[11px] p-3 rounded font-mono whitespace-pre-wrap break-all max-h-72 overflow-auto" style={{ background: "#F8FAF9", color: C.mid }}>
+                    {JSON.stringify(c, null, 2)}
+                  </pre>
+                </Section>
+              </div>
+            </ScrollArea>
+
+            <DialogFooter className="px-5 py-3 border-t flex-row justify-end gap-2" style={{ borderColor: C.border }}>
+              <Button variant="outline" size="sm" onClick={onClose}>关闭</Button>
+              <Button
+                size="sm" variant="outline"
+                disabled={busy}
+                style={{ borderColor: "#B03A2E", color: "#B03A2E" }}
+                onClick={() => onAction(detail.id, "reject")}
+              >
+                {busy ? <Loader2 className="w-3.5 h-3.5 mr-0.5 animate-spin" /> : <X className="w-3.5 h-3.5 mr-0.5" />} 驳回
+              </Button>
+              <Button
+                size="sm" disabled={busy}
+                style={{ background: C.primary }}
+                onClick={() => onAction(detail.id, "approve")}
+              >
+                {busy ? <Loader2 className="w-3.5 h-3.5 mr-0.5 animate-spin" /> : <Check className="w-3.5 h-3.5 mr-0.5" />} 通过
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-wider mb-2" style={{ color: C.light }}>{title}</div>
+      <div className="space-y-1.5">{children}</div>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex gap-3 text-[12px] items-start">
+      <span className="w-16 shrink-0" style={{ color: C.light }}>{label}</span>
+      <span className="flex-1 min-w-0" style={{ color: C.ink }}>{value}</span>
     </div>
   );
 }

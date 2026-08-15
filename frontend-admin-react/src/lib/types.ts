@@ -134,6 +134,8 @@ export interface AlertItem {
 
 export interface TodoReviewItem {
   id: string; type: string; name: string; conf: number; source: string; reviewer: string;
+  /** 原始 content JSON（后端列表接口已透传），用于详情抽屉展开 */
+  content?: any;
 }
 
 export interface SceneUsageItem {
