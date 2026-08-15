@@ -128,7 +128,9 @@ def seed_plans(session):
         if existing:
             # 幂等合并：已存在套餐补 agents 字段；若已有 agents，则与内置默认做并集，
             # 保证新增内置能力（如 geo）能纳入已播种的套餐（不覆盖运营端已定制的额外组合）。
-            fj = existing.features_json or {}
+            # 注意：必须用 dict() 副本，否则原地改 existing.features_json 同对象引用，
+            # SQLAlchemy 检测不到 JSON 变更 → 不 UPDATE → agents 永远写不进已存在套餐（需求8 根因）。
+            fj = dict(existing.features_json or {})
             if "agents" not in fj:
                 if default_agents:
                     fj["agents"] = list(default_agents)
