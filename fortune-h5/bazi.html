@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>命理运程 · 八字（演示 H5）</title>
+<style>
+  :root{--bg:#f4f1ea;--card:#fffdf8;--ink:#2b2620;--muted:#8a8175;--line:#e6e0d4;--gold:#b8860b;--jade:#3a7d5d;--red:#b5503a;--blue:#3a6ea5}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;line-height:1.7;padding:16px}
+  .phone{max-width:430px;margin:0 auto;background:var(--card);border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+  .hero{background:linear-gradient(135deg,#2b2620,#4a4036);color:#f4f1ea;padding:22px 20px}
+  .hero .date{font-size:12px;opacity:.7}
+  .hero h1{font-size:20px;margin:6px 0 2px;letter-spacing:1px}
+  .hero .sub{font-size:12px;opacity:.75}
+  .pillars{display:flex;justify-content:space-between;margin-top:16px;gap:8px}
+  .pill{flex:1;text-align:center;background:rgba(255,255,255,.08);border-radius:12px;padding:10px 4px}
+  .pill .lab{font-size:11px;opacity:.7}
+  .pill .gz{font-size:18px;font-weight:700;letter-spacing:2px;margin-top:2px}
+  .pill .el{font-size:10px;opacity:.65;margin-top:2px}
+  .sec{padding:16px 18px;border-bottom:1px solid var(--line)}
+  .sec h2{font-size:15px;color:var(--gold);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+  .sec h2:before{content:"";width:4px;height:14px;background:var(--gold);border-radius:2px}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}
+  .score{text-align:center;background:#faf7f0;border:1px solid var(--line);border-radius:12px;padding:10px 4px}
+  .score .v{font-size:20px;font-weight:800;color:var(--jade)}
+  .score .k{font-size:11px;color:var(--muted);margin-top:2px}
+  .row{display:flex;gap:10px;margin:6px 0}
+  .row .k{width:64px;color:var(--muted);font-size:13px;flex-shrink:0}
+  .row .v{font-size:13px;flex:1}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .chip{font-size:12px;padding:3px 10px;border-radius:20px;border:1px solid var(--line)}
+  .chip.good{background:#eef6f0;color:var(--jade);border-color:#cfe5d6}
+  .chip.bad{background:#fbeeea;color:var(--red);border-color:#f0cfc6}
+  .clothes{display:flex;gap:8px;margin-top:8px}
+  .sw{flex:1;text-align:center;border-radius:10px;padding:8px 2px;font-size:12px;color:#fff}
+  .sw .lv{font-size:10px;opacity:.85}
+  .tea{display:flex;gap:8px;margin-top:8px}
+  .tea .b{flex:1;background:#faf7f0;border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center;font-size:12px}
+  .tip{margin-top:10px;background:#fdf6e8;border-left:3px solid #c9a227;border-radius:0 8px 8px 0;padding:9px 10px;font-size:12.5px;line-height:1.7;color:#5a4a2a}
+  .tip b{color:#8a6a12}
+  .tip .lab{display:block;font-size:10.5px;letter-spacing:1px;color:#a08a4a;margin-bottom:2px}
+  .disclaimer{font-size:11px;color:var(--muted);padding:14px 18px;line-height:1.6}
+  .cta{display:block;width:100%;margin-top:12px;padding:12px;border:none;border-radius:12px;font-size:14px;font-weight:700;color:#fff;background:linear-gradient(135deg,var(--gold),#d4a017);cursor:pointer}
+  .cta.ghost{background:#faf7f0;color:var(--jade);border:1px solid var(--jade)}
+  .cta .track{font-size:9px;font-weight:400;opacity:.7;display:block;margin-top:2px}
+  .dev{background:#1c1916;color:#b8c0c8;font-family:Consolas,monospace;font-size:11px;border-radius:10px;padding:12px;margin-top:10px;white-space:pre-wrap;line-height:1.5}
+  .badge{display:inline-block;font-size:10px;background:var(--jade);color:#fff;padding:1px 7px;border-radius:8px;margin-left:6px}
+  .ly-sec{background:#fbf8f1}
+  .turtle{width:96px;height:72px;margin:14px auto;position:relative}
+  .turtle .shell{position:absolute;inset:0;background:radial-gradient(circle at 50% 30%,#6b8e5a,#3f5a34);border-radius:48% 48% 46% 46%/60% 60% 40% 40%;box-shadow:inset 0 -6px 10px rgba(0,0,0,.3)}
+  .turtle .hex{position:absolute;inset:14px;border:1px solid rgba(255,255,255,.25);border-radius:40%;background:repeating-linear-gradient(60deg,rgba(255,255,255,.06) 0 6px,transparent 6px 12px)}
+  .turtle.shake{animation:shake .5s ease-in-out}
+  @keyframes shake{0%,100%{transform:translateX(0) rotate(0)}20%{transform:translateX(-8px) rotate(-10deg)}40%{transform:translateX(8px) rotate(10deg)}60%{transform:translateX(-6px) rotate(-7deg)}80%{transform:translateX(6px) rotate(7deg)}}
+  .ly-lines{display:flex;flex-direction:column-reverse;gap:5px;align-items:center;margin:10px 0}
+  .ly-line{width:90px;height:10px;border-radius:3px;background:#2b2620}
+  .ly-line.yin{background:repeating-linear-gradient(90deg,#2b2620 0 36px,transparent 36px 54px)}
+  .ly-line.dyn{box-shadow:0 0 0 2px var(--gold)}
+  .ly-result{text-align:center;margin-top:8px}
+  .ly-result .gn{font-size:18px;font-weight:800;color:var(--ink)}
+  .ly-result .sub{font-size:12px;color:var(--muted)}
+  .ly-text{font-size:12px;color:var(--ink);background:#fffdf8;border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px;line-height:1.6}
+  .tag{display:inline-block;font-size:10px;background:#2b2620;color:#f4f1ea;padding:1px 8px;border-radius:10px;margin-left:8px;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="hero">
+    <div class="date" id="hDate"></div>
+    <h1 id="hTitle"></h1>
+    <div class="sub" id="hSub"></div>
+    <div class="pillars" id="hPillars"></div>
+  </div>
+
+  <div class="sec">
+    <h2>命盘速读</h2>
+    <div id="profileRows"></div>
+  </div>
+
+  <div class="sec">
+    <h2>今日运势评分</h2>
+    <div class="grid" id="scores"></div>
+    <div class="row"><div class="k">解读</div><div class="v" id="scoreTip"></div></div>
+    <button class="cta" onclick="track('tap_annual_upgrade')">想看全年走势？解锁你的 2026 年运<span class="track">埋点 · tap_annual_upgrade（情绪高点①）</span></button>
+  </div>
+
+  <div class="sec">
+    <h2>宜忌 · 吉时方位</h2>
+    <div class="chips" id="yiji"></div>
+    <div class="row" style="margin-top:10px"><div class="k">吉时</div><div class="v" id="jishiTime"></div></div>
+    <div class="row"><div class="k">方位</div><div class="v" id="jishiDir"></div></div>
+    <div class="row"><div class="k">生肖</div><div class="v" id="jishiAnimal"></div></div>
+  </div>
+
+  <div class="sec">
+    <h2>幸运色 · 数字</h2>
+    <div class="row"><div class="k">幸运色</div><div class="v" id="luckColor"></div></div>
+    <div class="row"><div class="k">幸运数</div><div class="v" id="luckNum"></div></div>
+  </div>
+
+  <div class="sec">
+    <h2>五行穿衣</h2>
+    <div class="clothes" id="clothes"></div>
+    <div class="tip">
+      <span class="lab">结合你的命盘</span>
+      <span id="clothesTip"></span>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2>五行茶 · 饮食</h2>
+    <div class="tea" id="tea"></div>
+    <div class="tip">
+      <span class="lab">结合你的命盘</span>
+      <span id="teaTip"></span>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2>节气养生 · 开运提醒</h2>
+    <div class="row"><div class="k">养生</div><div class="v" id="healthTip"></div></div>
+    <div class="row"><div class="k">开运</div><div class="v" id="healthLuck"></div></div>
+    <button class="cta ghost" onclick="track('set_reminder')">明天还想看？设为每日提醒 · 分享给朋友<span class="track">埋点 · set_reminder / share（情绪高点②，二选一）</span></button>
+  </div>
+
+  <div class="sec ly-sec">
+    <h2>卜一卦 · 趣味钩子 <span class="badge">交互原型</span></h2>
+    <p style="font-size:12px;color:var(--muted)">点按钮→龟壳摇 6 次（传统六爻每爻一摇，自下而上定六爻）→出卦象与解析。</p>
+    <div class="turtle" id="turtle"><div class="shell"></div><div class="hex"></div></div>
+    <button class="cta" id="castBtn" style="background:linear-gradient(135deg,#3a7d5d,#2e6b4a)">🐢 卜一卦（摇龟壳）<span class="track">埋点 · tap_liuyao_cast</span></button>
+    <div class="ly-lines" id="lyLines"></div>
+    <div class="ly-result" id="lyResult" style="display:none">
+      <div class="gn" id="gnName"></div>
+      <div class="sub" id="gnMeta"></div>
+    </div>
+    <div class="ly-text" id="lyText" style="display:none"></div>
+  </div>
+
+  <div class="sec">
+    <h2>埋点设计 <span class="badge">开发视角</span></h2>
+    <p style="font-size:12px;color:var(--muted)">每报告 ≤2 个埋点，仅落在情绪高点；事件经 fortune Agent 回写至看板（调用量 / 转化率 / 分享率）。</p>
+    <div class="dev">// 日签报告本体 ≤2 埋点（落在情绪高点）
+tap_annual_upgrade    → 解锁年运 / 会员转化漏斗（好奇高点①）
+set_reminder | share  → 次日留存（门禁≥30%）/ 社交传播（门禁≥10%）（希望高点②，二选一）
+
+// 卜一卦为独立潜伏模块（不计入报告本体≤2）
+tap_liuyao_cast        → 卦象互动钩子（演示随机起卦；引擎另支持梅花易数时辰卦）
+
+// 全局（不计入≤2限制）
+report_view        → 曝光
+report_render_ok   → 渲染成功
+disclaimer_tap     → 免责声明点击</div>
+  </div>
+
+  <div class="disclaimer">
+    ⚠️ 本页为命理运程前端演示（单文件 H5，数据来自本地 mock 层）。所有内容均为娱乐参考，<b>不作为医疗、投资或人生决策依据</b>。正式版将由 fortune Agent 引擎自动生成并接入 agent 中台。
+  </div>
+</div>
+
+<script>
+/* =========================================================
+ * 1) MOCK 数据层（演示）
+ *    真实版：把 MOCK 换成 fetchBazi() 的返回值即可（见文件底部骨架）
+ * =======================================================*/
+const MOCK = {
+  meta: {
+    date: '2026 丙午年 · 立秋后',
+    title: '命理运程日签',
+    sub: '八字：庚申 丙戌 丁巳 辛丑 · 日主丁火'
+  },
+  pillars: [
+    { lab: '年柱', gz: '庚申', el: '金' },
+    { lab: '月柱', gz: '丙戌', el: '火土' },
+    { lab: '日柱', gz: '丁巳', el: '火' },
+    { lab: '时柱', gz: '辛丑', el: '金土' }
+  ],
+  profile: [
+    { k: '日主', v: '丁火，生于戌月（土旺），地支巳为根、月干丙火帮身 → <b>身强</b>' },
+    { k: '五行', v: '金旺、土旺、火次、水弱、木绝（四柱不见木）' },
+    { k: '喜用神', v: '喜 <b>水（官杀）· 土（食伤）· 金（财）</b>；忌木（印）、火（比劫）' },
+    { k: '2026 流年', v: '丙午（火旺比劫年）：竞争多、开销大、财易分；用神重在<b>补水金</b>' }
+  ],
+  scores: [
+    { v: '7.2', k: '综合' },
+    { v: '7.5', k: '事业' },
+    { v: '6.5', k: '财运' },
+    { v: '7.0', k: '感情' }
+  ],
+  scoreTip: '比劫财年利合作、忌独占；今日宜借伙伴之力推进，单打易被人分功分利。',
+  yiji: [
+    { t: '宜 合作', c: 'good' },
+    { t: '宜 签约(带伙伴)', c: 'good' },
+    { t: '宜 学习', c: 'good' },
+    { t: '宜 储蓄', c: 'good' },
+    { t: '忌 单笔投资', c: 'bad' },
+    { t: '忌 借贷', c: 'bad' },
+    { t: '忌 冲动消费', c: 'bad' },
+    { t: '忌 口舌争辩', c: 'bad' }
+  ],
+  jishi: {
+    time: '子时(23-1)、亥时(21-23) 补水；申时(15-17)、酉时(17-19) 补金',
+    dir: '财神位 东北 · 喜神位 正南 · 吉位 正北（水）',
+    animal: '日支巳：六合申(猴)、三合酉丑(鸡/牛)；冲亥(猪)，属猪者慎行大事'
+  },
+  luck: {
+    color: '黑/藏青（水）、米黄（土）、白/银（金）',
+    num: '1、6（水）｜ 4、9（金）'
+  },
+  clothes: [
+    { lv: '大吉', t: '红/紫', bg: '#9b2d20' },
+    { lv: '次吉', t: '黄/棕/米', bg: '#c9a227' },
+    { lv: '平', t: '白/银', bg: '#e8e8e8', fg: '#444' },
+    { lv: '平', t: '黑/藏青', bg: '#2c3e50' },
+    { lv: '忌', t: '绿/青', bg: '#3a7d5d' }
+  ],
+  clothesTip: '你的喜用是<b>水、土、金</b>。今日首选<b>土（黄/棕/米）</b>，退一步<b>金（白/银）</b>也行。上表通行大吉是火（红/紫），但<b>火是你的忌神</b>——今天少碰。',
+  tea: [
+    { t: '大吉 红茶(火)<br>次吉 黄茶(土)' },
+    { t: '平 白茶(金)<br>平 黑茶/普洱(水)' },
+    { t: '忌 绿茶(木)' }
+  ],
+  teaTip: '今日喝<b>黄茶（土）</b>最对路，<b>白茶（金）</b>次之。红茶属火，你身强火旺，少喝。配<b>百合银耳、黑豆芝麻</b>润燥补水。',
+  health: {
+    tip: '立秋后燥气当令，润肺为要；丁火人逢秋金旺，注意呼吸道与皮肤保湿。',
+    luck: '整理办公桌东北角（财位）；与属猴/鸡/牛伙伴协作；避免与人争抢功劳。'
+  }
+};
+
+/* =========================================================
+ * 2) 渲染（全部由 MOCK 驱动；接真引擎时只需替换数据源）
+ * =======================================================*/
+function renderBazi(d) {
+  document.getElementById('hDate').textContent = d.meta.date;
+  document.getElementById('hTitle').textContent = d.meta.title;
+  document.getElementById('hSub').textContent = d.meta.sub;
+
+  document.getElementById('hPillars').innerHTML = d.pillars.map(p =>
+    `<div class="pill"><div class="lab">${p.lab}</div><div class="gz">${p.gz}</div><div class="el">${p.el}</div></div>`
+  ).join('');
+
+  document.getElementById('profileRows').innerHTML = d.profile.map(r =>
+    `<div class="row"><div class="k">${r.k}</div><div class="v">${r.v}</div></div>`
+  ).join('');
+
+  document.getElementById('scores').innerHTML = d.scores.map(s =>
+    `<div class="score"><div class="v">${s.v}</div><div class="k">${s.k}</div></div>`
+  ).join('');
+  document.getElementById('scoreTip').textContent = d.scoreTip;
+
+  document.getElementById('yiji').innerHTML = d.yiji.map(c =>
+    `<span class="chip ${c.c}">${c.t}</span>`
+  ).join('');
+
+  document.getElementById('jishiTime').textContent = d.jishi.time;
+  document.getElementById('jishiDir').textContent = d.jishi.dir;
+  document.getElementById('jishiAnimal').textContent = d.jishi.animal;
+
+  document.getElementById('luckColor').textContent = d.luck.color;
+  document.getElementById('luckNum').textContent = d.luck.num;
+
+  document.getElementById('clothes').innerHTML = d.clothes.map(c =>
+    `<div class="sw" style="background:${c.bg}${c.fg ? ';color:' + c.fg : ''}"><div class="lv">${c.lv}</div>${c.t}</div>`
+  ).join('');
+  document.getElementById('clothesTip').innerHTML = d.clothesTip;
+
+  document.getElementById('tea').innerHTML = d.tea.map(b =>
+    `<div class="b">${b.t}</div>`
+  ).join('');
+  document.getElementById('teaTip').innerHTML = d.teaTip;
+
+  document.getElementById('healthTip').textContent = d.health.tip;
+  document.getElementById('healthLuck').textContent = d.health.luck;
+
+  console.log('[report_view] bazi demo rendered');
+  console.log('[report_render_ok] true');
+}
+
+/* =========================================================
+ * 3) 埋点（演示：仅控制台留痕；真实环境上报埋点网关）
+ * =======================================================*/
+function track(ev) {
+  console.log('[track]', ev, new Date().toISOString());
+}
+
+/* =========================================================
+ * 4) 六爻卜卦（保留样张交互逻辑，纯前端随机起卦）
+ * =======================================================*/
+const TRIGRAM = { '111': 0, '110': 1, '101': 2, '100': 3, '011': 4, '010': 5, '001': 6, '000': 7 };
+const TRINAME = ['乾', '兑', '离', '震', '巽', '坎', '艮', '坤'];
+const TRIEL   = ['金', '金', '火', '木', '木', '水', '土', '土'];
+// 8x8 表：行=下卦(内)，列=上卦(外)，King Wen 序
+const NAMES = [
+  ['乾', '夬', '大有', '大壮', '小畜', '需', '大畜', '泰'],
+  ['履', '兑', '睽', '归妹', '中孚', '节', '损', '临'],
+  ['同人', '革', '离', '丰', '家人', '既济', '贲', '明夷'],
+  ['无妄', '随', '噬嗑', '震', '益', '屯', '颐', '复'],
+  ['姤', '大过', '鼎', '恒', '巽', '井', '蛊', '升'],
+  ['讼', '困', '未济', '解', '涣', '坎', '蒙', '师'],
+  ['遁', '咸', '旅', '小过', '渐', '蹇', '艮', '谦'],
+  ['否', '萃', '晋', '豫', '观', '比', '剥', '坤']
+];
+const lines = [];
+const castBtn = document.getElementById('castBtn');
+const turtle = document.getElementById('turtle');
+const lyLines = document.getElementById('lyLines');
+const lyResult = document.getElementById('lyResult');
+const lyText = document.getElementById('lyText');
+
+function shake() {
+  const y = Math.floor(Math.random() * 4); // 0..3 阳数
+  const raw = [6, 7, 8, 9][y];
+  lines.push(raw);
+  renderLines();
+  turtle.classList.remove('shake'); void turtle.offsetWidth; turtle.classList.add('shake');
+}
+function renderLines() {
+  lyLines.innerHTML = '';
+  lines.forEach((raw) => {
+    const yang = (raw === 7 || raw === 9);
+    const dyn  = (raw === 6 || raw === 9);
+    const d = document.createElement('div');
+    d.className = 'ly-line ' + (yang ? 'yang' : 'yin') + (dyn ? ' dyn' : '');
+    lyLines.appendChild(d);
+  });
+}
+function binOf(arr) { return arr.map(v => (v === 7 || v === 9) ? 1 : 0); }
+function trigramName(bits) {
+  const idx = TRIGRAM[bits.join('')];
+  return { name: TRINAME[idx], el: TRIEL[idx] };
+}
+function nameOf(bin) {
+  const lo = TRIGRAM[[bin[0], bin[1], bin[2]].join('')];
+  const up = TRIGRAM[[bin[3], bin[4], bin[5]].join('')];
+  return NAMES[lo][up];
+}
+function cast() {
+  castBtn.disabled = true;
+  lines.length = 0; lyResult.style.display = 'none'; lyText.style.display = 'none';
+  let n = 0;
+  const timer = setInterval(() => {
+    shake(); n++;
+    if (n >= 6) { clearInterval(timer); finish(); castBtn.disabled = false; }
+  }, 520);
+}
+function finish() {
+  const bin = binOf(lines);
+  const lo = trigramName([bin[0], bin[1], bin[2]]);
+  const up = trigramName([bin[3], bin[4], bin[5]]);
+  const name = nameOf(bin);
+  const vbin = bin.map((b, i) => (lines[i] === 6) ? 1 : (lines[i] === 9) ? 0 : b);
+  const vlo = trigramName([vbin[0], vbin[1], vbin[2]]);
+  const vup = trigramName([vbin[3], vbin[4], vbin[5]]);
+  const vname = nameOf(vbin);
+  const dynIdx = lines.map((v, i) => (v === 6 || v === 9) ? i + 1 : null).filter(x => x);
+  document.getElementById('gnName').textContent = '本卦 · ' + name;
+  document.getElementById('gnMeta').textContent =
+    '上' + up.name + '(' + up.el + ') 下' + lo.name + '(' + lo.el + ')' +
+    (dynIdx.length ? ' ｜ 动爻：第' + dynIdx.join('、') + '爻' : ' ｜ 静卦');
+  let txt = '【' + name + '】上' + up.name + '下' + lo.name + '之象。';
+  if (dynIdx.length) {
+    txt += '第' + dynIdx.join('、') + '爻发动，事态有变，趋于' + vname + '。';
+  } else {
+    txt += '六爻俱静，事象稳定，宜守不宜攻。';
+  }
+  const els = [up.el, lo.el];
+  const lucky = els.filter(e => ['金', '水', '土'].includes(e));
+  txt += lucky.length
+    ? '此卦含金/水/土之象，与你的命盘喜用（水·金·土）相合，主吉。'
+    : '此卦偏火/木，与命盘喜用略有冲，宜谨慎、借伙伴之力化解。';
+  txt += '（趣味解析，仅供娱乐参考）';
+  lyText.textContent = txt;
+  lyResult.style.display = 'block'; lyText.style.display = 'block';
+}
+castBtn.addEventListener('click', cast);
+
+/* =========================================================
+ * 5) 真实引擎接入骨架（预留） —— 接真 API 时启用
+ * =======================================================*/
+/*
+async function fetchBazi() {
+  // 后端：agent/fortune/router.py  POST /api/v1/agent/fortune/archive
+  const res = await fetch('/api/v1/agent/fortune/archive', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ birthday: '1980-10-10', hour: 12, minute: 0, lng: 121.47 })
+  });
+  const data = await res.json();
+  // 期望返回结构与 MOCK 同构：{ meta, pillars, profile, scores, yiji, jishi, luck, clothes, tea, health }
+  return data;
+}
+// fetchBazi().then(renderBazi);
+*/
+
+/* 启动：先渲染 mock 数据 */
+renderBazi(MOCK);
+</script>
+</body>
+</html>
