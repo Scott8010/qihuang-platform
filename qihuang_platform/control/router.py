@@ -1431,8 +1431,8 @@ async def admin_dashboard(admin: dict = Depends(get_current_admin)):
             trend_values.append(cnt)
 
 
-        # 场景分布（按租户 scene 字段真实聚合）
-        scene_rows = db.query(Tenant.scene, func.count(Tenant.id)).group_by(Tenant.scene).all()
+        # 场景分布（按租户 scene 字段真实聚合；func.lower 归一化大小写，避免 HEALTH/health 分裂）
+        scene_rows = db.query(func.lower(Tenant.scene), func.count(Tenant.id)).group_by(func.lower(Tenant.scene)).all()
         scene_distribution = { (row[0] or "unknown"): row[1] for row in scene_rows }
         # 系统服务状态
         services = [
