@@ -237,3 +237,17 @@ jobs:
             echo "健康检查超时，请检查 journalctl -u qihuang-admin"
             exit 1
           DEPLOY_SCRIPT
+
+      - name: 验证前端 bundle 完整性（防 ssh-deploy 漏同步导致白屏）
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'VERIFY'
+            set -e
+            cd /root/qihuang_platform/frontend-admin-react/dist
+            REF=$(grep -oE "assets/index-[A-Za-z0-9_-]+\.js" index.html | head -1)
+            if [ -z "$REF" ]; then echo "FATAL: index.html 未引用任何 JS bundle"; exit 1; fi
+            if [ ! -f "$REF" ]; then echo "FATAL: 前端 bundle 漏同步 ($REF 不存在，index.html 已指向它 -> 线上会白屏)"; exit 1; fi
+            echo "OK: 前端 bundle $REF 完整 ($(wc -c < "$REF") bytes)"
+          VERIFY
