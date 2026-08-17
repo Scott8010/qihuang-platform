@@ -49,6 +49,18 @@ BUILTIN_AGENTS: Dict[str, Dict[str, Any]] = {
                 "独立 JSONL 落盘（不混 fortune 库），钉业务实体（material_key→GEO-XXXX 幂等），"
                 "附免责声明，仅作传统人居环境文化娱乐参考。",
     },
+    "health-advisor": {
+        "name": "中医健康顾问",
+        "kind": "business_embedded",          # 融入业务流的能力模块
+        "engine": "qihuang-health-advisor",    # 编排层（调 8601 四诊合参引擎）
+        "router_prefix": "/api/v1/agent/health-advisor",
+        "capabilities": ["consult", "report", "dashboard"],
+        "status": "active",
+        "category": "health",
+        "desc": "中医健康顾问：固定专业辨证链（体质辨识→辨证→方剂→调理），"
+                "基于 8601 四诊合参引擎，partial 降级 + 免责必带，"
+                "回写钉业务实体（material_key→HA-XXXX 幂等），仅作辅助参考。",
+    },
 }
 
 # 运行时缓存（与 agent_def 表最终一致）
