@@ -70,6 +70,19 @@ def parse_formulas(raw: Dict[str, Any]) -> List[Formula]:
     return out
 
 
+def _norm_name(val: Any) -> Optional[str]:
+    """把证型候选规范成可读字符串：list→顿号连接，str→去空白。
+
+    真实 L1 的 `常见证候`/`pattern` 常为多个证型组成的列表，
+    直接 str(list) 会得到 `['肾阳虚', ...]` 这种 repr，不专业。
+    """
+    if isinstance(val, list):
+        items = [str(x).strip() for x in val if x not in (None, "")]
+        return "、".join(items) if items else None
+    s = str(val).strip()
+    return s or None
+
+
 def extract_syndrome_rule(sizhen_raw: Dict[str, Any], chat_raw: Dict[str, Any]) -> Syndrome:
     """
     多源融合提取证型（规则版 LLM 替代，骨架阶段）。
@@ -87,12 +100,12 @@ def extract_syndrome_rule(sizhen_raw: Dict[str, Any], chat_raw: Dict[str, Any]) 
     for z in diag.get("zangfu") or []:
         c = z.get("常见证候")
         if c:
-            candidates.append((str(c), None))
+            candidates.append((_norm_name(c), None))
     # 2) 情志辨证（desc 取治法/代表方）
     for q in diag.get("qingzhi") or []:
         pat = q.get("pattern")
         if pat:
-            candidates.append((str(pat), q.get("治法") or q.get("代表方")))
+            candidates.append((_norm_name(pat), q.get("治法") or q.get("代表方")))
     # 3) sizhen 舌脉分析（真实数据实测 pulse_type 可靠）
     ta = sizhen.get("tongue_analysis") or {}
     if ta.get("pulse_type"):
@@ -106,6 +119,10 @@ def extract_syndrome_rule(sizhen_raw: Dict[str, Any], chat_raw: Dict[str, Any]) 
         c = sizhen.get("constitution") or {}
         if c.get("type"):
             name = f"{c.get('type')}倾向"
+    if not name:
+        name = "辨证资料不足"
+    if confidence is None:
+        confidence = "中"
     return Syndrome(name=name, desc=desc, confidence=confidence)
 
 
