@@ -25,7 +25,6 @@ _advisor = HealthAdvisor()
 
 @router.post(
     "/health-advisor/consult",
-    response_model=ConsultResponse,
     summary="中医健康顾问咨询（固定专业辨证链 + partial 降级）",
 )
 async def consult(
