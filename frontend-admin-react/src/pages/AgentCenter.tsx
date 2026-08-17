@@ -3,13 +3,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Bot, Boxes, RefreshCw, Check, Loader2, Network, Gauge, Plug,
-  CircleDot, AlertTriangle,
+  CircleDot, AlertTriangle, Stethoscope,
 } from "lucide-react";
 import { C } from "@/lib/types";
 import {
   fetchAgentCenter, toggleAgent, fetchAgentDashboard,
   fetchPlanAgentMatrix, setPlanAgents,
-  type AgentDef, type PlanAgentRow,
+  getIdentity, consultHealthAdvisor,
+  type AgentDef, type PlanAgentRow, type HealthAdvisorConsultResult,
 } from "@/lib/api";
 
 /* ═══════════════════════════════════════════
@@ -351,6 +352,9 @@ export default function AgentCenter() {
           </Card>
         ) : null}
       </section>
+
+      {/* ═══ 构件 D：中医健康顾问在线试用 ═══ */}
+      <HealthAdvisorTrial />
     </div>
   );
 }
@@ -360,6 +364,161 @@ function Metric({ label, value, color }: { label: string; value: string; color: 
     <div className="rounded-lg border p-3" style={{ borderColor: C.border }}>
       <div className="text-[11px] mb-1" style={{ color: C.light }}>{label}</div>
       <div className="text-[20px] font-semibold" style={{ color }}>{value}</div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   构件 D：中医健康顾问在线试用
+   直接对接 /api/v1/agent/health-advisor/consult，
+   让运营在控制台内输入问诊文本即时查看辨证结果。
+   ═══════════════════════════════════════════ */
+
+function HealthAdvisorTrial() {
+  const [question, setQuestion] = useState("");
+  const [age, setAge] = useState("");
+  const [gender, setGender] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<HealthAdvisorConsultResult | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const run = async () => {
+    if (!question.trim()) { setErr("请输入问诊内容"); return; }
+    setLoading(true); setErr(null); setResult(null);
+    const tid = getIdentity()?.tenant_id || "tenant_default";
+    const r = await consultHealthAdvisor({
+      question: question.trim(),
+      profile: { age: age ? Number(age) : undefined, gender: gender || undefined },
+      store_id: tid,
+      mode: "full",
+    });
+    setLoading(false);
+    if (r?.code === 0 && r.data) setResult(r.data);
+    else setErr(r?.message || "调用失败");
+  };
+
+  return (
+    <section className="mt-5">
+      <div className="flex items-center gap-2 mb-3">
+        <Stethoscope className="w-4 h-4" style={{ color: C.primary }} />
+        <span className="text-[14px] font-medium" style={{ color: C.ink }}>中医健康顾问 · 在线试用（构件 D）</span>
+        <span className="text-[11px] px-1.5 py-0.5 rounded-full" style={{ background: C.soft, color: C.primary }}>health-advisor</span>
+      </div>
+
+      <Card className="border" style={{ borderColor: C.border }}>
+        <CardContent className="p-4 space-y-3">
+          <div>
+            <label className="text-[12px] mb-1 block" style={{ color: C.mid }}>问诊内容（症状 / 舌象 / 脉象 / 病史）</label>
+            <textarea
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              rows={4}
+              placeholder="例：患者男，45岁，主诉神疲乏力、畏寒肢冷、纳差便溏、舌淡胖边有齿痕苔白滑，脉沉细无力。"
+              className="w-full rounded-lg border p-3 text-[13px] resize-none focus:outline-none"
+              style={{ borderColor: C.border, color: C.ink }}
+            />
+          </div>
+
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="text-[12px] mb-1 block" style={{ color: C.mid }}>年龄（选填）</label>
+              <input
+                value={age} onChange={(e) => setAge(e.target.value)}
+                type="number" placeholder="45"
+                className="w-full rounded-lg border px-3 py-2 text-[13px] focus:outline-none"
+                style={{ borderColor: C.border, color: C.ink }}
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-[12px] mb-1 block" style={{ color: C.mid }}>性别（选填）</label>
+              <input
+                value={gender} onChange={(e) => setGender(e.target.value)}
+                placeholder="男 / 女"
+                className="w-full rounded-lg border px-3 py-2 text-[13px] focus:outline-none"
+                style={{ borderColor: C.border, color: C.ink }}
+              />
+            </div>
+          </div>
+
+          {err && (
+            <div className="text-[12px] flex items-center gap-2" style={{ color: "#B03A2E" }}>
+              <AlertTriangle className="w-4 h-4" />{err}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <Button size="sm" className="h-7 text-[12px]" style={{ background: C.primary }}
+              disabled={loading} onClick={run}>
+              {loading
+                ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                : <Stethoscope className="w-3.5 h-3.5 mr-1" />}
+              {loading ? "辨证中…" : "开始辨证"}
+            </Button>
+            {result?.partial && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: "#FDF6E3", color: "#8A6A1F" }}>部分降级（partial）</span>
+            )}
+          </div>
+
+          {result && (
+            <div className="border-t pt-3 space-y-3" style={{ borderColor: C.border }}>
+              {result.constitution?.type && (
+                <Field label="体质辨识" value={result.constitution.type} sub={result.constitution.desc} />
+              )}
+              {result.syndrome?.name && (
+                <Field
+                  label="辨证倾向（证型）"
+                  value={result.syndrome.name}
+                  sub={result.syndrome.confidence != null ? `置信度 ${Math.round(result.syndrome.confidence * 100)}%` : undefined}
+                />
+              )}
+              {result.formulas && result.formulas.length > 0 && (
+                <div>
+                  <div className="text-[12px] mb-1" style={{ color: C.light }}>推荐方剂</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {result.formulas.map((f, i) => (
+                      <span key={i} className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: C.soft, color: C.primary }}>
+                        {f.name}{f.desc ? `（${f.desc}）` : ""}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {result.suggestions && result.suggestions.length > 0 && (
+                <div>
+                  <div className="text-[12px] mb-1" style={{ color: C.light }}>调理建议</div>
+                  <ul className="list-disc pl-5 space-y-0.5">
+                    {result.suggestions.map((s, i) => (
+                      <li key={i} className="text-[12px] leading-relaxed" style={{ color: C.mid }}>{s}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {result.report_id && (
+                <div className="text-[11px]" style={{ color: C.light }}>报告 ID：<span className="font-mono">{result.report_id}</span></div>
+              )}
+              {result.reply && (
+                <div>
+                  <div className="text-[12px] mb-1" style={{ color: C.light }}>辨证详述</div>
+                  <pre className="text-[12px] bg-[#F8FAF9] rounded-lg p-3 overflow-auto max-h-64 whitespace-pre-wrap" style={{ color: C.mid }}>{result.reply}</pre>
+                </div>
+              )}
+              {result.disclaimer && (
+                <div className="text-[11px] leading-relaxed" style={{ color: C.light }}>⚠️ {result.disclaimer}</div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
+function Field({ label, value, sub }: { label: string; value?: string; sub?: string }) {
+  return (
+    <div>
+      <div className="text-[12px] mb-0.5" style={{ color: C.light }}>{label}</div>
+      <div className="text-[13px] font-medium" style={{ color: C.ink }}>{value}</div>
+      {sub && <div className="text-[11px]" style={{ color: C.light }}>{sub}</div>}
     </div>
   );
 }

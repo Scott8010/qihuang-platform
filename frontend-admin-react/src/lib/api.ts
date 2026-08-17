@@ -789,3 +789,38 @@ export async function fetchPlanAgentMatrix(): Promise<PlanAgentRow[]> {
 export async function setPlanAgents(planId: string, agents: string[]): Promise<MutateResult> {
   return mutate("PUT", `/admin/v1/plans/${encodeURIComponent(planId)}/agents`, { agents });
 }
+
+// ═══ 中医健康顾问（health-advisor）═══
+// 后端契约见 qihuang_platform/agent/health_advisor/router.py
+// POST /api/v1/agent/health-advisor/consult（需登录态，复用 _token）
+
+export interface HealthAdvisorConsultReq {
+  question: string;
+  profile?: { age?: number; gender?: string };
+  store_id?: string;
+  mode?: "full" | "quick";
+  session_id?: string;
+}
+
+export interface HealthAdvisorConsultResult {
+  reply: string;
+  constitution?: { type?: string; desc?: string };
+  syndrome?: { name?: string; desc?: string; confidence?: number };
+  formulas?: { name?: string; desc?: string }[];
+  suggestions?: string[];
+  report_id?: string;
+  session_id?: string;
+  disclaimer?: string;
+  partial?: boolean;
+  trace_id?: string;
+}
+
+/** POST /api/v1/agent/health-advisor/consult — 中医健康顾问辨证（固定专业辨证链 + partial 降级） */
+export async function consultHealthAdvisor(
+  payload: HealthAdvisorConsultReq,
+): Promise<{ code: number; message?: string; data?: HealthAdvisorConsultResult }> {
+  return post<{ code: number; message?: string; data?: HealthAdvisorConsultResult }>(
+    "/api/v1/agent/health-advisor/consult",
+    payload,
+  );
+}
