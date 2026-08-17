@@ -1,0 +1,13 @@
+# 统一换行符为 LF（Unix 标准），消除 Windows 下 autocrlf 导致的假 M 噪声
+* text=auto eol=lf
+
+# 二进制文件不转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
