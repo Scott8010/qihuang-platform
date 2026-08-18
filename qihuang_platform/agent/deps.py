@@ -12,7 +12,7 @@ from typing import Dict
 from fastapi import Depends, Request
 from fastapi.exceptions import HTTPException
 
-from qihuang_platform.gateway.deps import get_current_user
+from qihuang_platform.gateway.deps import get_current_user, get_current_principal
 from qihuang_platform.gateway.response import error
 from qihuang_platform.agent.registry import is_active
 
@@ -24,7 +24,7 @@ def require_agent_in_plan(agent_key: str):
     if agent_key in _DEP_CACHE:
         return _DEP_CACHE[agent_key]
 
-    async def _dep(request: Request, user: dict = Depends(get_current_user)):
+    async def _dep(request: Request, user: dict = Depends(get_current_principal)):
         tenant_id = getattr(request.state, "tenant_id", None)
         if not tenant_id:
             raise HTTPException(

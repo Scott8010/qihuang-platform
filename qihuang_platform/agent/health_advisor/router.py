@@ -11,7 +11,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 
-from qihuang_platform.gateway.deps import get_current_user
+from qihuang_platform.gateway.deps import get_current_user, get_current_principal
 from qihuang_platform.gateway.response import success, error
 from qihuang_platform.agent.deps import require_agent_in_plan
 from qihuang_platform.agent.health_advisor.metering import check_quota
@@ -30,7 +30,7 @@ _advisor = HealthAdvisor()
 async def consult(
     req: ConsultRequest,
     request: Request,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(get_current_principal),
     _: Any = Depends(require_agent_in_plan("health-advisor")),
 ):
     tenant_id = getattr(request.state, "tenant_id", None)

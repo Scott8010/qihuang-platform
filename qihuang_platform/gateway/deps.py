@@ -86,6 +86,29 @@ async def get_current_api_key(
     return key_info
 
 
+# ========== 双鉴权（JWT + API Key） ==========
+
+async def get_current_principal(
+    request: Request,
+    x_app_key: Optional[str] = Header(None, alias="X-App-Key"),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    x_signature: Optional[str] = Header(None, alias="X-Signature"),
+    x_timestamp: Optional[str] = Header(None, alias="X-Timestamp"),
+    x_nonce: Optional[str] = Header(None, alias="X-Nonce"),
+) -> dict:
+    """双鉴权入口：API Key 签名优先，否则回退 JWT。
+
+    两种鉴权均向 request.state 注入 tenant_id（API Key 仅注入 tenant_id），
+    供下游 require_agent_in_plan 等依赖统一消费。使 /api/v1/agent/* 既能用
+    JWT 登录态、也能用 API Key 签名调用（支撑颐掌柜 HB A2 接入）。
+    """
+    if x_app_key:
+        return await get_current_api_key(
+            request, x_app_key, x_signature, x_timestamp, x_nonce
+        )
+    return await get_current_user(request, credentials)
+
+
 # ========== 管理端增强鉴权 ==========
 
 async def get_current_admin(

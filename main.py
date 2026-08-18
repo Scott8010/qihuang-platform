@@ -55,6 +55,27 @@ async def lifespan(app: FastAPI):
             db.close()
     except Exception as e:
         print(f"[Platform] 数据库初始化失败（可能已初始化）: {e}")
+
+    # API Key 环境变量播种（解决内存 _api_keys_db 重启即丢的问题）
+    try:
+        from qihuang_platform.gateway.auth import register_api_key
+        ak = os.getenv("QH_API_KEY_APP_KEY")
+        sk = os.getenv("QH_API_KEY_APP_SECRET")
+        tid = os.getenv("QH_API_KEY_TENANT_ID")
+        if ak and sk and tid:
+            register_api_key(
+                app_key=ak,
+                app_secret=sk,
+                tenant_id=tid,
+                plan=os.getenv("QH_API_KEY_PLAN", "standard"),
+                extra={"note": "env-seeded", "purpose": "HB-A2"},
+            )
+            print(f"[Platform] 已从环境变量播种 API Key (tenant={tid})")
+        else:
+            print("[Platform] 未检测到 QH_API_KEY_* 环境变量，跳过 API Key 播种")
+    except Exception as e:
+        print(f"[Platform] API Key 播种失败（不影响其他启动）: {e}")
+
     print(f"[Platform] Phase 0 — 骨架就绪，等待 Phase 1 挂载路由")
     yield
     print("[Platform] 平台已关闭")
