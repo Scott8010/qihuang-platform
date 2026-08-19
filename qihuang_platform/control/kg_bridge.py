@@ -69,6 +69,11 @@ def write_review_to_kg(content, item_type: str = None) -> dict:
         if not name or not etype:
             return {"ok": False, "detail": "缺少 entity_name/entity_type，跳过回写"}
 
+        # 最后一关（P1 加固 2026-08-20）：名称含测试/占位关键词绝不允许写库
+        _DIRTY_KW = ("测试", "E2E", "test", "Test", "TEST", "占位", "dummy", "Dummy")
+        if any(kw in str(name) for kw in _DIRTY_KW):
+            return {"ok": False, "detail": f"名称含测试/占位关键词({name})，拒绝回写"}
+
         label = ENTITY_LABEL_MAP.get(str(etype).lower())
         if not label:
             return {"ok": False, "detail": f"未知 entity_type={etype}，跳过回写"}

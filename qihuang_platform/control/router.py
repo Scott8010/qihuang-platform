@@ -787,6 +787,22 @@ async def review_action(req: ReviewActionRequest, admin: dict = Depends(get_curr
         if item.status != "PENDING":
             return error("INVALID_PARAM", message=f"审核项状态为{item.status}，无法重复审核")
 
+        # ── 审核门槛（P1 加固 2026-08-20）：杜绝低质/脏数据被批准 ──
+        if req.action == "approve":
+            # ① 脏数据（测试/占位/空壳）硬拦截
+            dirty = _is_dirty_kg_content(item.content or {})
+            if dirty:
+                return error("INVALID_PARAM", message=f"该审核项为脏数据，禁止通过：{dirty}")
+            # ② 自生长类低置信度：<0.5 禁止直接批准（强制二次复核，需填审核意见）
+            if (item.item_type or "").find("自生长") >= 0 and (item.confidence or 0) < 0.5:
+                if not req.note.strip():
+                    return error("INVALID_PARAM", message="自生长低置信度条目(<0.5)需填写审核意见后才能通过（二次复核）")
+            # ③ 空壳内容（无实体名/条文/方剂）禁止通过
+            content = item.content or {}
+            has_body = any(content.get(k) for k in ("entity_name", "name", "clause_text", "formula", "translation"))
+            if not has_body:
+                return error("INVALID_PARAM", message="该审核项内容为空壳（无 entity_name/clause_text/formula），禁止通过")
+
         item.status = "APPROVED" if req.action == "approve" else "REJECTED"
         # reviewer_id 有 FK 约束指向 user.id；admin token 的 sub 常为 "system"(非用户记录)，
         # 直接写入会触发外键违反导致审核失败。sub 非真实用户 id 时置 None，
@@ -827,6 +843,26 @@ async def review_action(req: ReviewActionRequest, admin: dict = Depends(get_curr
 _QH_INTERNAL_KEY = os.environ.get("QH_INTERNAL_API_KEY", "qh_key_default_2026")
 _DEFAULT_TENANT = os.environ.get("QH_DEFAULT_TENANT", "tenant_default")
 
+# 脏数据防线：测试/占位内容的硬性拦截关键词
+_KDIRTY_KEYWORDS = ("测试", "E2E", "test", "Test", "TEST", "占位", "dummy", "Dummy")
+
+
+def _is_dirty_kg_content(content: dict) -> str:
+    """检查知识条目是否为脏数据（测试/占位），返回脏因，干净返回空串。"""
+    if not isinstance(content, dict):
+        return "content 非字典"
+    src = content.get("_src") or content.get("source")
+    if src and ("e2e" in str(src).lower() or "test" in str(src).lower()):
+        return f"来源含测试标识(_src={src})"
+    name = content.get("entity_name") or content.get("name") or ""
+    if any(kw in str(name) for kw in _KDIRTY_KEYWORDS):
+        return f"名称含测试/占位关键词({name})"
+    clause = content.get("clause_text") or ""
+    formula = content.get("formula") or ""
+    if not name and not clause and not formula:
+        return "内容为空壳(无 entity_name/clause_text/formula)"
+    return ""
+
 
 async def _verify_internal_key(
     api_key: str = Query(None, alias="api_key"),
@@ -854,6 +890,12 @@ async def ingest_kg_review(
 ):
     """8601 自生长引擎经此接口把中置信度新知识推入 8602 审核队列，
     替代旧的 8601/annotation 写 JSON 通道。"""
+    # ── 脏数据防线（P1 加固 2026-08-20）：测试/占位/空壳内容一律拒收，不进审核队列 ──
+    dirty = _is_dirty_kg_content(req.content)
+    if dirty:
+        return error("INVALID_PARAM", message=f"拒绝摄入脏知识条目：{dirty}（source={req.source}）")
+    if req.confidence < 0.0 or req.confidence > 1.0:
+        return error("INVALID_PARAM", message=f"confidence 非法：{req.confidence}")
     db = SessionLocal()
     try:
         item = KgReviewItem(
