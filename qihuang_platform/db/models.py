@@ -348,6 +348,9 @@ class StoreCoachSession(Base):
     product_id = Column(String(36), index=True)    # 产品模板（DbTemplate kind=product）
     project_id = Column(String(36), index=True)    # 项目模板（DbTemplate kind=project）
     customer_profile = Column(String(200))         # 顾客画像（默认内置，可租户传入）
+    material_text = Column(Text)                   # 课件文本内容（V2 店务培训：课件的文本切片，引擎据此出题）
+    material_ref = Column(String(100), index=True) # 课件引用ID（HB Course/Lesson 或 DbTemplate 关联）
+    passing_score = Column(Float, default=60.0)    # 合格线（总分 ≥ 此值=合格 qualified）
     messages = Column(JSON)                        # 对话历史
     evaluation = Column(JSON)                      # 四维话术评分 {"completeness":..,"professional":..,"affinity":..,"compliance":..}
     score = Column(Float)                          # 加权总分 0-100

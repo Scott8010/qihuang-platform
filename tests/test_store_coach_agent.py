@@ -153,6 +153,65 @@ def test_session_not_found(sc_client, monkeypatch):
     assert r.json()["code"] != 0  # error(NOT_FOUND)
 
 
+def test_courseware_driven_session(sc_client, monkeypatch):
+    """V2 店务培训：课件内容入参 → 会话记录课件 + 可配合格线。"""
+    _patch_engine(monkeypatch)
+    r = sc_client.post(
+        "/api/v1/agent/store-coach/sessions",
+        json={
+            "scene": "recommend",
+            "topic": "艾灸足三里讲解",
+            "material_ref": "lesson_123",
+            "material_text": "足三里：足阳明胃经穴位，位于小腿外侧，犊鼻下3寸。常用于调理脾胃、增强体质。艾灸足三里每次15-20分钟，每周2-3次。",
+            "passing_score": 70,
+        },
+    )
+    assert r.status_code == 200, r.text
+    d = r.json()["data"]
+    assert d["material_ref"] == "lesson_123"
+    assert d["passing_score"] == 70
+    assert d["opening"]
+
+
+def test_evaluate_qualified(sc_client, monkeypatch):
+    """合格判定：score ≥ passing_score 且合规 → qualified=True。"""
+    _patch_engine(monkeypatch)  # mock score=82.5, passing 默认 60 → qualified
+    sid = _create_session(sc_client)
+    r = sc_client.post(
+        "/api/v1/agent/store-coach/evaluate",
+        json={"session_id": sid, "answer": "阿姨您好，足三里是调理脾胃的好穴位，建议每周艾灸两三次。"},
+    )
+    assert r.status_code == 200, r.text
+    d = r.json()["data"]
+    assert d["score"] == 82.5
+    assert d["passing_score"] == 60.0
+    assert d["qualified"] is True
+    assert "mastery" in d  # V2 掌握度（mock 未给则空结构）
+    assert "key_points" in d
+
+
+def test_evaluate_not_qualified_low_score(sc_client, monkeypatch):
+    """合格判定：score < passing_score → qualified=False。"""
+    _patch_engine(monkeypatch)  # 先打底（含默认高分的 evaluate mock），再覆盖为低分
+    import importlib
+    sc_router_mod = importlib.import_module("qihuang_platform.agent.store_coach.router")
+    mock_eval = AsyncMock(return_value=(
+        '{"evaluation":{"completeness":40,"professional":45,"affinity":50,"compliance":60},'
+        '"score":47.5,"feedback":"知识点薄弱","summary":"需加强"}',
+        "deepseek",
+    ))
+    monkeypatch.setattr(sc_router_mod, "evaluate", mock_eval)
+    sid = _create_session(sc_client)
+    r = sc_client.post(
+        "/api/v1/agent/store-coach/evaluate",
+        json={"session_id": sid, "answer": "那个……足三里就是腿上按着酸的地方吧，灸灸应该有用。"},
+    )
+    assert r.status_code == 200, r.text
+    d = r.json()["data"]
+    assert d["score"] == 47.5
+    assert d["qualified"] is False
+
+
 def test_plan_gate_forbidden_without_subscription(client):
     """未订阅套餐的租户调用 store-coach → 403 AGENT_FORBIDDEN（不覆盖 require_agent_in_plan）。"""
     from fastapi import Request

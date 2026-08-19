@@ -58,6 +58,9 @@ class StoreCoachSessionRequest(BaseModel):
     product_id: Optional[str] = Field(None, description="产品模板ID（DbTemplate kind=product）")
     project_id: Optional[str] = Field(None, description="项目模板ID（DbTemplate kind=project）")
     customer_profile: Optional[str] = Field(None, description="顾客画像（默认内置，如 '50岁阿姨、注重养生'）")
+    material_text: Optional[str] = Field(None, description="课件文本内容（店务培训 V2：店长上传课件的文本切片，引擎据此生成话术训练题）")
+    material_ref: Optional[str] = Field(None, description="课件引用ID（HB Course/Lesson 或 8602 DbTemplate 关联）")
+    passing_score: Optional[float] = Field(None, ge=0, le=100, description="合格线（默认 60；总分 ≥ 此值=合格 qualified）")
 
 
 class StoreCoachEvaluateRequest(BaseModel):
@@ -144,6 +147,10 @@ async def create_store_coach_session(
             compliance_ok=True,
             compliance_hits=[],
         )
+        # V2 店务培训：课件内容入参（存 JSON 防超长），合格线可配
+        session.material_text = (req.material_text or "")[:20000]
+        session.material_ref = req.material_ref
+        session.passing_score = req.passing_score if req.passing_score is not None else 60.0
         db.add(session)
         db.commit()
 
@@ -155,6 +162,7 @@ async def create_store_coach_session(
             topic=req.topic,
             customer_profile=req.customer_profile or "",
             history=[],
+            material_text=req.material_text,
         )
         latency_ms = (time.monotonic() - start) * 1000
         if opening:
@@ -173,6 +181,8 @@ async def create_store_coach_session(
             "customer_profile": session.customer_profile or "（默认内置画像）",
             "opening": opening or "（AI 开场暂不可用，请店员先开口）",
             "model": model,
+            "material_ref": session.material_ref,
+            "passing_score": session.passing_score,
         })
     finally:
         db.close()
@@ -213,21 +223,23 @@ async def store_coach_evaluate(
         # 合规横切：店员话术先过审（违规标红，仍继续评分但标记）
         compliance = await _compliance_check(req.answer, tenant_id)
 
-        # AI 顾客接话
+        # AI 顾客接话（课件上下文：顾客围绕课件知识点提问）
         reply, reply_model = await customer_reply(
             scene=session.scene,
             topic=session.topic,
             customer_profile=session.customer_profile or "",
             history=history + [{"role": "user", "content": req.answer}],
+            material_text=session.material_text,
         )
 
-        # 四维话术评估
+        # 四维话术评估 + 课件知识掌握度（V2）
         eval_raw, eval_model = await evaluate(
             scene=session.scene,
             topic=session.topic,
             customer_profile=session.customer_profile or "",
             history=history,
             staff_answer=req.answer,
+            material_text=session.material_text,
         )
 
         # 解析评估 JSON
@@ -251,6 +263,12 @@ async def store_coach_evaluate(
             # 引擎未给总分时按权重折算
             score = round(sum(evaluation.get(k, 0) * w for k, w in _WEIGHTS.items()), 1)
         feedback = parsed.get("feedback") or ""
+        mastery = parsed.get("mastery") or {"mastered": [], "weak": [], "untouched": []}
+        key_points = parsed.get("key_points") or []
+
+        # 合格判定（V2）：总分 ≥ 合格线（默认 60）且无违规拦截 → 合格
+        passing_score = session.passing_score if session.passing_score is not None else 60.0
+        qualified = (score is not None and score >= passing_score and compliance["ok"])
 
         # 落库
         history.append({"role": "user", "content": req.answer})
@@ -277,6 +295,10 @@ async def store_coach_evaluate(
             "evaluation": evaluation,
             "score": score,
             "feedback": feedback,
+            "mastery": mastery,
+            "key_points": key_points,
+            "passing_score": passing_score,
+            "qualified": qualified,
             "eval_model": eval_model,
             "compliance": {
                 "ok": compliance["ok"],
@@ -320,11 +342,28 @@ async def store_coach_dashboard(
         for s in sessions:
             by_scene[s.scene] = by_scene.get(s.scene, 0) + 1
         compliance_fail = len([s for s in sessions if s.compliance_ok is False])
+        # V2：合格率（按 passing_score 判定）
+        qualified_count = len([s for s in scored if s.score >= (s.passing_score if s.passing_score is not None else 60.0)])
+        qualified_rate = round(qualified_count / len(scored), 3) if scored else 0.0
+        # V2：按店员聚合（user_id 维度）
+        by_user: Dict[str, Dict[str, Any]] = {}
+        for s in sessions:
+            uid = s.user_id or "unknown"
+            entry = by_user.setdefault(uid, {"sessions": 0, "scored": 0, "avg_score": 0.0, "qualified": 0})
+            entry["sessions"] += 1
+            if s.score is not None:
+                entry["scored"] += 1
+                entry["avg_score"] = round((entry["avg_score"] * (entry["scored"] - 1) + s.score) / entry["scored"], 1)
+                if s.score >= (s.passing_score if s.passing_score is not None else 60.0):
+                    entry["qualified"] += 1
         recent = [{
             "scene": s.scene,
             "topic": s.topic,
             "score": s.score,
+            "passing_score": s.passing_score,
+            "qualified": (s.score is not None and s.score >= (s.passing_score if s.passing_score is not None else 60.0)),
             "compliance_ok": s.compliance_ok,
+            "material_ref": s.material_ref,
             "created_at": s.created_at,
         } for s in sessions[:20]]
 
@@ -334,6 +373,9 @@ async def store_coach_dashboard(
             "avg_score": round(avg_score, 1),
             "by_scene": by_scene,
             "compliance_fail_count": compliance_fail,
+            "qualified_count": qualified_count,
+            "qualified_rate": qualified_rate,
+            "by_user": by_user,
             "recent": recent,
         })
     finally:

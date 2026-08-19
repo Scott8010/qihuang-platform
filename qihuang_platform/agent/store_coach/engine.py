@@ -131,10 +131,18 @@ _SCENE_PROFILES: Dict[str, str] = {
 }
 
 
-def build_customer_user_prompt(scene: str, topic: str, customer_profile: str, history: List[dict]) -> str:
-    """构建顾客角色 user prompt（含对练历史）。"""
+def build_customer_user_prompt(
+    scene: str, topic: str, customer_profile: str, history: List[dict],
+    material_text: Optional[str] = None,
+) -> str:
+    """构建顾客角色 user prompt（含对练历史 + 可选课件上下文）。"""
     lines = [f"场景：{topic}（{scene}）"]
     lines.append(f"你的顾客画像：{customer_profile}")
+    if material_text and material_text.strip():
+        # 课件上下文：顾客提问围绕课件知识点，考验店员对课件的掌握
+        lines.append("【顾客背景知识】以下是你从门店宣传/课程里了解到的内容，你会围绕它提问：")
+        lines.append(material_text.strip()[:1500])
+        lines.append("（注：你只作为普通顾客发问，不暴露你已知太多；问题要自然口语化）")
     if history:
         lines.append("【对话历史】")
         for m in history[-6:]:  # 最近 6 轮，控制上下文
@@ -151,10 +159,11 @@ async def customer_reply(
     topic: str,
     customer_profile: str,
     history: List[dict],
+    material_text: Optional[str] = None,
 ) -> Tuple[Optional[str], Optional[str]]:
     """AI 扮演顾客接话/开场。返回 (顾客回应, 引擎key)。"""
     profile = customer_profile or _SCENE_PROFILES.get(scene, _SCENE_PROFILES["reception"])
-    user = build_customer_user_prompt(scene, topic, profile, history)
+    user = build_customer_user_prompt(scene, topic, profile, history, material_text)
     return await _generate(
         _CUSTOMER_SYSTEM_PROMPT,
         user,
@@ -174,8 +183,11 @@ _EVALUATE_SYSTEM_PROMPT = (
     "2) professional 专业性：产品/项目知识准确、不夸大功效、符合中医养生常识；\n"
     "3) affinity 亲和力：语气自然有温度、像真人聊天而非机械背稿；\n"
     "4) compliance 合规性：无绝对化承诺（根治/包好/100%）、无疗效夸大、无诱导消费。\n"
-    "输出 JSON：{\"evaluation\":{\"completeness\":0-100,\"professional\":0-100,\"affinity\":0-100,\"compliance\":0-100},\"score\":加权总分0-100,\"feedback\":\"3-5条具体改进建议（中文）\",\"summary\":\"一句话总评\"}\n"
+    "若提供了「培训课件内容」：另评估知识掌握度 mastery——逐知识点判断店员话术\n"
+    "是否覆盖且准确（每个知识点给 掌握/薄弱/未涉及 三态之一），并列出命中的知识点 key_points。\n"
+    "输出 JSON：{\"evaluation\":{\"completeness\":0-100,\"professional\":0-100,\"affinity\":0-100,\"compliance\":0-100},\"score\":加权总分0-100,\"mastery\":{\"mastered\":[\"知识点\"],\"weak\":[\"知识点\"],\"untouched\":[\"知识点\"]},\"key_points\":[\"命中知识点\"],\"feedback\":\"3-5条具体改进建议（中文）\",\"summary\":\"一句话总评\"}\n"
     "加权：score = completeness*0.25 + professional*0.30 + affinity*0.20 + compliance*0.25。\n"
+    "未提供课件时 mastery 可为 {\"mastered\":[],\"weak\":[],\"untouched\":[]}。\n"
     "只输出 JSON，不要 markdown 包裹，不要额外解释。"
 )
 
@@ -186,13 +198,22 @@ async def evaluate(
     customer_profile: str,
     history: List[dict],
     staff_answer: str,
+    material_text: Optional[str] = None,
 ) -> Tuple[Optional[str], Optional[str]]:
-    """四维话术评估。返回 (JSON文本, 引擎key)。"""
+    """四维话术评估 + 课件知识掌握度。返回 (JSON文本, 引擎key)。
+
+    课件知识掌握度（V2 店务培训）：若提供课件文本，额外评估店员话术对课件
+    知识点的覆盖与准确程度（mastery: 掌握/薄弱/未涉及 + 命中知识点列表）。
+    """
     profile = customer_profile or _SCENE_PROFILES.get(scene, _SCENE_PROFILES["reception"])
     lines = [
         f"场景：{topic}（{scene}）",
         f"顾客画像：{profile}",
     ]
+    if material_text and material_text.strip():
+        lines.append("【培训课件内容（店员应掌握的知识依据）】")
+        lines.append(material_text.strip()[:1500])
+        lines.append("（请据课件核对店员话术的知识准确性与覆盖度，评分与掌握度都以课件为准）")
     if history:
         lines.append("【此前的对话】")
         for m in history[-6:]:
@@ -204,5 +225,5 @@ async def evaluate(
         _EVALUATE_SYSTEM_PROMPT,
         "\n".join(lines),
         temperature=0.3,
-        max_tokens=800,
+        max_tokens=1000,
     )
