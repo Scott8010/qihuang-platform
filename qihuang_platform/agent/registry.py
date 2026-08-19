@@ -73,6 +73,19 @@ BUILTIN_AGENTS: Dict[str, Dict[str, Any]] = {
                 "AI 出题陪练 + 基于推理链四档评分(PERFECT/GOOD/PARTIAL/WRONG)，"
                 "回写 EduCoachSession（本店行级隔离），供业务 Agent B3 员工军师调用。",
     },
+    "content-writer": {
+        "name": "文案生成",
+        "kind": "business_embedded",          # 融入业务流的能力模块
+        "engine": "qihuang-content-writer",    # 8602 自有 4 引擎 LLM 客户端（DeepSeek→Qwen→GLM→Kimi）
+        "router_prefix": "/api/v1/agent/content-writer",
+        "capabilities": ["generate", "dashboard"],
+        "status": "active",
+        "category": "content",
+        "desc": "中医健康营销文案生成：8602 自建 4 引擎 LLM 客户端（复用 refine_llm 验证过的 key 链路），"
+                "默认注入合规约束 system prompt（不夸大疗效/不承诺治愈/符合广告法），"
+                "支持多版本输出，与 compliance-guard 审核链路咬合（B2 营销智能 = content-writer + compliance），"
+                "供业务 Agent B2 营销/拓客、经营管理等调用。",
+    },
 }
 
 # 运行时缓存（与 agent_def 表最终一致）

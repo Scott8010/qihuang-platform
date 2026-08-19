@@ -16,6 +16,7 @@ from qihuang_platform.agent.fortune.router import router as fortune_router
 from qihuang_platform.agent.geo.router import router as geo_router
 from qihuang_platform.agent.health_advisor.router import router as health_advisor_router
 from qihuang_platform.agent.coach.router import router as coach_router
+from qihuang_platform.agent.content_writer.router import router as content_writer_router
 
 agent_router = APIRouter()
 agent_router.include_router(
@@ -32,6 +33,9 @@ agent_router.include_router(
 )
 agent_router.include_router(
     coach_router, prefix="/api/v1/agent", tags=["Agent-中台"]
+)
+agent_router.include_router(
+    content_writer_router, prefix="/api/v1/agent", tags=["Agent-中台"]
 )
 
 __all__ = ["agent_router"]
