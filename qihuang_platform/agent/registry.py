@@ -153,27 +153,9 @@ def sync_from_db() -> int:
 
     try:
         rows = db.query(AgentDef).all()
-        if not rows:
-            # 播种内置样板
-            for key, spec in BUILTIN_AGENTS.items():
-                db.add(AgentDef(
-                    agent_key=key,
-                    name=spec.get("name", key),
-                    kind=spec.get("kind", "business_embedded"),
-                    engine=spec.get("engine"),
-                    category=spec.get("category", "general"),
-                    router_prefix=spec.get("router_prefix"),
-                    capabilities=spec.get("capabilities", []),
-                    status=spec.get("status", "active"),
-                    desc=spec.get("desc"),
-                    features_json=spec.get("features_json", {}),
-                ))
-            db.commit()
-            rows = db.query(AgentDef).all()
-            print(f"[AgentRegistry] 已用内置样板播种 {len(rows)} 个 Agent 能力")
+        existing_keys = {r.agent_key for r in rows}
 
         # 回补：已播种库若缺新增内置能力（如 geo），将 BUILTIN_AGENTS 中缺失项补入 DB + 缓存
-        existing_keys = {r.agent_key for r in rows}
         backfilled = []
         for key, spec in BUILTIN_AGENTS.items():
             if key in existing_keys:
@@ -194,6 +176,30 @@ def sync_from_db() -> int:
         if backfilled:
             db.commit()
             print(f"[AgentRegistry] 已回补新增内置能力：{', '.join(backfilled)}")
+
+        # 回写：DB 已存在的能力，BUILTIN_AGENTS 中的「registry 控字段」必须以真值为准（防止历史 DB
+        # 旧值反向覆盖代码侧的改名/desc/能力列表等）。status 保留运营态（运营手动改过的不回退）。
+        # 触发场景：coach 改名「话术陪练教练」→「中医辨证教练」时，仅改 registry 源码不够，
+        # 已存在 DB 行会反向覆盖；这里强制以源码真值更新 DB。
+        rows = db.query(AgentDef).all()
+        rewritten = []
+        for row in rows:
+            spec = BUILTIN_AGENTS.get(row.agent_key)
+            if not spec:
+                continue
+            changed = False
+            for f in ("name", "kind", "engine", "category", "router_prefix", "capabilities", "desc", "features_json"):
+                new_val = spec.get(f) if f != "features_json" else spec.get("features_json") or {}
+                if f == "name" and not new_val:
+                    new_val = row.agent_key
+                if getattr(row, f) != new_val:
+                    setattr(row, f, new_val)
+                    changed = True
+            if changed:
+                rewritten.append(row.agent_key)
+        if rewritten:
+            db.commit()
+            print(f"[AgentRegistry] 已同步代码真值到 DB：{', '.join(rewritten)}")
 
         rows = db.query(AgentDef).all()
         AGENT_REGISTRY.clear()
