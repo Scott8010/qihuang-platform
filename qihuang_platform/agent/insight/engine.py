@@ -1,0 +1,106 @@
+"""
+insight · 数据诊断引擎（8602 自有 4 引擎 LLM 客户端）
+
+复用 refine_llm 验证过的 4 引擎 fallback 链路（DeepSeek→通义千问→GLM-4→Kimi），
+key 从 os.environ 读（8602 进程经 geo_vision.env 在 main.py 启动时 load_dotenv 注入，
+与 refine_llm 同源，生产已验证可用）。
+
+设计铁律：
+- 零新增 LLM SDK 依赖，直接 httpx 调 OpenAI 兼容 /chat/completions；
+- 任何引擎全挂 → 返回 error 标记，绝不抛异常中断上游；
+- 经营诊断护栏（对齐方案七风险表）：insight 只给「数据诊断 + 建议」，决策权在人，
+  每条结论必须附数据依据（指标名+数值），不夸大、不承诺经营效果、不做医疗/辨证。
+"""
+from __future__ import annotations
+
+import logging
+import os
+from typing import Dict, List, Optional, Tuple
+
+import httpx
+
+logger = logging.getLogger("insight.engine")
+
+# 与 refine_llm._PROVIDERS / content_writer.engine 完全对齐（4 引擎优先级 fallback）
+_PROVIDERS: List[Dict[str, str]] = [
+    {
+        "key": "deepseek",
+        "name": "DeepSeek",
+        "env": "DEEPSEEK_API_KEY",
+        "base_url": "https://api.deepseek.com/v1",
+        "model": "deepseek-chat",
+    },
+    {
+        "key": "qwen",
+        "name": "通义千问",
+        "env": "QWEN_API_KEY",
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "model": "qwen-max",
+    },
+    {
+        "key": "glm",
+        "name": "GLM-4",
+        "env": "GLM_API_KEY",
+        "base_url": "https://open.bigmodel.cn/api/paas/v4",
+        "model": "glm-4-plus",
+    },
+    {
+        "key": "kimi",
+        "name": "Kimi",
+        "env": "KIMI_API_KEY",
+        "base_url": "https://api.moonshot.cn/v1",
+        "model": "moonshot-v1-128k",
+    },
+]
+
+
+async def _chat_once(
+    provider: Dict[str, str],
+    system: str,
+    user: str,
+    *,
+    temperature: float = 0.4,
+    max_tokens: int = 2000,
+) -> Optional[str]:
+    """单次调用某引擎的 chat/completions，失败返回 None（交由上层 fallback）。"""
+    api_key = os.environ.get(provider["env"])
+    if not api_key:
+        return None
+    url = provider["base_url"].rstrip("/") + "/chat/completions"
+    payload = {
+        "model": provider["model"],
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            resp = await client.post(
+                url,
+                json=payload,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data["choices"][0]["message"]["content"].strip()
+    except Exception as e:  # noqa: BLE001 - 任一引擎失败都降级到下一个
+        logger.warning("[insight] %s 调用失败: %s", provider["name"], e)
+        return None
+
+
+async def diagnose(
+    system: str,
+    user: str,
+    *,
+    temperature: float = 0.4,
+    max_tokens: int = 2000,
+) -> Tuple[Optional[str], Optional[str]]:
+    """依次尝试 4 引擎生成经营诊断，返回 (文本, 命中引擎key)。全失败返回 (None, None)。"""
+    for provider in _PROVIDERS:
+        text = await _chat_once(provider, system, user, temperature=temperature, max_tokens=max_tokens)
+        if text and text.strip():
+            return text.strip(), provider["key"]
+    return None, None

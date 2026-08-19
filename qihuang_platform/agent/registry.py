@@ -86,6 +86,19 @@ BUILTIN_AGENTS: Dict[str, Dict[str, Any]] = {
                 "支持多版本输出，与 compliance-guard 审核链路咬合（B2 营销智能 = content-writer + compliance），"
                 "供业务 Agent B2 营销/拓客、经营管理等调用。",
     },
+    "insight": {
+        "name": "数据诊断",
+        "kind": "business_embedded",          # 融入业务流的能力模块
+        "engine": "qihuang-insight",          # 8602 自有 4 引擎 LLM 客户端（DeepSeek→Qwen→GLM→Kimi）
+        "router_prefix": "/api/v1/agent/insight",
+        "capabilities": ["diagnose", "dashboard"],
+        "status": "active",
+        "category": "business",
+        "desc": "经营数据诊断：接收门店/租户经营指标快照（流水/客流/会员/转化/复购），"
+                "AI 给出「哪有问题+为什么+怎么救」，每条结论附数据依据，"
+                "护栏：只做数据诊断与经营建议、不做医疗/辨证、不承诺经营效果、决策权在人，"
+                "供业务 Agent B1 经营风控 / 经营管理调用。",
+    },
 }
 
 # 运行时缓存（与 agent_def 表最终一致）
