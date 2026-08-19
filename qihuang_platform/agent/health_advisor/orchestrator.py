@@ -131,9 +131,10 @@ class HealthAdvisor:
         # 背景任务触发，零侵入、best-effort，绝不阻断主响应。
         try:
             import asyncio
-            asyncio.create_task(self._record_attribution(tenant_id, req, resp, trace_id))
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._record_attribution(tenant_id, req, resp, trace_id))
         except RuntimeError:
-            pass
+            logger.warning("[orchestrator] 无运行事件循环，跳过归因钩子 trace_id=%s", trace_id)
         return resp
 
     async def _record_attribution(self, tenant_id, req, resp, trace_id):
@@ -156,7 +157,9 @@ class HealthAdvisor:
             syn_name = getattr(syn, "name", None) if syn else None
             if syn_name and syn_name not in ("辨证资料不足", None):
                 names.append(("syndrome", syn_name))
+            logger.info("[orchestrator] consult 归因候选项 %d 条 trace_id=%s", len(names), trace_id)
             if not names:
+                logger.info("[orchestrator] consult 无可归因实体(无方剂/证候) trace_id=%s", trace_id)
                 return
 
             db = SessionLocal()
