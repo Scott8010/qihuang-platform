@@ -14,13 +14,13 @@ coach 能力 Agent 上收（Agent 中台接入点）测试。
 import importlib
 import pytest
 
-from qihuang_platform.db.models import EduCoachSession
+from qihuang_platform.db.models import EduCoachSession, User
 from qihuang_platform.db.config import SessionLocal
 
 
 @pytest.fixture
 def coach_client(client):
-    """覆盖鉴权依赖，注入测试租户。"""
+    """覆盖鉴权依赖，注入测试租户与真实 user（满足 PostgreSQL 严格外键）。"""
     from fastapi import Request
     from qihuang_platform.gateway.deps import get_current_principal
     from qihuang_platform.agent.deps import require_agent_in_plan
@@ -28,6 +28,16 @@ def coach_client(client):
     async def fake_principal(request: Request):
         request.state.tenant_id = "tenant_default"
         return {"tenant_id": "tenant_default", "user_id": "u_coach_1"}
+
+    # 幂等插入真实 user：edu_coach_session.user_id 在 PostgreSQL 下强制外键到 user.id，
+    # SQLite 不强制会掩盖该问题（与之前 org_default/tenant FK 同模式）。
+    db = SessionLocal()
+    try:
+        if not db.query(User).filter_by(id="u_coach_1").first():
+            db.add(User(id="u_coach_1", tenant_id="tenant_default", username="coach_test_user", status="active"))
+            db.commit()
+    finally:
+        db.close()
 
     client.app.dependency_overrides[get_current_principal] = fake_principal
     client.app.dependency_overrides[require_agent_in_plan("coach")] = (lambda: None)
@@ -117,6 +127,5 @@ def test_coach_invalid_difficulty(coach_client):
         "/api/v1/agent/coach/sessions",
         json={"topic": "x", "difficulty": "ultra"},
     )
-    print("DIAG invalid_difficulty:", r.status_code, r.text)
     assert r.status_code == 200
     assert r.json()["code"] != 0  # error(INVALID_PARAM)
