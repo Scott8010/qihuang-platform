@@ -893,3 +893,90 @@ export async function consultStoreCoach(
     payload,
   );
 }
+
+// ═══ 多租户能力中心 ═══
+
+export interface CapabilityTemplate {
+  id: string;
+  tenant_id: string;
+  name: string;
+  kind: string;
+  content_json: Record<string, unknown>;
+  current_version: string;
+  created_by: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  ownership: {
+    visibility: string | null;
+    source: string | null;
+    owner_org_id: string | null;
+  } | null;
+}
+
+export interface CapabilitySubmission {
+  id: string;
+  template_id: string;
+  submitter_tenant_id: string | null;
+  submitter_org_id: string | null;
+  status: string;
+  reviewer_id: string | null;
+  review_note: string | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+}
+
+/** GET /admin/v1/template-center/templates — 模板列表 */
+export async function fetchCapabilityTemplates(): Promise<CapabilityTemplate[]> {
+  try {
+    const r = await get<{ code: number; data: { items?: CapabilityTemplate[]; total?: number } }>(
+      "/admin/v1/template-center/templates",
+    );
+    return r?.data?.items || [];
+  } catch (e) { console.error("fetchCapabilityTemplates", e); return []; }
+}
+
+/** POST /admin/v1/template-center/templates — 创建模板 */
+export async function createCapabilityTemplate(body: {
+  name: string; kind: string; content_json: Record<string, unknown>;
+}): Promise<MutateResult> {
+  return mutate("POST", "/admin/v1/template-center/templates", { ...body, visibility: "private" });
+}
+
+/** POST /admin/v1/template-center/templates/{id}/clone — 克隆到指定机构 */
+export async function cloneCapabilityTemplate(
+  templateId: string, targetOrgId: string,
+): Promise<MutateResult> {
+  return mutate("POST", `/admin/v1/template-center/templates/${encodeURIComponent(templateId)}/clone`, {
+    target_org_id: targetOrgId, visibility: "private",
+  });
+}
+
+/** POST /admin/v1/template-center/templates/{id}/submit — 机构模板提交平台审核 */
+export async function submitCapabilityTemplate(templateId: string): Promise<MutateResult> {
+  return mutate("POST", `/admin/v1/template-center/templates/${encodeURIComponent(templateId)}/submit`);
+}
+
+/** GET /admin/v1/template-center/review/submissions — 审核单列表 */
+export async function fetchCapabilitySubmissions(status?: string): Promise<CapabilitySubmission[]> {
+  try {
+    const q = status ? `?status=${encodeURIComponent(status)}` : "";
+    const r = await get<{ code: number; data: { items?: CapabilitySubmission[]; total?: number } }>(
+      `/admin/v1/template-center/review/submissions${q}`,
+    );
+    return r?.data?.items || [];
+  } catch (e) { console.error("fetchCapabilitySubmissions", e); return []; }
+}
+
+/** POST /admin/v1/template-center/review/submissions/{id}/approve — 平台采纳（提升 public） */
+export async function approveCapabilitySubmission(submissionId: string, note: string): Promise<MutateResult> {
+  return mutate("POST", `/admin/v1/template-center/review/submissions/${encodeURIComponent(submissionId)}/approve`, {
+    review_note: note,
+  });
+}
+
+/** POST /admin/v1/template-center/review/submissions/{id}/reject — 平台强下架（收回 private） */
+export async function rejectCapabilitySubmission(submissionId: string, note: string): Promise<MutateResult> {
+  return mutate("POST", `/admin/v1/template-center/review/submissions/${encodeURIComponent(submissionId)}/reject`, {
+    review_note: note,
+  });
+}

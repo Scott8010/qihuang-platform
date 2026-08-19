@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import {
   LayoutDashboard, Building2, ShieldCheck, KeyRound, BarChart3,
   BookOpenCheck, Activity, Search, Bell, Sprout, ChevronDown, LogOut,
-  Users as UsersIcon, Eye, EyeOff, Lock, Bot, CreditCard,
+  Users as UsersIcon, Eye, EyeOff, Lock, Bot, CreditCard, Boxes,
 } from "lucide-react";
 import { C } from "@/lib/types";
 import { login, logout, getToken, changePassword, getIdentity } from "@/lib/api";
@@ -16,6 +16,7 @@ import Content from "@/pages/Content";
 import Monitor from "@/pages/Monitor";
 import AgentCenter from "@/pages/AgentCenter";
 import PlanUpgrade from "@/pages/PlanUpgrade";
+import CapabilityCenter from "@/pages/CapabilityCenter";
 
 const nav = [
   { id: "dashboard", label: "工作台", icon: LayoutDashboard },
@@ -25,6 +26,7 @@ const nav = [
   { id: "roles", label: "权限管理", icon: ShieldCheck },
   { id: "keys", label: "密钥配额", icon: KeyRound },
   { id: "billing", label: "计量计费", icon: BarChart3 },
+  { id: "capability", label: "能力中心", icon: Boxes },
   { id: "content", label: "内容管控", icon: BookOpenCheck },
   { id: "monitor", label: "监控运维", icon: Activity },
   { id: "planupgrade", label: "套餐升级", icon: CreditCard },
@@ -254,6 +256,7 @@ export default function App() {
           {page === "roles" && <Roles />}
           {page === "keys" && <ApiKeys />}
           {page === "billing" && <Billing />}
+          {page === "capability" && <CapabilityCenter />}
           {page === "content" && <Content />}
           {page === "monitor" && <Monitor />}
           {page === "planupgrade" && <PlanUpgrade />}
