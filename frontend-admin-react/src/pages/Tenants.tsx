@@ -144,7 +144,7 @@ export default function Tenants() {
                   <Select value={form.plan} onValueChange={(v) => setForm({ ...form, plan: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {["体验版", "标准版", "专业版", "私有化"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                      {["体验版", "标准版", "专业版", "企业版"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>

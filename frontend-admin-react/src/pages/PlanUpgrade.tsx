@@ -14,11 +14,17 @@ export default function PlanUpgrade() {
   const [submitting, setSubmitting] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
+  // 套餐展示等级顺序：体验版 → 标准版 → 专业版 → 企业版（前端兜底，不依赖后端排序）
+  const PLAN_LEVEL: Record<string, number> = {
+    "体验版": 1, "标准版": 2, "专业版": 3, "企业版": 4,
+  };
+
   const load = async () => {
     setLoading(true);
     const [ts, ps] = await Promise.all([fetchTenantExtended(20), fetchPlans()]);
     setTenants(ts);
-    setPlans(ps);
+    // 前端硬排序：保证 体验版→标准版→专业版→企业版（无论后端 order by price_cents 是否乱）
+    setPlans([...ps].sort((a, b) => (PLAN_LEVEL[a.name] ?? 99) - (PLAN_LEVEL[b.name] ?? 99)));
     setLoading(false);
   };
 
