@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Bot, Boxes, RefreshCw, Check, Loader2, Network, Gauge, Plug,
-  CircleDot, AlertTriangle, Stethoscope,
+  CircleDot, AlertTriangle, Stethoscope, X, BarChart3,
 } from "lucide-react";
 import { C } from "@/lib/types";
 import {
@@ -43,6 +43,9 @@ export default function AgentCenter() {
   const [editPlan, setEditPlan] = useState<string | null>(null);
   const [editAgents, setEditAgents] = useState<string[]>([]);
   const [savingPlan, setSavingPlan] = useState<string | null>(null);
+
+  // 在线试用：当前展开试用的 agent_key（null=收起）
+  const [trialFor, setTrialFor] = useState<string | null>(null);
 
   const loadAgents = () => fetchAgentCenter().then((d) => setAgents(d.agents));
   const loadMatrix = () => fetchPlanAgentMatrix().then(setMatrix);
@@ -86,6 +89,9 @@ export default function AgentCenter() {
         Agent 中台把「可嵌入业务流的能力模块」作为一等资源统一管理：<b>资源池</b>注册能力并支持运营态热插拔启停，
         <b>套餐专家团</b>把能力打包进套餐，<b>各 Agent 看板</b>派发底层运营数据。新增能力只需注册 + 挂载路由。
       </div>
+
+      {/* ═══ 构件 0：平台总览（汇总可视化） ═══ */}
+      <AgentOverview agents={agents} onOpenTrial={setTrialFor} />
 
       {/* ═══ 构件 A：能力资源池 ═══ */}
       <section>
@@ -163,7 +169,22 @@ export default function AgentCenter() {
                         onClick={() => openDash(a.agent_key)}>
                         <Gauge className="w-3.5 h-3.5 mr-1" /> 看板
                       </Button>
+                      {(a.agent_key === "health-advisor" || a.agent_key === "store-coach" || a.agent_key === "content-writer" || a.agent_key === "insight") && (
+                        <Button size="sm" variant="outline" className="h-7 text-[12px]"
+                          style={trialFor === a.agent_key ? { borderColor: C.primary, color: C.primary } : undefined}
+                          onClick={() => setTrialFor(trialFor === a.agent_key ? null : a.agent_key)}>
+                          <Stethoscope className="w-3.5 h-3.5 mr-1" />
+                          {trialFor === a.agent_key ? "收起" : "在线试用"}
+                        </Button>
+                      )}
                     </div>
+
+                    {/* 在线试用展开区（内嵌在能力卡片上） */}
+                    {trialFor === a.agent_key && (
+                      <div className="mt-3 pt-3 border-t" style={{ borderColor: C.border }}>
+                        <AgentTrial agent={a} onClose={() => setTrialFor(null)} />
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               );
@@ -352,9 +373,6 @@ export default function AgentCenter() {
           </Card>
         ) : null}
       </section>
-
-      {/* ═══ 构件 D：中医健康顾问在线试用 ═══ */}
-      <HealthAdvisorTrial />
     </div>
   );
 }
@@ -369,12 +387,130 @@ function Metric({ label, value, color }: { label: string; value: string; color: 
 }
 
 /* ═══════════════════════════════════════════
-   构件 D：中医健康顾问在线试用
+   构件 0：平台总览（汇总可视化）
+   纯前端聚合 agents/plans，不新增后端接口。
+   ═══════════════════════════════════════════ */
+
+const categoryLabel: Record<string, string> = {
+  content: "内容", mystic: "玄学", health: "健康", edu: "培训", business: "经营",
+};
+const categoryColor: Record<string, string> = {
+  content: "#2E5A4C", mystic: "#8A6A1F", health: "#3D7363", edu: "#C8A45D", business: "#5B7F8A",
+};
+
+function AgentOverview({ agents, onOpenTrial }: {
+  agents: AgentDef[];
+  onOpenTrial: (key: string) => void;
+}) {
+  const total = agents.length;
+  const active = agents.filter((a) => a.status === "active").length;
+  const inactive = total - active;
+  const activeRate = total ? Math.round((active / total) * 100) : 0;
+
+  // 分类分布
+  const byCat = new Map<string, number>();
+  agents.forEach((a) => byCat.set(a.category, (byCat.get(a.category) || 0) + 1));
+  const cats = Array.from(byCat.entries()).sort((x, y) => y[1] - x[1]);
+
+  // 套餐覆盖
+  const covered = agents.filter((a) => a.included_in_plans.length > 0).length;
+
+  return (
+    <section>
+      <Card className="border" style={{ borderColor: C.border }}>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <BarChart3 className="w-4 h-4" style={{ color: C.primary }} />
+            <span className="text-[14px] font-medium" style={{ color: C.ink }}>平台总览</span>
+            <span className="text-[11px] px-1.5 py-0.5 rounded-full" style={{ background: C.soft, color: C.primary }}>
+              {active}/{total} 启用
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <Metric label="能力总数" value={String(total)} color={C.primary} />
+            <Metric label="启用中" value={String(active)} color="#2E5A4C" />
+            <Metric label="已停用" value={String(inactive)} color={inactive ? "#B03A2E" : C.mid} />
+            <Metric label="覆盖套餐" value={`${covered}/${total}`} color="#8A6A1F" />
+          </div>
+
+          {/* 启用率进度条 */}
+          <div className="mb-3">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[11px]" style={{ color: C.light }}>启用率</span>
+              <span className="text-[11px] font-medium" style={{ color: C.primary }}>{activeRate}%</span>
+            </div>
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: "#F0F0F0" }}>
+              <div className="h-full rounded-full" style={{ width: `${activeRate}%`, background: C.primary }} />
+            </div>
+          </div>
+
+          {/* 分类分布 */}
+          <div className="flex flex-wrap gap-2 mb-3">
+            {cats.map(([k, v]) => (
+              <span key={k} className="text-[11px] px-2 py-0.5 rounded-full" style={{
+                background: (categoryColor[k] || C.mid) + "18", color: categoryColor[k] || C.mid,
+              }}>
+                {categoryLabel[k] || k} × {v}
+              </span>
+            ))}
+            {cats.length === 0 && <span className="text-[11px]" style={{ color: C.light }}>暂无分类数据</span>}
+          </div>
+
+          {/* 各能力状态条（点「试用」直接展开对应能力） */}
+          <div className="flex flex-wrap gap-1.5">
+            {agents.map((a) => {
+              const on = a.status === "active";
+              return (
+                <button key={a.agent_key}
+                  onClick={() => onOpenTrial(a.agent_key)}
+                  className="flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full border transition-colors"
+                  style={{
+                    borderColor: on ? C.border : "#E5E5E5",
+                    background: on ? "#FAFCFB" : "#F7F7F7",
+                    color: on ? C.ink : C.light,
+                  }}
+                  title={on ? "已启用 · 点击在线试用" : "已停用 · 点击在线试用"}>
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: on ? "#2E5A4C" : "#CCCCCC" }} />
+                  {a.name}
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   Agent 在线试用（内嵌能力卡片）
+   按 agent_key 路由到对应能力的试用表单。
+   当前：health-advisor 辨证试用；其余能力展示说明。
+   ═══════════════════════════════════════════ */
+
+function AgentTrial({ agent, onClose }: { agent: AgentDef; onClose: () => void }) {
+  if (agent.agent_key === "health-advisor") {
+    return <HealthAdvisorTrial onClose={onClose} />;
+  }
+  return (
+    <div className="text-[12px] flex items-center justify-between" style={{ color: C.mid }}>
+      <span className="flex items-center gap-2">
+        <AlertTriangle className="w-3.5 h-3.5" style={{ color: C.light }} />
+        「{agent.name}」暂未提供控制台内试用表单，可直接在卡片「看板」查看运营数据，或由业务端按 API 契约调用。
+      </span>
+      <Button size="sm" variant="outline" className="h-6 text-[11px]" onClick={onClose}>关闭</Button>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   中医健康顾问在线试用
    直接对接 /api/v1/agent/health-advisor/consult，
    让运营在控制台内输入问诊文本即时查看辨证结果。
    ═══════════════════════════════════════════ */
 
-function HealthAdvisorTrial() {
+function HealthAdvisorTrial({ onClose }: { onClose?: () => void }) {
   const [question, setQuestion] = useState("");
   const [age, setAge] = useState("");
   const [gender, setGender] = useState("");
@@ -398,118 +534,121 @@ function HealthAdvisorTrial() {
   };
 
   return (
-    <section className="mt-5">
-      <div className="flex items-center gap-2 mb-3">
-        <Stethoscope className="w-4 h-4" style={{ color: C.primary }} />
-        <span className="text-[14px] font-medium" style={{ color: C.ink }}>中医健康顾问 · 在线试用（构件 D）</span>
-        <span className="text-[11px] px-1.5 py-0.5 rounded-full" style={{ background: C.soft, color: C.primary }}>health-advisor</span>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Stethoscope className="w-3.5 h-3.5" style={{ color: C.primary }} />
+          <span className="text-[12px] font-medium" style={{ color: C.ink }}>中医健康顾问 · 在线试用</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: C.soft, color: C.primary }}>health-advisor</span>
+        </div>
+        {onClose && (
+          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100" style={{ color: C.light }}>
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
-      <Card className="border" style={{ borderColor: C.border }}>
-        <CardContent className="p-4 space-y-3">
-          <div>
-            <label className="text-[12px] mb-1 block" style={{ color: C.mid }}>问诊内容（症状 / 舌象 / 脉象 / 病史）</label>
-            <textarea
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              rows={4}
-              placeholder="例：患者男，45岁，主诉神疲乏力、畏寒肢冷、纳差便溏、舌淡胖边有齿痕苔白滑，脉沉细无力。"
-              className="w-full rounded-lg border p-3 text-[13px] resize-none focus:outline-none"
-              style={{ borderColor: C.border, color: C.ink }}
+      <div>
+        <label className="text-[11px] mb-1 block" style={{ color: C.mid }}>问诊内容（症状 / 舌象 / 脉象 / 病史）</label>
+        <textarea
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          rows={3}
+          placeholder="例：患者男，45岁，主诉神疲乏力、畏寒肢冷、纳差便溏、舌淡胖边有齿痕苔白滑，脉沉细无力。"
+          className="w-full rounded-lg border p-2.5 text-[12px] resize-none focus:outline-none"
+          style={{ borderColor: C.border, color: C.ink }}
+        />
+      </div>
+
+      <div className="flex gap-3">
+        <div className="flex-1">
+          <label className="text-[11px] mb-1 block" style={{ color: C.mid }}>年龄（选填）</label>
+          <input
+            value={age} onChange={(e) => setAge(e.target.value)}
+            type="number" placeholder="45"
+            className="w-full rounded-lg border px-2.5 py-1.5 text-[12px] focus:outline-none"
+            style={{ borderColor: C.border, color: C.ink }}
+          />
+        </div>
+        <div className="flex-1">
+          <label className="text-[11px] mb-1 block" style={{ color: C.mid }}>性别（选填）</label>
+          <input
+            value={gender} onChange={(e) => setGender(e.target.value)}
+            placeholder="男 / 女"
+            className="w-full rounded-lg border px-2.5 py-1.5 text-[12px] focus:outline-none"
+            style={{ borderColor: C.border, color: C.ink }}
+          />
+        </div>
+      </div>
+
+      {err && (
+        <div className="text-[11px] flex items-center gap-2" style={{ color: "#B03A2E" }}>
+          <AlertTriangle className="w-3.5 h-3.5" />{err}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2">
+        <Button size="sm" className="h-7 text-[12px]" style={{ background: C.primary }}
+          disabled={loading} onClick={run}>
+          {loading
+            ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+            : <Stethoscope className="w-3.5 h-3.5 mr-1" />}
+          {loading ? "辨证中…" : "开始辨证"}
+        </Button>
+        {result?.partial && (
+          <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: "#FDF6E3", color: "#8A6A1F" }}>部分降级（partial）</span>
+        )}
+      </div>
+
+      {result && (
+        <div className="border-t pt-2.5 space-y-2.5" style={{ borderColor: C.border }}>
+          {result.constitution?.type && (
+            <Field label="体质辨识" value={result.constitution.type} sub={result.constitution.desc} />
+          )}
+          {result.syndrome?.name && (
+            <Field
+              label="辨证倾向（证型）"
+              value={result.syndrome.name}
+              sub={result.syndrome.confidence != null ? `置信度 ${Math.round(result.syndrome.confidence * 100)}%` : undefined}
             />
-          </div>
-
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="text-[12px] mb-1 block" style={{ color: C.mid }}>年龄（选填）</label>
-              <input
-                value={age} onChange={(e) => setAge(e.target.value)}
-                type="number" placeholder="45"
-                className="w-full rounded-lg border px-3 py-2 text-[13px] focus:outline-none"
-                style={{ borderColor: C.border, color: C.ink }}
-              />
-            </div>
-            <div className="flex-1">
-              <label className="text-[12px] mb-1 block" style={{ color: C.mid }}>性别（选填）</label>
-              <input
-                value={gender} onChange={(e) => setGender(e.target.value)}
-                placeholder="男 / 女"
-                className="w-full rounded-lg border px-3 py-2 text-[13px] focus:outline-none"
-                style={{ borderColor: C.border, color: C.ink }}
-              />
-            </div>
-          </div>
-
-          {err && (
-            <div className="text-[12px] flex items-center gap-2" style={{ color: "#B03A2E" }}>
-              <AlertTriangle className="w-4 h-4" />{err}
+          )}
+          {result.formulas && result.formulas.length > 0 && (
+            <div>
+              <div className="text-[11px] mb-1" style={{ color: C.light }}>推荐方剂</div>
+              <div className="flex flex-wrap gap-1.5">
+                {result.formulas.map((f, i) => (
+                  <span key={i} className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: C.soft, color: C.primary }}>
+                    {f.name}{f.desc ? `（${f.desc}）` : ""}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
-
-          <div className="flex items-center gap-2">
-            <Button size="sm" className="h-7 text-[12px]" style={{ background: C.primary }}
-              disabled={loading} onClick={run}>
-              {loading
-                ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
-                : <Stethoscope className="w-3.5 h-3.5 mr-1" />}
-              {loading ? "辨证中…" : "开始辨证"}
-            </Button>
-            {result?.partial && (
-              <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: "#FDF6E3", color: "#8A6A1F" }}>部分降级（partial）</span>
-            )}
-          </div>
-
-          {result && (
-            <div className="border-t pt-3 space-y-3" style={{ borderColor: C.border }}>
-              {result.constitution?.type && (
-                <Field label="体质辨识" value={result.constitution.type} sub={result.constitution.desc} />
-              )}
-              {result.syndrome?.name && (
-                <Field
-                  label="辨证倾向（证型）"
-                  value={result.syndrome.name}
-                  sub={result.syndrome.confidence != null ? `置信度 ${Math.round(result.syndrome.confidence * 100)}%` : undefined}
-                />
-              )}
-              {result.formulas && result.formulas.length > 0 && (
-                <div>
-                  <div className="text-[12px] mb-1" style={{ color: C.light }}>推荐方剂</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {result.formulas.map((f, i) => (
-                      <span key={i} className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: C.soft, color: C.primary }}>
-                        {f.name}{f.desc ? `（${f.desc}）` : ""}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {result.suggestions && result.suggestions.length > 0 && (
-                <div>
-                  <div className="text-[12px] mb-1" style={{ color: C.light }}>调理建议</div>
-                  <ul className="list-disc pl-5 space-y-0.5">
-                    {result.suggestions.map((s, i) => (
-                      <li key={i} className="text-[12px] leading-relaxed" style={{ color: C.mid }}>{s}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {result.report_id && (
-                <div className="text-[11px]" style={{ color: C.light }}>报告 ID：<span className="font-mono">{result.report_id}</span></div>
-              )}
-              {result.reply && (
-                <div>
-                  <div className="text-[12px] mb-1" style={{ color: C.light }}>辨证详述</div>
-                  <pre className="text-[12px] bg-[#F8FAF9] rounded-lg p-3 overflow-auto max-h-64 whitespace-pre-wrap" style={{ color: C.mid }}>{result.reply}</pre>
-                </div>
-              )}
-              {result.disclaimer && (
-                <div className="text-[11px] leading-relaxed" style={{ color: C.light }}>⚠️ {result.disclaimer}</div>
-              )}
+          {result.suggestions && result.suggestions.length > 0 && (
+            <div>
+              <div className="text-[11px] mb-1" style={{ color: C.light }}>调理建议</div>
+              <ul className="list-disc pl-5 space-y-0.5">
+                {result.suggestions.map((s, i) => (
+                  <li key={i} className="text-[12px] leading-relaxed" style={{ color: C.mid }}>{s}</li>
+                ))}
+              </ul>
             </div>
           )}
-        </CardContent>
-      </Card>
-    </section>
+          {result.report_id && (
+            <div className="text-[11px]" style={{ color: C.light }}>报告 ID：<span className="font-mono">{result.report_id}</span></div>
+          )}
+          {result.reply && (
+            <div>
+              <div className="text-[11px] mb-1" style={{ color: C.light }}>辨证详述</div>
+              <pre className="text-[11px] bg-[#F8FAF9] rounded-lg p-2.5 overflow-auto max-h-48 whitespace-pre-wrap" style={{ color: C.mid }}>{result.reply}</pre>
+            </div>
+          )}
+          {result.disclaimer && (
+            <div className="text-[11px] leading-relaxed" style={{ color: C.light }}>⚠️ {result.disclaimer}</div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
