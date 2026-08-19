@@ -2193,6 +2193,60 @@ async def list_agent_center(admin: dict = Depends(get_current_admin)):
     return success(data={"total": len(items), "agents": items})
 
 
+@router.get("/agents/usage", summary="Agent 中台-调用量聚合(近7日)")
+async def agent_center_usage(admin: dict = Depends(get_current_admin)):
+    """按 CallLog.endpoint 前缀聚合各 Agent 能力近7日调用量（真实计量，运营驾驶舱数据源）。
+
+    前缀规则：/api/v1/agent/{agent_key}/... —— 与 agent/__init__.py 挂载前缀一致。
+    返回按 calls 降序排列，含 tokens / cost_cents 累计。
+    """
+    db = SessionLocal()
+    try:
+        agents = list_agents()
+        now = _now()
+        since = now - timedelta(days=7)
+        rows = (
+            db.query(
+                CallLog.endpoint,
+                func.count(CallLog.id),
+                func.coalesce(func.sum(CallLog.tokens_used), 0),
+                func.coalesce(func.sum(CallLog.cost_cents), 0),
+            )
+            .filter(CallLog.timestamp >= since)
+            .group_by(CallLog.endpoint)
+            .all()
+        )
+        usage_map: dict = {}
+        for ep, cnt, tokens, cost in rows:
+            ep = ep or ""
+            for key, spec in agents.items():
+                prefix = f"/api/v1/agent/{key}/"
+                if ep.startswith(prefix):
+                    u = usage_map.setdefault(key, {"calls": 0, "tokens": 0, "cost_cents": 0.0})
+                    u["calls"] += cnt
+                    u["tokens"] += int(tokens or 0)
+                    u["cost_cents"] += round(float(cost or 0), 2)
+                    break
+        items = [
+            {"agent_key": key,
+             "name": spec.get("name") or key,
+             "calls": u["calls"],
+             "tokens": u["tokens"],
+             "cost_cents": u["cost_cents"]}
+            for key, u in usage_map.items()
+        ]
+        items.sort(key=lambda x: x["calls"], reverse=True)
+        total_calls = sum(i["calls"] for i in items)
+        return success(data={
+            "period": "7d",
+            "since": since.strftime("%Y-%m-%d"),
+            "total_calls": total_calls,
+            "usage": items,
+        })
+    finally:
+        db.close()
+
+
 @router.get("/agents/{agent_key}", summary="Agent 能力详情")
 async def get_agent_detail(agent_key: str, admin: dict = Depends(get_current_admin)):
     spec = get_agent(agent_key)

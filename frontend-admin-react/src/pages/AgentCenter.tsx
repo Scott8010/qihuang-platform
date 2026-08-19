@@ -1,15 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Bot, Boxes, RefreshCw, Check, Loader2, Network, Gauge, Plug,
-  CircleDot, AlertTriangle, Stethoscope, X, BarChart3,
+  CircleDot, AlertTriangle, Stethoscope, X, BarChart3, Activity, Users,
+  Coins, HeartPulse, Zap, Server,
 } from "lucide-react";
+import {
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  PieChart, Pie, Cell, BarChart, Bar,
+} from "recharts";
 import { C } from "@/lib/types";
 import {
-  fetchAgentCenter, toggleAgent, fetchAgentDashboard,
-  fetchPlanAgentMatrix, setPlanAgents,
-  getIdentity, consultHealthAdvisor,
+  fetchAgentCenter, toggleAgent, fetchAgentDashboard, fetchPlanAgentMatrix, setPlanAgents,
+  getIdentity, consultHealthAdvisor, consultStoreCoach,
+  fetchDashboard, fetchSceneUsage, fetchAgentUsage,
   type AgentDef, type PlanAgentRow, type HealthAdvisorConsultResult,
 } from "@/lib/api";
 
@@ -90,8 +95,8 @@ export default function AgentCenter() {
         <b>套餐专家团</b>把能力打包进套餐，<b>各 Agent 看板</b>派发底层运营数据。新增能力只需注册 + 挂载路由。
       </div>
 
-      {/* ═══ 构件 0：平台总览（汇总可视化） ═══ */}
-      <AgentOverview agents={agents} onOpenTrial={setTrialFor} />
+      {/* ═══ 构件 0：Agent 中台 · 运营驾驶舱 ═══ */}
+      <AgentOverview agents={agents} />
 
       {/* ═══ 构件 A：能力资源池 ═══ */}
       <section>
@@ -169,14 +174,12 @@ export default function AgentCenter() {
                         onClick={() => openDash(a.agent_key)}>
                         <Gauge className="w-3.5 h-3.5 mr-1" /> 看板
                       </Button>
-                      {(a.agent_key === "health-advisor" || a.agent_key === "store-coach" || a.agent_key === "content-writer" || a.agent_key === "insight") && (
-                        <Button size="sm" variant="outline" className="h-7 text-[12px]"
-                          style={trialFor === a.agent_key ? { borderColor: C.primary, color: C.primary } : undefined}
-                          onClick={() => setTrialFor(trialFor === a.agent_key ? null : a.agent_key)}>
-                          <Stethoscope className="w-3.5 h-3.5 mr-1" />
-                          {trialFor === a.agent_key ? "收起" : "在线试用"}
-                        </Button>
-                      )}
+                      <Button size="sm" variant="outline" className="h-7 text-[12px]"
+                        style={trialFor === a.agent_key ? { borderColor: C.primary, color: C.primary } : undefined}
+                        onClick={() => setTrialFor(trialFor === a.agent_key ? null : a.agent_key)}>
+                        <Stethoscope className="w-3.5 h-3.5 mr-1" />
+                        {trialFor === a.agent_key ? "收起" : "在线试用"}
+                      </Button>
                     </div>
 
                     {/* 在线试用展开区（内嵌在能力卡片上） */}
@@ -377,108 +380,257 @@ export default function AgentCenter() {
   );
 }
 
-function Metric({ label, value, color }: { label: string; value: string; color: string }) {
+function Metric({ label, value, color, sub, icon, dark }: {
+  label: string; value: string; color: string; sub?: string; icon?: ReactNode; dark?: boolean;
+}) {
   return (
-    <div className="rounded-lg border p-3" style={{ borderColor: C.border }}>
-      <div className="text-[11px] mb-1" style={{ color: C.light }}>{label}</div>
-      <div className="text-[20px] font-semibold" style={{ color }}>{value}</div>
+    <div className="rounded-xl px-4 py-3.5 relative overflow-hidden"
+      style={dark
+        ? { background: `linear-gradient(135deg, #22312B 0%, #2E5A4C 60%, #3D7363 100%)`, boxShadow: "0 6px 18px rgba(34,49,43,0.18)" }
+        : { background: "white", border: "1px solid " + C.border }}>
+      {dark && (
+        <div className="absolute -right-4 -top-6 w-20 h-20 rounded-full opacity-20" style={{ background: "#C8A45D" }} />
+      )}
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[11px]" style={{ color: dark ? "rgba(255,255,255,0.65)" : C.light }}>{label}</span>
+        {icon && <span style={{ color: dark ? "rgba(255,255,255,0.8)" : color }}>{icon}</span>}
+      </div>
+      <div className="text-[26px] leading-tight font-semibold tracking-tight"
+        style={{ color: dark ? "#F3F6F4" : color }}>
+        {value}
+      </div>
+      {sub && (
+        <div className="text-[10px] mt-0.5" style={{ color: dark ? "rgba(255,255,255,0.55)" : C.light }}>{sub}</div>
+      )}
     </div>
   );
 }
 
 /* ═══════════════════════════════════════════
-   构件 0：平台总览（汇总可视化）
-   纯前端聚合 agents/plans，不新增后端接口。
+   构件 0：Agent 中台 · 运营驾驶舱
+   数据 100% 平台自身真实计量：
+   - 4 指标卡 / 7日趋势 / 服务健康 ← /admin/v1/dashboard（真实 DB 聚合）
+   - 场景调用分布 ← /admin/v1/billing/scene-usage（CallLog 本月）
+   - Agent 活跃度排行 ← /admin/v1/agents/usage（CallLog 近7日）
    ═══════════════════════════════════════════ */
 
-const categoryLabel: Record<string, string> = {
-  content: "内容", mystic: "玄学", health: "健康", edu: "培训", business: "经营",
-};
-const categoryColor: Record<string, string> = {
-  content: "#2E5A4C", mystic: "#8A6A1F", health: "#3D7363", edu: "#C8A45D", business: "#5B7F8A",
-};
+const SCENE_COLORS: Record<string, string> = { HEALTH: "#2E5A4C", MED: "#B03A2E", EDU: "#C8A45D" };
+const SCENE_NAMES: Record<string, string> = { HEALTH: "大健康", MED: "医疗", EDU: "培训" };
 
-function AgentOverview({ agents, onOpenTrial }: {
-  agents: AgentDef[];
-  onOpenTrial: (key: string) => void;
-}) {
-  const total = agents.length;
-  const active = agents.filter((a) => a.status === "active").length;
-  const inactive = total - active;
-  const activeRate = total ? Math.round((active / total) * 100) : 0;
+function AgentOverview({ agents }: { agents: AgentDef[] }) {
+  const [dash, setDash] = useState<any>(null);
+  const [sceneUsage, setSceneUsage] = useState<any[]>([]);
+  const [agentUsage, setAgentUsage] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // 分类分布
-  const byCat = new Map<string, number>();
-  agents.forEach((a) => byCat.set(a.category, (byCat.get(a.category) || 0) + 1));
-  const cats = Array.from(byCat.entries()).sort((x, y) => y[1] - x[1]);
+  const load = () => {
+    setLoading(true);
+    Promise.all([fetchDashboard(), fetchSceneUsage(), fetchAgentUsage()])
+      .then(([d, s, u]) => { setDash(d); setSceneUsage(s); setAgentUsage(u.usage || []); })
+      .finally(() => setLoading(false));
+  };
+  useEffect(load, []);
 
-  // 套餐覆盖
-  const covered = agents.filter((a) => a.included_in_plans.length > 0).length;
+  // 近7日趋势：callTrend 三段求和还原真实每日调用
+  const trend = (dash?.callTrend || []).map((t: any) => ({
+    day: t.day,
+    calls: (t["大健康"] || 0) + (t["医疗"] || 0) + (t["培训"] || 0),
+  }));
+
+  // 场景调用分布（本月真实 CallLog）
+  const sceneData = (sceneUsage || [])
+    .map((s: any) => ({
+      name: SCENE_NAMES[s.sceneKey] || s.scene || "未分类",
+      value: s.calls || 0,
+      fill: SCENE_COLORS[s.sceneKey] || "#8FA9A0",
+    }))
+    .filter((x: any) => x.value > 0);
+
+  // Agent 活跃度排行（近7日真实计量，按调用降序）
+  const usageData = (agentUsage || []).slice(0, 8);
+
+  const services = dash?.services || [];
+  const okCount = services.filter((s: any) => s.ok).length;
+  const llmStatus = services[services.length - 1]?.status || "—";
+  const fmt = (n: number) => (n >= 10000 ? (n / 10000).toFixed(1) + "w" : n.toLocaleString());
 
   return (
     <section>
-      <Card className="border" style={{ borderColor: C.border }}>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <BarChart3 className="w-4 h-4" style={{ color: C.primary }} />
-            <span className="text-[14px] font-medium" style={{ color: C.ink }}>平台总览</span>
-            <span className="text-[11px] px-1.5 py-0.5 rounded-full" style={{ background: C.soft, color: C.primary }}>
-              {active}/{total} 启用
-            </span>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Activity className="w-4 h-4" style={{ color: C.primary }} />
+          <span className="text-[14px] font-medium" style={{ color: C.ink }}>Agent 中台 · 运营驾驶舱</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono" style={{ background: C.soft, color: C.primary }}>
+            真实计量
+          </span>
+        </div>
+        <Button size="sm" variant="outline" className="h-7 text-[12px]" onClick={load}>
+          <RefreshCw className="w-3.5 h-3.5 mr-1" /> 刷新
+        </Button>
+      </div>
+
+      {loading ? (
+        <Card className="border" style={{ borderColor: C.border }}>
+          <CardContent className="p-10 text-center"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />驾驶舱加载中…</CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {/* 4 大指标（真实 DB 计量） */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Metric dark label="今日 API 调用" value={fmt(dash?.todayCalls || 0)} color="#F3F6F4"
+              sub={`累计 ${fmt(dash?.apiCalls || 0)} 次`} icon={<Zap className="w-3.5 h-3.5" />} />
+            <Metric label="活跃租户" value={String(dash?.activeTenants || 0)} color={C.primary}
+              sub={`本月新增 ${dash?.newThisMonth ?? 0} 家`} icon={<Users className="w-3.5 h-3.5" />} />
+            <Metric label="本月应收" value={`¥${fmt(Math.round((dash?.revenueCents || 0) / 100))}`} color="#8A6A1F"
+              sub="账单计价（分累计）" icon={<Coins className="w-3.5 h-3.5" />} />
+            <Metric label="服务健康" value={`${okCount}/${services.length}`}
+              color={services.length && okCount === services.length ? "#2E5A4C" : "#B03A2E"}
+              sub={services.length ? `LLM 集群 · ${llmStatus}` : "暂无服务数据"}
+              icon={<Server className="w-3.5 h-3.5" />} />
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-            <Metric label="能力总数" value={String(total)} color={C.primary} />
-            <Metric label="启用中" value={String(active)} color="#2E5A4C" />
-            <Metric label="已停用" value={String(inactive)} color={inactive ? "#B03A2E" : C.mid} />
-            <Metric label="覆盖套餐" value={`${covered}/${total}`} color="#8A6A1F" />
+          {/* 图表区 1：趋势 + 场景分布 */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+            <Card className="border lg:col-span-7" style={{ borderColor: C.border }}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <BarChart3 className="w-3.5 h-3.5" style={{ color: C.primary }} />
+                  <span className="text-[12px] font-medium" style={{ color: C.ink }}>近 7 日 API 调用趋势</span>
+                  <span className="text-[10px]" style={{ color: C.light }}>每日真实调用次数</span>
+                </div>
+                <div className="h-44">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={trend} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#2E5A4C" stopOpacity={0.28} />
+                          <stop offset="100%" stopColor="#2E5A4C" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E3ECE8" vertical={false} />
+                      <XAxis dataKey="day" tick={{ fontSize: 10, fill: "#8FA9A0" }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: "#8FA9A0" }} axisLine={false} tickLine={false} />
+                      <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #E3ECE8" }}
+                        formatter={(v: any) => [`${v} 次`, "调用"]} />
+                      <Area type="monotone" dataKey="calls" stroke="#2E5A4C" strokeWidth={2} fill="url(#trendFill)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border lg:col-span-5" style={{ borderColor: C.border }}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <CircleDot className="w-3.5 h-3.5" style={{ color: C.primary }} />
+                  <span className="text-[12px] font-medium" style={{ color: C.ink }}>场景调用分布</span>
+                  <span className="text-[10px]" style={{ color: C.light }}>本月真实计量</span>
+                </div>
+                {sceneData.length === 0 ? (
+                  <div className="h-44 flex items-center justify-center text-[12px]" style={{ color: C.light }}>本月暂无调用数据</div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="h-44 w-1/2">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={sceneData} dataKey="value" nameKey="name" cx="50%" cy="50%"
+                            innerRadius={38} outerRadius={62} paddingAngle={3} strokeWidth={0}>
+                            {sceneData.map((x: any, i: number) => <Cell key={i} fill={x.fill} />)}
+                          </Pie>
+                          <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #E3ECE8" }}
+                            formatter={(v: any, n: any) => [`${v} 次`, n]} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      {sceneData.map((x: any) => (
+                        <div key={x.name} className="flex items-center justify-between text-[11px]">
+                          <span className="flex items-center gap-1.5" style={{ color: C.mid }}>
+                            <span className="w-2 h-2 rounded-full" style={{ background: x.fill }} />
+                            {x.name}
+                          </span>
+                          <span className="font-mono" style={{ color: C.ink }}>{x.value.toLocaleString()}</span>
+                        </div>
+                      ))}
+                      <div className="pt-1 border-t text-[10px]" style={{ borderColor: C.border, color: C.light }}>
+                        合计 {sceneData.reduce((n: number, x: any) => n + x.value, 0).toLocaleString()} 次
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
-          {/* 启用率进度条 */}
-          <div className="mb-3">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[11px]" style={{ color: C.light }}>启用率</span>
-              <span className="text-[11px] font-medium" style={{ color: C.primary }}>{activeRate}%</span>
-            </div>
-            <div className="h-2 rounded-full overflow-hidden" style={{ background: "#F0F0F0" }}>
-              <div className="h-full rounded-full" style={{ width: `${activeRate}%`, background: C.primary }} />
-            </div>
-          </div>
+          {/* 图表区 2：Agent 活跃度排行 + 服务健康 */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+            <Card className="border lg:col-span-7" style={{ borderColor: C.border }}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap className="w-3.5 h-3.5" style={{ color: C.primary }} />
+                  <span className="text-[12px] font-medium" style={{ color: C.ink }}>Agent 活跃度排行</span>
+                  <span className="text-[10px]" style={{ color: C.light }}>近 7 日调用量（真实计量）</span>
+                </div>
+                {usageData.length === 0 ? (
+                  <div className="h-44 flex items-center justify-center text-[12px]" style={{ color: C.light }}>
+                    近 7 日暂无 Agent 调用，业务端接入后自动累积
+                  </div>
+                ) : (
+                  <div className="h-44">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={usageData} layout="vertical" margin={{ top: 0, right: 24, left: 8, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E3ECE8" horizontal={false} />
+                        <XAxis type="number" tick={{ fontSize: 10, fill: "#8FA9A0" }} axisLine={false} tickLine={false} />
+                        <YAxis type="category" dataKey="name" width={96} tick={{ fontSize: 10, fill: "#4A5B54" }} axisLine={false} tickLine={false} />
+                        <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #E3ECE8" }}
+                          formatter={(v: any) => [`${v} 次`, "调用"]} />
+                        <Bar dataKey="calls" radius={[0, 4, 4, 0]} barSize={14}>
+                          {usageData.map((x: any, i: number) => (
+                            <Cell key={i} fill={i === 0 ? "#8A6A1F" : i === 1 ? "#2E5A4C" : "#3D7363"} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
-          {/* 分类分布 */}
-          <div className="flex flex-wrap gap-2 mb-3">
-            {cats.map(([k, v]) => (
-              <span key={k} className="text-[11px] px-2 py-0.5 rounded-full" style={{
-                background: (categoryColor[k] || C.mid) + "18", color: categoryColor[k] || C.mid,
-              }}>
-                {categoryLabel[k] || k} × {v}
-              </span>
-            ))}
-            {cats.length === 0 && <span className="text-[11px]" style={{ color: C.light }}>暂无分类数据</span>}
+            <Card className="border lg:col-span-5" style={{ borderColor: C.border }}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <HeartPulse className="w-3.5 h-3.5" style={{ color: C.primary }} />
+                  <span className="text-[12px] font-medium" style={{ color: C.ink }}>平台服务健康</span>
+                  <span className="text-[10px]" style={{ color: C.light }}>依赖服务快照</span>
+                </div>
+                <div className="space-y-2">
+                  {services.length === 0 && (
+                    <div className="py-8 text-center text-[12px]" style={{ color: C.light }}>暂无服务数据</div>
+                  )}
+                  {services.map((s: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg"
+                      style={{ background: s.ok ? "#F3F6F4" : "#FBF4E4" }}>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full" style={{ background: s.ok ? "#2E5A4C" : "#C8A45D" }} />
+                        <span className="text-[12px]" style={{ color: C.ink }}>{s.name}</span>
+                        {!s.ok && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#FDF6E3", color: "#8A6A1F" }}>
+                            {s.status}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 text-[10px] font-mono" style={{ color: C.light }}>
+                        <span>{s.latency}</span>
+                        <span>{s.uptime}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </div>
-
-          {/* 各能力状态条（点「试用」直接展开对应能力） */}
-          <div className="flex flex-wrap gap-1.5">
-            {agents.map((a) => {
-              const on = a.status === "active";
-              return (
-                <button key={a.agent_key}
-                  onClick={() => onOpenTrial(a.agent_key)}
-                  className="flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full border transition-colors"
-                  style={{
-                    borderColor: on ? C.border : "#E5E5E5",
-                    background: on ? "#FAFCFB" : "#F7F7F7",
-                    color: on ? C.ink : C.light,
-                  }}
-                  title={on ? "已启用 · 点击在线试用" : "已停用 · 点击在线试用"}>
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: on ? "#2E5A4C" : "#CCCCCC" }} />
-                  {a.name}
-                </button>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
     </section>
   );
 }
@@ -493,13 +645,150 @@ function AgentTrial({ agent, onClose }: { agent: AgentDef; onClose: () => void }
   if (agent.agent_key === "health-advisor") {
     return <HealthAdvisorTrial onClose={onClose} />;
   }
+  if (agent.agent_key === "store-coach") {
+    return <StoreCoachTrial onClose={onClose} />;
+  }
   return (
-    <div className="text-[12px] flex items-center justify-between" style={{ color: C.mid }}>
-      <span className="flex items-center gap-2">
-        <AlertTriangle className="w-3.5 h-3.5" style={{ color: C.light }} />
-        「{agent.name}」暂未提供控制台内试用表单，可直接在卡片「看板」查看运营数据，或由业务端按 API 契约调用。
-      </span>
-      <Button size="sm" variant="outline" className="h-6 text-[11px]" onClick={onClose}>关闭</Button>
+    <div className="space-y-2.5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Plug className="w-3.5 h-3.5" style={{ color: C.primary }} />
+          <span className="text-[12px] font-medium" style={{ color: C.ink }}>「{agent.name}」API 契约</span>
+        </div>
+        <Button size="sm" variant="outline" className="h-6 text-[11px]" onClick={onClose}>关闭</Button>
+      </div>
+      {agent.desc && <p className="text-[11px] leading-relaxed" style={{ color: C.mid }}>{agent.desc}</p>}
+      <div className="flex flex-wrap gap-1.5">
+        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono" style={{ background: C.soft, color: C.primary }}>
+          {agent.router_prefix || "—"}
+        </span>
+        {agent.capabilities.map((c) => (
+          <span key={c} className="text-[10px] px-1.5 py-0.5 rounded font-mono" style={{ background: "#F5F5F5", color: C.mid }}>
+            {c}
+          </span>
+        ))}
+      </div>
+      <div className="text-[11px] flex items-center gap-2" style={{ color: C.light }}>
+        <AlertTriangle className="w-3.5 h-3.5" />
+        该能力由业务端按上述 API 契约调用（鉴权走登录态）；控制台内可直接用卡片「看板」查看它的真实运营数据。
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   门店话术教练在线试用
+   直接对接 /api/v1/agent/store-coach/sessions，
+   输入对练主题（可带课件文本），即时看到 AI 顾客开场白。
+   ═══════════════════════════════════════════ */
+
+function StoreCoachTrial({ onClose }: { onClose?: () => void }) {
+  const [topic, setTopic] = useState("");
+  const [profile, setProfile] = useState("");
+  const [material, setMaterial] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const run = async () => {
+    if (!topic.trim()) { setErr("请输入对练主题"); return; }
+    setLoading(true); setErr(null); setResult(null);
+    const r = await consultStoreCoach({
+      topic: topic.trim(),
+      customer_profile: profile.trim() || undefined,
+      material_text: material.trim() || undefined,
+    });
+    setLoading(false);
+    if (r?.code === 0 && r.data) setResult(r.data);
+    else setErr(r?.message || "调用失败");
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Stethoscope className="w-3.5 h-3.5" style={{ color: C.primary }} />
+          <span className="text-[12px] font-medium" style={{ color: C.ink }}>门店话术教练 · 在线试用</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: C.soft, color: C.primary }}>store-coach</span>
+        </div>
+        {onClose && (
+          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100" style={{ color: C.light }}>
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      <div>
+        <label className="text-[11px] mb-1 block" style={{ color: C.mid }}>对练主题（*）</label>
+        <input
+          value={topic} onChange={(e) => setTopic(e.target.value)}
+          placeholder="例：顾客嫌养生套餐贵，怎么接"
+          className="w-full rounded-lg border px-2.5 py-1.5 text-[12px] focus:outline-none"
+          style={{ borderColor: C.border, color: C.ink }}
+        />
+      </div>
+
+      <div>
+        <label className="text-[11px] mb-1 block" style={{ color: C.mid }}>顾客画像（选填）</label>
+        <input
+          value={profile} onChange={(e) => setProfile(e.target.value)}
+          placeholder="例：50岁阿姨、注重养生、对价格敏感"
+          className="w-full rounded-lg border px-2.5 py-1.5 text-[12px] focus:outline-none"
+          style={{ borderColor: C.border, color: C.ink }}
+        />
+      </div>
+
+      <div>
+        <label className="text-[11px] mb-1 block" style={{ color: C.mid }}>课件文本（选填，课件驱动 V2）</label>
+        <textarea
+          value={material} onChange={(e) => setMaterial(e.target.value)}
+          rows={2}
+          placeholder="粘贴店长上传课件的文本片段，AI 顾客将围绕课件知识点提问"
+          className="w-full rounded-lg border p-2.5 text-[12px] resize-none focus:outline-none"
+          style={{ borderColor: C.border, color: C.ink }}
+        />
+      </div>
+
+      {err && (
+        <div className="text-[11px] flex items-center gap-2" style={{ color: "#B03A2E" }}>
+          <AlertTriangle className="w-3.5 h-3.5" />{err}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2">
+        <Button size="sm" className="h-7 text-[12px]" style={{ background: C.primary }}
+          disabled={loading} onClick={run}>
+          {loading
+            ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+            : <Stethoscope className="w-3.5 h-3.5 mr-1" />}
+          {loading ? "AI 顾客开场中…" : "开始对练"}
+        </Button>
+      </div>
+
+      {result && (
+        <div className="border-t pt-2.5 space-y-2.5" style={{ borderColor: C.border }}>
+          <div>
+            <div className="text-[11px] mb-1" style={{ color: C.light }}>顾客画像</div>
+            <div className="text-[12px]" style={{ color: C.ink }}>{result.customer_profile}</div>
+          </div>
+          <div>
+            <div className="text-[11px] mb-1" style={{ color: C.light }}>AI 顾客开场白</div>
+            <div className="text-[12px] leading-relaxed rounded-lg px-3 py-2" style={{ background: "#F3F6F4", color: C.ink }}>
+              {result.opening}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <span className="text-[10px] px-1.5 py-0.5 rounded font-mono" style={{ background: C.soft, color: C.primary }}>
+              {result.model}
+            </span>
+            {result.passing_score != null && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded font-mono" style={{ background: "#FDF6E3", color: "#8A6A1F" }}>
+                合格线 {result.passing_score}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

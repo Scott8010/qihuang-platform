@@ -125,6 +125,7 @@ export async function changePassword(old_password: string, new_password: string)
 
 export async function fetchDashboard(): Promise<{
   totalTenants: number; activeTenants: number; totalUsers: number;
+  newThisMonth: number;
   apiCalls: number; todayCalls: number; apiUsage: number; revenueCents: number;
   callTrend: CallTrendItem[]; sceneDist: SceneDistItem[];
   alerts: AlertItem[]; reviews: TodoReviewItem[];
@@ -137,6 +138,7 @@ export async function fetchDashboard(): Promise<{
     const totalTenants = d.tenants?.total || 0;
     const activeTenants = d.tenants?.active || 0;
     const totalUsers = d.users?.total || 0;
+    const newThisMonth = d.tenants?.new_this_month || 0;
     const totalCalls = d.api?.total_calls || 0;
     const todayCalls = d.api?.today_calls || 0;
     const revenueCents = d.revenue?.total_cents || 0;
@@ -178,7 +180,7 @@ export async function fetchDashboard(): Promise<{
     }
 
     return {
-      totalTenants, activeTenants, totalUsers,
+      totalTenants, activeTenants, totalUsers, newThisMonth,
       apiCalls: totalCalls, todayCalls,
       apiUsage: d.api?.avg_latency_ms || 0,
       revenueCents,
@@ -201,7 +203,7 @@ export async function fetchDashboard(): Promise<{
     };
   } catch (e) {
     console.error("fetchDashboard error", e);
-    return { totalTenants: 0, activeTenants: 0, totalUsers: 0, apiCalls: 0, todayCalls: 0, apiUsage: 0, revenueCents: 0, callTrend: [], sceneDist: [], alerts: [], reviews: [], services: [], recentOps: [] };
+    return { totalTenants: 0, activeTenants: 0, totalUsers: 0, newThisMonth: 0, apiCalls: 0, todayCalls: 0, apiUsage: 0, revenueCents: 0, callTrend: [], sceneDist: [], alerts: [], reviews: [], services: [], recentOps: [] };
   }
 }
 
@@ -790,6 +792,30 @@ export async function setPlanAgents(planId: string, agents: string[]): Promise<M
   return mutate("PUT", `/admin/v1/plans/${encodeURIComponent(planId)}/agents`, { agents });
 }
 
+export interface AgentUsageItem {
+  agent_key: string;
+  name: string;
+  calls: number;
+  tokens: number;
+  cost_cents: number;
+}
+
+/** GET /admin/v1/agents/usage — 各 Agent 近7日调用量聚合（运营驾驶舱·活跃度排行数据源） */
+export async function fetchAgentUsage(): Promise<{ usage: AgentUsageItem[]; totalCalls: number }> {
+  try {
+    const r = await get<{ code: number; data?: { usage?: any[]; total_calls?: number } }>("/admin/v1/agents/usage");
+    if (r?.code !== 0 || !r.data) return { usage: [], totalCalls: 0 };
+    const usage = (r.data.usage || []).map((u: any) => ({
+      agent_key: u.agent_key || "",
+      name: u.name || u.agent_key || "",
+      calls: u.calls ?? 0,
+      tokens: u.tokens ?? 0,
+      cost_cents: u.cost_cents ?? 0,
+    }));
+    return { usage, totalCalls: r.data.total_calls ?? 0 };
+  } catch (e) { console.error("fetchAgentUsage error", e); return { usage: [], totalCalls: 0 }; }
+}
+
 // ═══ 中医健康顾问（health-advisor）═══
 // 后端契约见 qihuang_platform/agent/health_advisor/router.py
 // POST /api/v1/agent/health-advisor/consult（需登录态，复用 _token）
@@ -821,6 +847,38 @@ export async function consultHealthAdvisor(
 ): Promise<{ code: number; message?: string; data?: HealthAdvisorConsultResult }> {
   return post<{ code: number; message?: string; data?: HealthAdvisorConsultResult }>(
     "/api/v1/agent/health-advisor/consult",
+    payload,
+  );
+}
+
+// ═══ 门店话术教练（store-coach）═══
+// 后端契约见 qihuang_platform/agent/store_coach/router.py
+// POST /api/v1/agent/store-coach/sessions（需登录态，复用 _token）
+
+export interface StoreCoachTrialReq {
+  scene?: string;
+  topic: string;
+  customer_profile?: string;
+  material_text?: string;
+  passing_score?: number;
+}
+
+export interface StoreCoachTrialResult {
+  session_id: string;
+  scene: string;
+  topic: string;
+  customer_profile: string;
+  opening: string;
+  model?: string;
+  material_ref?: string | null;
+  passing_score?: number | null;
+}
+
+export async function consultStoreCoach(
+  payload: StoreCoachTrialReq,
+): Promise<{ code: number; message?: string; data?: StoreCoachTrialResult }> {
+  return post<{ code: number; message?: string; data?: StoreCoachTrialResult }>(
+    "/api/v1/agent/store-coach/sessions",
     payload,
   );
 }
