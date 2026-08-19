@@ -580,12 +580,21 @@ PRESET_PERMISSIONS = [
 
 def seed_preset_data(session):
     """初始化预置角色和权限"""
-    from qihuang_platform.db.models import Role, Permission, RolePermission, Tenant
+    from qihuang_platform.db.models import Role, Permission, RolePermission, Tenant, Org
 
     # 创建默认租户
     if not session.query(Tenant).filter_by(name="default").first():
         t = Tenant(id="tenant_default", name="default", display_name="默认租户", scene="health")
         session.add(t)
+        session.flush()
+
+    # 创建默认机构（与默认租户配对）。gateway 在用户 org_id 缺失时回退为
+    # "org_default"，若不 seed，template_ownership / store_questionnaire 等 org_id
+    # 外键在 PostgreSQL（严格 FK 约束）下插入会失败；SQLite 则因不强制 FK 而掩盖。
+    if not session.query(Org).filter_by(id="org_default").first():
+        org = Org(id="org_default", tenant_id="tenant_default",
+                  name="default org", org_type="root", status="active")
+        session.add(org)
         session.flush()
 
     # 创建预置权限

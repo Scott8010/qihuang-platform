@@ -56,7 +56,7 @@ def test_orchestrator_attribution(monkeypatch, client):
     try:
         _cleanup(db)
         asyncio.run(ha._record_attribution(
-            "t1", _Req(),
+            "tenant_default", _Req(),
             _Resp([_F("麻黄汤"), _F("桂枝汤")], _Syn("风寒表实证"), False),
             "tr1",
         ))
@@ -87,7 +87,7 @@ def test_business_signal_fetch_and_collect(monkeypatch, client):
         _cleanup(db)
         for _ in range(5):
             db.add(ConsultAttribution(
-                tenant_id="t1", kg_id="kg-A", entity_name="麻黄汤",
+                tenant_id="tenant_default", kg_id="kg-A", entity_name="麻黄汤",
                 entity_type="formula", adopted=True))
         db.commit()
     finally:
@@ -140,7 +140,7 @@ def test_business_gain_amplifies(monkeypatch, client):
         _cleanup(db)
         for _ in range(3):
             db.add(ConsultAttribution(
-                tenant_id="t1", kg_id="kg-B", entity_name="桂枝汤",
+                tenant_id="tenant_default", kg_id="kg-B", entity_name="桂枝汤",
                 entity_type="formula", adopted=True))
         db.commit()
     finally:

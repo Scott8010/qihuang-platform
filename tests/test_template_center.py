@@ -53,7 +53,7 @@ def test_template_center_full_flow(client, admin_token):
 
     # 4) 克隆到机构
     r = client.post(f"/admin/v1/template-center/templates/{tid}/clone", headers=H, json={
-        "target_org_id": "org-2", "visibility": "private",
+        "target_org_id": "org_default", "visibility": "private",
     })
     assert r.status_code == 200, r.text
     assert r.json()["data"]["ownership"]["source"] == "clone"
