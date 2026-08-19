@@ -99,6 +99,20 @@ BUILTIN_AGENTS: Dict[str, Dict[str, Any]] = {
                 "护栏：只做数据诊断与经营建议、不做医疗/辨证、不承诺经营效果、决策权在人，"
                 "供业务 Agent B1 经营风控 / 经营管理调用。",
     },
+    "store-coach": {
+        "name": "门店话术教练",
+        "kind": "business_embedded",          # 融入业务流的能力模块
+        "engine": "qihuang-store-coach",       # 8602 自有 4 引擎 LLM 双角色（顾客扮演 + 话术评估）
+        "router_prefix": "/api/v1/agent/store-coach",
+        "capabilities": ["sessions", "evaluate", "dashboard"],
+        "status": "active",
+        "category": "business",
+        "desc": "门店话术训练：AI 扮演顾客角色，店员练习接待/推荐/异议处理/促成话术，"
+                "四维话术评分（完整性/专业性/亲和力/合规性）+ 合规横切（违规标红拦截），"
+                "内容模板化（DbTemplate kind=script/product/project），"
+                "独立于 theory-coach（中医辨证对练，edu/coach）不混表不混语义，"
+                "供业务 Agent B3 员工军师调用。",
+    },
 }
 
 # 运行时缓存（与 agent_def 表最终一致）

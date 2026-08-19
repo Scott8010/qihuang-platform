@@ -331,6 +331,32 @@ class EduCoachSession(Base):
     created_at = Column(DateTime, default=_now)
 
 
+class StoreCoachSession(Base):
+    """门店话术对练会话表（store-coach 能力，独立于 edu_coach_session 不混表）
+
+    场景：门店店员话术训练——AI 扮演顾客角色，店员练习接待/推荐/异议处理/促成话术，
+    按话术四维评分（完整性/专业性/亲和力/合规性），输出过 compliance 审核。
+    tenant_id 非空（行级隔离），user_id 可空（API Key 调用时无 user 上下文）。
+    """
+    __tablename__ = "store_coach_session"
+    id = Column(String(36), primary_key=True, default=_uid)
+    tenant_id = Column(String(36), ForeignKey("tenant.id"), nullable=False, index=True)
+    user_id = Column(String(36), index=True)  # 不强制 FK：API Key 调用无 user 上下文
+    scene = Column(String(30), default="reception")  # reception/recommend/objection/close
+    topic = Column(String(200))
+    script_id = Column(String(36), index=True)     # 话术模板（DbTemplate kind=script）
+    product_id = Column(String(36), index=True)    # 产品模板（DbTemplate kind=product）
+    project_id = Column(String(36), index=True)    # 项目模板（DbTemplate kind=project）
+    customer_profile = Column(String(200))         # 顾客画像（默认内置，可租户传入）
+    messages = Column(JSON)                        # 对话历史
+    evaluation = Column(JSON)                      # 四维话术评分 {"completeness":..,"professional":..,"affinity":..,"compliance":..}
+    score = Column(Float)                          # 加权总分 0-100
+    feedback = Column(Text)                        # 改进建议
+    compliance_ok = Column(Boolean, default=True)  # 输出是否过 compliance 审核
+    compliance_hits = Column(JSON)                 # 违规命中明细（标红依据）
+    created_at = Column(DateTime, default=_now)
+
+
 class EduExamRecord(Base):
     """测评记录表"""
     __tablename__ = "edu_exam_record"

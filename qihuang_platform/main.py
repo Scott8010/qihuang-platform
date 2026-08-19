@@ -90,7 +90,19 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             print(f"[Platform] Agent 注册表同步失败: {e}")
 
-        # 4) 默认租户订阅企业版（含 compliance），保证控制端/默认租户可调用 Agent 能力
+        # 4) store-coach 平台级培训模板种数据（幂等：话术/产品/项目样例）
+        db = SessionLocal()
+        try:
+            from qihuang_platform.agent.store_coach.seed import seed_platform_templates
+            n = seed_platform_templates(db)
+            print(f"[Platform] store-coach 培训模板已种入 {n} 个（幂等，已存在则跳过）")
+        except Exception as e:
+            db.rollback()
+            print(f"[Platform] store-coach 培训模板种入跳过: {e}")
+        finally:
+            db.close()
+
+        # 5) 默认租户订阅企业版（含 compliance），保证控制端/默认租户可调用 Agent 能力
         db = SessionLocal()
         try:
             from qihuang_platform.db.models import Subscription, Plan as _Plan
