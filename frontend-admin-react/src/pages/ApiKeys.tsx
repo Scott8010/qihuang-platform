@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, KeyRound, Copy, RefreshCw, Ban, Loader2 } from "lucide-react";
+import { Plus, KeyRound, Copy, RefreshCw, Ban, Loader2, FileDown } from "lucide-react";
 import { C, keyStatus } from "@/lib/types";
 import type { ApiKey } from "@/lib/types";
 import { fetchApiKeys, createApiKey, rotateApiKey, revokeApiKey } from "@/lib/api";
@@ -70,10 +70,18 @@ export default function ApiKeys() {
       .finally(() => setLoading(false));
   }, []);
 
-  const copy = (v: string) => {
+  const copy = (v: string, label: string) => {
     navigator.clipboard?.writeText(v);
     setCopied(v);
     setTimeout(() => setCopied(""), 1500);
+    if (label === 'app_secret') {
+      toast.success('SK 已复制 · 请妥善保存到客户 .env，关闭后不再显示', {
+        duration: 4000,
+        description: '建议走安全通道交付（加密文件 / 线下），不要发到聊天框',
+      });
+    } else {
+      toast.success(`${label} 已复制`);
+    }
   };
 
   async function doIssue() {
@@ -178,7 +186,7 @@ export default function ApiKeys() {
                       <div className="flex items-center gap-2">
                         <KeyRound className="w-4 h-4" style={{ color: C.light }} />
                         <span className="font-mono text-[12px]" style={{ color: C.ink }}>{maskKey(k.appKey)}</span>
-                        <button className="hover:opacity-70" onClick={() => copy(k.appKey)} title="复制完整 Key">
+                        <button className="hover:opacity-70" onClick={() => copy(k.appKey, 'app_key')} title="复制完整 Key">
                           <Copy className="w-3.5 h-3.5" style={{ color: copied === k.appKey ? C.primary : C.light }} />
                         </button>
                       </div>
@@ -245,9 +253,28 @@ export default function ApiKeys() {
                 <div>app_key: {issued.app_key}</div>
                 <div>app_secret: {issued.app_secret}</div>
               </div>
-              <Button size='sm' variant='outline' onClick={() => copy(issued.app_secret)}>
-                <Copy className='w-3.5 h-3.5 mr-1' /> 复制 secret
-              </Button>
+              <div className='rounded p-2 text-[11px]' style={{ background: '#FFF6E6', border: '1px solid #F0DDA8', color: '#6B4900' }}>
+                <b>⚠️ 妥善保管</b>：SK 关闭此弹窗后<b>永远不可再查</b>，丢失需走运营方轮换流程（旧 SK 72h 内仍可并行使用）。
+              </div>
+              <div className='flex gap-2'>
+                <Button size='sm' variant='outline' onClick={() => copy(issued.app_secret, 'app_secret')}>
+                  <Copy className='w-3.5 h-3.5 mr-1' /> 复制 secret
+                </Button>
+                <Button size='sm' variant='outline' onClick={() => copy(issued.app_key, 'app_key')}>
+                  <Copy className='w-3.5 h-3.5 mr-1' /> 复制 app_key
+                </Button>
+                <a
+                  href={`${window.location.origin}/admin/8602-客户接入手册-v1.0.html`}
+                  download="8602-客户接入手册-v1.0.html"
+                  target="_blank"
+                  rel="noopener"
+                  className='inline-flex items-center gap-1 rounded-md border px-3 h-8 text-[12px] hover:bg-[#F8FAF9]'
+                  style={{ borderColor: C.border, color: C.primary }}
+                  title='下载后一并交付给客户'
+                >
+                  <FileDown className='w-3.5 h-3.5' /> 下载接入手册 v1.0
+                </a>
+              </div>
             </div>
           ) : (
             <div className='space-y-2'>

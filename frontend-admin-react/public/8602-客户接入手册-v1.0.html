@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>岐黄智脑 8602 · 客户接入手册 v1.0</title>
+<style>
+  :root{
+    --c-bg:#F3F6F4; --c-card:#FFFFFF; --c-ink:#1F3D2E; --c-mid:#547060;
+    --c-light:#8AA294; --c-border:#D6E0D9; --c-primary:#2E5A4C;
+    --c-gold:#C8A45D; --c-gold-soft:#F5EDD9; --c-soft:#EAF2EE;
+    --c-danger:#B03A2E; --c-teal:#0F6E56; --c-amber:#854F0B;
+    --c-code-bg:#F0F4F1;
+  }
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+       background:var(--c-bg);color:var(--c-ink);margin:0;padding:32px 24px;line-height:1.7;font-size:14px}
+  .wrap{max-width:1080px;margin:0 auto}
+  h1{font-size:24px;font-weight:600;margin:0 0 4px;color:var(--c-primary)}
+  .meta{font-size:12px;color:var(--c-light);margin-bottom:24px;border-bottom:1px solid var(--c-border);padding-bottom:16px;display:flex;flex-wrap:wrap;gap:12px}
+  .meta b{color:var(--c-mid);font-weight:500}
+  h2{font-size:18px;font-weight:600;color:var(--c-primary);margin:32px 0 12px;padding-left:12px;border-left:4px solid var(--c-gold)}
+  h3{font-size:14px;font-weight:600;color:var(--c-ink);margin:20px 0 8px}
+  p{margin:8px 0}
+  .lead{font-size:13px;color:var(--c-mid);background:var(--c-soft);padding:12px 16px;border-radius:8px;margin-bottom:16px}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin:12px 0;background:var(--c-card)}
+  th,td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--c-border);vertical-align:top}
+  th{background:var(--c-soft);color:var(--c-mid);font-weight:600;font-size:12px;letter-spacing:.04em}
+  td code{font-family:"SF Mono",Consolas,Menlo,monospace;font-size:12px;background:var(--c-code-bg);padding:1px 6px;border-radius:4px;color:var(--c-teal)}
+  pre{background:#1F2A26;color:#E0EAE3;padding:14px 16px;border-radius:8px;overflow-x:auto;font-family:"SF Mono",Consolas,Menlo,monospace;font-size:12px;line-height:1.55;margin:10px 0}
+  pre code{background:transparent;color:inherit;padding:0;font-size:inherit}
+  .pre-title{font-size:11px;color:var(--c-light);margin:6px 0 -4px;text-transform:uppercase;letter-spacing:0.08em}
+  .warn{background:#FFF6E6;border-left:4px solid var(--c-gold);padding:10px 14px;border-radius:6px;font-size:13px;margin:12px 0;color:#6B4900}
+  .danger{background:#FCEBEB;border-left:4px solid var(--c-danger);padding:10px 14px;border-radius:6px;font-size:13px;margin:12px 0;color:#5C1F1F}
+  .ok{background:#E1F5EE;border-left:4px solid var(--c-teal);padding:10px 14px;border-radius:6px;font-size:13px;margin:12px 0;color:#04342C}
+  ul,ol{margin:8px 0;padding-left:22px}
+  li{margin:4px 0;font-size:13px}
+  .toc{background:var(--c-card);border:1px solid var(--c-border);border-radius:8px;padding:14px 18px;margin-bottom:24px}
+  .toc ol{margin:0;padding-left:22px}
+  .toc li{margin:3px 0;font-size:13px}
+  .toc a{color:var(--c-primary);text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+  .agent-block{background:var(--c-card);border:1px solid var(--c-border);border-radius:10px;padding:14px 18px;margin:14px 0}
+  .agent-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px dashed var(--c-border)}
+  .agent-key{font-family:"SF Mono",Consolas,Menlo,monospace;background:var(--c-code-bg);color:var(--c-teal);padding:2px 8px;border-radius:4px;font-size:12px}
+  .agent-name{font-size:15px;font-weight:600;color:var(--c-ink)}
+  .agent-tag{font-size:11px;padding:1px 8px;border-radius:10px;background:var(--c-soft);color:var(--c-mid)}
+  .footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--c-border);font-size:11px;color:var(--c-light);text-align:center}
+  @media print{body{padding:12px} pre{font-size:10px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>客户接入手册 · v1.0</h1>
+<div class="meta">
+  <span><b>平台：</b>岐黄智脑 8602 商业化平台</span>
+  <span><b>所属组：</b>岐黄中台组（L2 资源控制台）</span>
+  <span><b>版本：</b>v1.0</span>
+  <span><b>日期：</b>2026-08-19</span>
+  <span><b>适用场景：</b>客户后端对接 8602 全部 Agent 能力 + 合规/玄学/地理子模块</span>
+</div>
+
+<p class="lead">本文档是 8602 平台为客户研发团队准备的接入指南。客户拿到 AK/SK 后，按本文档第 3 章登录拿 JWT，第 4 章逐个接入 8 项能力。鉴权体系为 <b>JWT Bearer Token</b>（不是 HMAC 签名），Token 有效期 2 小时，过期用 refresh_token 刷新。</p>
+
+<div class="toc">
+<strong style="font-size:13px;color:var(--c-mid)">目录</strong>
+<ol>
+  <li><a href="#intro">平台介绍</a></li>
+  <li><a href="#cred">凭据说明</a></li>
+  <li><a href="#jwt">JWT 鉴权流程</a></li>
+  <li><a href="#agents">8 项能力 API 契约</a></li>
+  <li><a href="#errors">错误码对照表</a></li>
+  <li><a href="#quota">配额与计费</a></li>
+  <li><a href="#security">安全规范</a></li>
+  <li><a href="#faq">常见问题</a></li>
+  <li><a href="#env">附录 A · .env 模板</a></li>
+  <li><a href="#hmac">附录 B · HMAC 签名（/open/v1/* 外部 API 场景）</a></li>
+</ol>
+</div>
+
+<h2 id="intro">1. 平台介绍</h2>
+
+<p><b>岐黄智脑 8602</b> 是一站式大健康 AI 中台，向客户暴露 8 项可调用的 Agent 能力 + 1 项合规内容审核能力 + 1 项玄学起卦能力。所有能力通过统一的 HTTP API 调用，鉴权使用 JWT Bearer Token。</p>
+
+<table>
+  <thead><tr><th>类别</th><th>能力数</th><th>代表能力</th></tr></thead>
+  <tbody>
+    <tr><td>健康咨询</td><td>1</td><td>中医健康顾问（health-advisor）</td></tr>
+    <tr><td>教育培训</td><td>2</td><td>中医辨证教练（coach）、门店话术教练（store-coach）</td></tr>
+    <tr><td>内容生产</td><td>1</td><td>文案生成（content-writer）</td></tr>
+    <tr><td>经营诊断</td><td>1</td><td>数据洞察（insight）</td></tr>
+    <tr><td>合规审核</td><td>1</td><td>内容合规（compliance）</td></tr>
+    <tr><td>玄学起卦</td><td>1</td><td>六爻起卦（fortune）</td></tr>
+    <tr><td>地理视觉</td><td>1</td><td>地理健康视觉（geo）</td></tr>
+  </tbody>
+</table>
+
+<h3>基础信息</h3>
+<ul>
+  <li><b>API 网关：</b><code>http://111.231.63.73:8602</code>（生产）</li>
+  <li><b>路径前缀：</b><code>/api/v1/agent/&lt;key&gt;/&lt;action&gt;</code></li>
+  <li><b>内容类型：</b><code>application/json; charset=utf-8</code></li>
+  <li><b>字符编码：</b>UTF-8</li>
+  <li><b>时区：</b>UTC（所有时间戳为 UTC ISO8601 字符串）</li>
+</ul>
+
+<h2 id="cred">2. 凭据说明</h2>
+
+<p>客户开通后，运营方在 8602 控制台「租户详情 → API 密钥」为该客户签发一对凭据：</p>
+
+<table>
+  <thead><tr><th>字段</th><th>含义</th><th>格式</th><th>示例</th></tr></thead>
+  <tbody>
+    <tr><td><code>app_key</code></td><td>应用 Key（公开标识符，登录时当 username 用）</td><td><code>ak_&lt;32位hex&gt;</code></td><td><code>ak_7e5722682d954b39...</code></td></tr>
+    <tr><td><code>app_secret</code></td><td>应用 Secret（私密登录密码，<b>仅显示一次</b>）</td><td><code>sk_&lt;64位hex&gt;</code></td><td><code>sk_a1b2c3...</code>（64 hex）</td></tr>
+  </tbody>
+</table>
+
+<div class="danger">
+  <b>🔴 SK 永不再显示</b> · 签发那一瞬间控制台显示一次，关闭页面后<b>永远不可再查</b>。客户必须<b>当场复制保存到本地 <code>.env</code></b>（加入 <code>.gitignore</code>）。如丢失只能走运营方<b>轮换密钥</b>（轮换期间旧密钥 72 小时内仍可用，避免突然断流）。
+</div>
+
+<h3>推荐本地存储</h3>
+<p>请把以下内容存入项目根目录的 <code>.env</code>（gitignored）：</p>
+<pre class="pre-title">.env</pre>
+<pre><code># === 岐黄智脑 8602 接入凭据 ===
+# 妥善保管，不要提交到 git / 不要发到聊天框
+QH_BASE_URL=http://111.231.63.73:8602
+QH_TENANT_ID=&lt;你的租户 ID，由运营方提供&gt;
+QH_APP_KEY=ak_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+QH_APP_SECRET=sk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
+
+<p>登录拿 JWT 后，把 access_token 也写入 <code>.env</code> 或运行时缓存（2 小时过期，需用 refresh_token 续期）。</p>
+
+<h2 id="jwt">3. JWT 鉴权流程</h2>
+
+<p>8602 当前为内部租户提供 <b>JWT Bearer Token</b> 鉴权路径（<code>/api/v1/auth/login</code>），客户后端先登录拿 token，再用 token 调 Agent API。</p>
+
+<h3>3.1 登录拿 Token</h3>
+<pre class="pre-title">POST /api/v1/auth/login</pre>
+<pre><code>curl -X POST $QH_BASE_URL/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "login_type": "password",
+    "username": "'"$QH_APP_KEY"'",
+    "password": "'"$QH_APP_SECRET"'"
+  }'</code></pre>
+
+<p>响应：</p>
+<pre><code>{
+  "code": 0,
+  "data": {
+    "access_token": "eyJhbGciOiJIUzI1NiIs...",
+    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
+    "token_type": "bearer",
+    "expires_in": 7200
+  }
+}</code></pre>
+
+<table>
+  <thead><tr><th>字段</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr><td><code>access_token</code></td><td>访问 Token，2 小时有效，调 Agent API 时放 <code>Authorization</code> 头</td></tr>
+    <tr><td><code>refresh_token</code></td><td>刷新 Token，30 天有效，access_token 过期时用来换新 access_token</td></tr>
+    <tr><td><code>expires_in</code></td><td>access_token 有效期（秒），默认 7200（2 小时）</td></tr>
+  </tbody>
+</table>
+
+<h3>3.2 调 Agent API（带 Token）</h3>
+<pre class="pre-title">Authorization: Bearer &lt;access_token&gt;</pre>
+<pre><code>curl -X POST $QH_BASE_URL/api/v1/agent/health-advisor/consult \
+  -H "Authorization: Bearer $QH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "最近失眠、乏力",
+    "profile": {"age": 35, "gender": "female"}
+  }'</code></pre>
+
+<h3>3.3 Token 过期 → 自动刷新</h3>
+<pre class="pre-title">POST /api/v1/auth/refresh</pre>
+<pre><code>curl -X POST $QH_BASE_URL/api/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{ "refresh_token": "'"$QH_REFRESH_TOKEN"'" }'</code></pre>
+
+<p>响应同 3.1。建议客户实现一个 Token 管理器：检测到 401 <code>TOKEN_EXPIRED</code> 自动 refresh 后重试。</p>
+
+<h2 id="agents">4. 8 项能力 API 契约</h2>
+
+<p>下面逐项列出 8 个 Agent 的端点路径、入参结构、响应结构、典型使用场景。</p>
+
+<div class="agent-block">
+  <div class="agent-head">
+    <span class="agent-name">1. 中医健康顾问</span>
+    <span class="agent-key">health-advisor</span>
+    <span class="agent-tag">套餐默认</span>
+  </div>
+  <p><b>端点：</b><code>POST /api/v1/agent/health-advisor/consult</code></p>
+  <p><b>用途：</b>中医辨证咨询（固定专业辨证链 + partial 降级）</p>
+  <p><b>入参：</b></p>
+  <pre><code>{
+  "question": "最近失眠、乏力",             // 必填：用户主诉
+  "store_id": "store_001",                 // 可选：门店 ID（颐掌柜侧计量对账）
+  "profile": {                              // 可选：结构化档案
+    "age": 35,
+    "gender": "female",
+    "history": "高血压 3 年",
+    "tongue": "淡红",                       // 舌象
+    "pulse": "弦细"                          // 脉象
+  },
+  "mode": "standard",                       // standard | full（含报告生成）
+  "session_id": null                        // 可选：多轮会话 ID
+}</code></pre>
+  <p><b>响应：</b></p>
+  <pre><code>{
+  "code": 0,
+  "data": {
+    "reply": "根据您描述的失眠、乏力，结合舌脉...",   // 人话回复
+    "ask_more": "能否描述一下舌苔颜色？",             // 追问（缺舌脉时）
+    "constitution": { "type": "气虚质", "score": 0.78 },
+    "syndrome": { "name": "心脾两虚", "confidence": "0.82" },
+    "formula": { "name": "归脾汤", "items": ["黄芪", "党参", "..."], "note": "..." }
+  }
+}</code></pre>
+</div>
+
+<div class="agent-block">
+  <div class="agent-head">
+    <span class="agent-name">2. 中医辨证教练</span>
+    <span class="agent-key">coach</span>
+    <span class="agent-tag">套餐默认</span>
+  </div>
+  <p><b>端点：</b><code>POST /api/v1/agent/coach/sessions</code>（创建会话）· <code>POST /api/v1/agent/coach/evaluate</code>（评分）</p>
+  <p><b>用途：</b>中医师 / 教育线 · 辨证对练。AI 扮老中医出题，员工答题，给出四档辨证评分。</p>
+  <p><b>入参（sessions）：</b></p>
+  <pre><code>{ "user_id": "u_001", "topic": "太阳病辨证" }</code></pre>
+  <p><b>入参（evaluate）：</b></p>
+  <pre><code>{ "session_id": "s_xxx", "answer": "患者恶寒发热、头项强痛..." }</code></pre>
+  <p><b>响应（evaluate）：</b></p>
+  <pre><code>{
+  "code": 0,
+  "data": {
+    "score": 82,
+    "grade": "基本到位",
+    "feedback": "辨证方向正确，但忽略了...",
+    "keypoints_hit": ["太阳经证", "表实"],
+    "keypoints_missed": ["无汗而喘"]
+  }
+}</code></pre>
+</div>
+
+<div class="agent-block">
+  <div class="agent-head">
+    <span class="agent-name">3. 门店话术教练</span>
+    <span class="agent-key">store-coach</span>
+    <span class="agent-tag">需授权叠加</span>
+  </div>
+  <p><b>端点：</b><code>POST /api/v1/agent/store-coach/sessions</code>（AI 顾客接话）· <code>POST /api/v1/agent/store-coach/evaluate</code>（四维话术评分 + 课件掌握度）</p>
+  <p><b>用途：</b>养生门店 / 零售门店店员话术培训。AI 扮顾客与店员对练，支持上传课件做知识掌握度评估。</p>
+  <p><b>入参（sessions）：</b></p>
+  <pre><code>{
+  "scene": "script",                          // script | product | project | knowledge
+  "topic": "顾客嫌养生套餐贵，怎么接",
+  "material_text": "本课件介绍艾灸调理知识...",  // 可选：门店上传的课件文本
+  "passing_score": 60                         // 可选：合格分数线（默认 60）
+}</code></pre>
+  <p><b>响应（evaluate）：</b></p>
+  <pre><code>{
+  "code": 0,
+  "data": {
+    "score": 78,
+    "qualified": true,                        // 是否合格
+    "scores": { "completeness": 22, "expertise": 24, "empathy": 16, "compliance": 16 },
+    "mastery": "掌握",                         // 掌握 | 薄弱 | 未涉及
+    "key_points": ["主动倾听", "价值塑造"],
+    "feedback": "回答专业，但亲和度可提升...",
+    "compliance_ok": true,
+    "compliance_hits": []
+  }
+}</code></pre>
+</div>
+
+<div class="agent-block">
+  <div class="agent-head">
+    <span class="agent-name">4. 文案生成</span>
+    <span class="agent-key">content-writer</span>
+    <span class="agent-tag">需授权叠加</span>
+  </div>
+  <p><b>端点：</b><code>POST /api/v1/agent/content-writer/generate</code></p>
+  <p><b>用途：</b>1 键产出合规文案（小红书 / 公众号 / 抖音 / 朋友圈），4 引擎 LLM 降级链 + 合规横切</p>
+  <p><b>入参：</b></p>
+  <pre><code>{
+  "topic": "180 天散养土鸡",                  // 必填
+  "content_type": "xhs",                      // xhs | wechat | douyin | weibo
+  "tone": "温暖亲切",                          // 自由风格
+  "length": 300,                              // 字数
+  "variants": 3                               // 生成 1-4 个版本
+}</code></pre>
+  <p><b>响应：</b></p>
+  <pre><code>{
+  "code": 0,
+  "data": {
+    "texts": [
+      "你家散养土鸡，来自安徽亳州...",
+      "180 天慢养，每一口都是..."
+    ],
+    "model_used": "deepseek",                  // 实际调用的 LLM
+    "compliance_ok": true
+  }
+}</code></pre>
+</div>
+
+<div class="agent-block">
+  <div class="agent-head">
+    <span class="agent-name">5. 数据洞察</span>
+    <span class="agent-key">insight</span>
+    <span class="agent-tag">需授权叠加</span>
+  </div>
+  <p><b>端点：</b><code>POST /api/v1/agent/insight/diagnose</code></p>
+  <p><b>用途：</b>经营数据诊断引擎（指标快照 → JSON 诊断：summary / issues / suggestions / missing_data）</p>
+  <p><b>入参：</b></p>
+  <pre><code>{
+  "metrics": {
+    "month_calls": 1240,
+    "success_rate": 0.92,
+    "avg_latency_ms": 2300,
+    "agent_distribution": { "health-advisor": 800, "store-coach": 440 }
+  },
+  "tenant_id": "7e188ba9"
+}</code></pre>
+  <p><b>响应：</b></p>
+  <pre><code>{
+  "code": 0,
+  "data": {
+    "summary": "本月 API 调用活跃，但平均延迟偏高...",
+    "issues": [
+      {"severity": "high", "msg": "avg_latency_ms 超过 2000ms 健康线"}
+    ],
+    "suggestions": [
+      "启用引擎降级链切换到 qwen 降负"
+    ],
+    "missing_data": ["token 用量", "失败原因分类"]
+  }
+}</code></pre>
+</div>
+
+<div class="agent-block">
+  <div class="agent-head">
+    <span class="agent-name">6. 内容合规审核</span>
+    <span class="agent-key">compliance</span>
+    <span class="agent-tag">套餐默认</span>
+  </div>
+  <p><b>端点：</b><code>POST /api/v1/agent/compliance/scan</code> · <code>POST /api/v1/agent/compliance/feedback</code></p>
+  <p><b>用途：</b>内容物料初检（医疗违规词 / 虚假宣传 / 阴阳怪气等 33 类规则）</p>
+  <p><b>入参（scan）：</b></p>
+  <pre><code>{
+  "store_id": "store_001",
+  "text": "祖传秘方包治百病",
+  "content_type": "weibo"
+}</code></pre>
+  <p><b>响应：</b></p>
+  <pre><code>{
+  "code": 0,
+  "data": {
+    "state": "违规拦截",                       // 已通过 | 违规拦截 | 存疑待复核
+    "hits": [
+      {"rule": "虚假宣传", "match": "包治百病", "severity": "high"}
+    ],
+    "suggestion": "建议改为『调理』等温和表述"
+  }
+}</code></pre>
+</div>
+
+<div class="agent-block">
+  <div class="agent-head">
+    <span class="agent-name">7. 六爻起卦</span>
+    <span class="agent-key">fortune</span>
+    <span class="agent-tag">套餐默认</span>
+  </div>
+  <p><b>端点：</b><code>POST /api/v1/agent/fortune/cast</code>（起卦）· <code>GET /api/v1/agent/fortune/daily</code>（每日运势）</p>
+  <p><b>入参（cast）：</b></p>
+  <pre><code>{
+  "question": "今日是否适合签新客户？",
+  "birth_info": { "year": 1980, "month": 6, "day": 15, "hour": 10 },
+  "divination_time": "2026-08-19T14:30:00Z"
+}</code></pre>
+  <p><b>响应：</b></p>
+  <pre><code>{
+  "code": 0,
+  "data": {
+    "hexagram": "天火同人",
+    "judgment": "卦辞：同人于野，亨...",
+    "interpretation": "卦象显示...",
+    "advice": "宜主动出击，忌犹豫不决"
+  }
+}</code></pre>
+</div>
+
+<div class="agent-block">
+  <div class="agent-head">
+    <span class="agent-name">8. 地理健康视觉</span>
+    <span class="agent-key">geo</span>
+    <span class="agent-tag">套餐默认</span>
+  </div>
+  <p><b>端点：</b><code>POST /api/v1/agent/geo</code></p>
+  <p><b>用途：</b>基于地理位置的健康场景视觉识别（适合养生门店选址参考）</p>
+  <p><b>入参：</b></p>
+  <pre><code>{
+  "lat": 31.2304,
+  "lng": 121.4737,
+  "radius_m": 500
+}</code></pre>
+  <p><b>响应：</b></p>
+  <pre><code>{
+  "code": 0,
+  "data": {
+    "scene_type": "居民区",
+    "health_signals": ["老年人口占比高", "周边社区健康活动密集"],
+    "recommendation": "适合开设养生调理门店"
+  }
+}</code></pre>
+</div>
+
+<h2 id="errors">5. 错误码对照表</h2>
+
+<p>所有 8602 接口返回统一信封：<code>{ code, message, data }</code>。<b>code=0 表示成功</b>，其它 code 为业务错误。</p>
+
+<table>
+  <thead><tr><th>code</th><th>标识</th><th>含义</th><th>建议处理</th></tr></thead>
+  <tbody>
+    <tr><td>0</td><td>SUCCESS</td><td>成功</td><td>正常处理 <code>data</code></td></tr>
+    <tr><td>1001</td><td>UNAUTHORIZED</td><td>缺少认证 Token</td><td>检查 <code>Authorization</code> 头是否带 <code>Bearer</code></td></tr>
+    <tr><td>1002</td><td>TOKEN_EXPIRED</td><td>access_token 过期</td><td>用 <code>refresh_token</code> 换新 token 后重试</td></tr>
+    <tr><td>1003</td><td>TOKEN_INVALID</td><td>token 无效 / 被吊销</td><td>重新走 <code>/auth/login</code> 流程</td></tr>
+    <tr><td>2001</td><td>QUOTA_EXCEEDED</td><td>本月套餐配额用尽</td><td>联系运营方升级套餐 或 等下月恢复</td></tr>
+    <tr><td>2002</td><td>API_KEY_INVALID</td><td>AK/SK 错误或被吊销</td><td>检查 .env 配置；如确认无误联系运营</td></tr>
+    <tr><td>2008</td><td>AGENT_FORBIDDEN</td><td>该能力未在套餐/授权内</td><td>联系运营方叠加 addon 授权</td></tr>
+    <tr><td>4001</td><td>VALIDATION_FAILED</td><td>请求参数不合法</td><td>检查必填字段 / 字段类型</td></tr>
+    <tr><td>429</td><td>RATE_LIMITED</td><td>触发限流</td><td>退避重试（建议指数退避）</td></tr>
+    <tr><td>5000</td><td>INTERNAL_ERROR</td><td>服务端异常</td><td>带 request_id 联系运维</td></tr>
+  </tbody>
+</table>
+
+<h2 id="quota">6. 配额与计费</h2>
+
+<table>
+  <thead><tr><th>套餐</th><th>年费（元）</th><th>月调用配额</th><th>默认能力</th></tr></thead>
+  <tbody>
+    <tr><td>体验版</td><td>0</td><td>200</td><td>健康顾问/辨证教练/合规/起卦/地理</td></tr>
+    <tr><td>标准版</td><td>9,900</td><td>5,000</td><td>体验版 + 门店话术教练</td></tr>
+    <tr><td>专业版</td><td>29,900</td><td>30,000</td><td>标准版 + 文案生成 + 数据洞察</td></tr>
+    <tr><td>企业版</td><td>99,900</td><td>200,000</td><td>全能力 + 定制空间</td></tr>
+  </tbody>
+</table>
+
+<ul>
+  <li>配额按<b>租户级月度统计</b>，所有 Agent 共享</li>
+  <li>套餐外能力叠加走 <code>agent-addons</code> 接口（运营方操作）</li>
+  <li>配额用尽 → 返 <code>2001 QUOTA_EXCEEDED</code>，不阻断 token</li>
+  <li>续费 / 升级套餐 → 走 <code>/tenants/{id}/renew</code> / <code>/subscription/upgrade</code>（次月生效）</li>
+</ul>
+
+<h2 id="security">7. 安全规范</h2>
+
+<div class="danger">
+  <b>🔴 三条不可逾越的红线</b>
+  <ol style="margin:8px 0 0;padding-left:22px">
+    <li><b>SK 绝不进 git / 不进聊天框 / 不存进明文文档</b>。客户应把 SK 写到本地 <code>.env</code>（gitignored）。</li>
+    <li><b>SK 误传 = 立即吊销</b>。如已误传到任何外部通道，立刻通知运营方吊销重发。</li>
+    <li><b>access_token 不要给前端</b>。JWT 仅在客户后端内部流转，前端通过客户后端的 BFF 层转发调用，避免 token 进入浏览器。</li>
+  </ol>
+</div>
+
+<h3>推荐做法</h3>
+<ul>
+  <li>客户后端用 <b>内存缓存 + 过期前 5 分钟自动 refresh</b> 持有 access_token</li>
+  <li>客户后端实现<b>请求重试</b>：收到 <code>1002 TOKEN_EXPIRED</code> 自动 refresh 后重试原请求</li>
+  <li>客户后端实现<b>指数退避</b>：收到 <code>429 RATE_LIMITED</code> 按 1s / 2s / 4s / 8s 退避</li>
+  <li>所有 API 调用走<b>服务端发起</b>，token 不进浏览器 / 不进小程序 storage</li>
+</ul>
+
+<h2 id="faq">8. 常见问题</h2>
+
+<h3>Q1. SK 丢失了怎么办？</h3>
+<p>SK 控制台不可查。联系运营方走「轮换密钥」流程：运营方在控制台调轮换，<b>旧 SK 在 72 小时内仍可用</b>，新 SK 一次性展示给客户。</p>
+
+<h3>Q2. 套餐升级什么时候生效？</h3>
+<p>升级是<b>次月 1 号生效</b>，当月仍按原套餐计费与鉴权。运营方控制台会显示「待生效预约」徽章。</p>
+
+<h3>Q3. 套餐配额用完了还能用吗？</h3>
+<p>不能。配额用尽后调用返 <code>2001 QUOTA_EXCEEDED</code>，需升级套餐或等下月 1 号恢复。</p>
+
+<h3>Q4. /open/v1/* 是什么？怎么用？</h3>
+<p><code>/open/v1/*</code> 是面向外部第三方（不登录）的 HMAC 签名 API 路径，目前<b>仅供演示</b>，未正式启用。如需启用请联系 8602 商务。</p>
+
+<h3>Q5. 支持哪些客户端语言？</h3>
+<p>任何能发 HTTP 的语言都行。文档示例用 <code>curl</code>，客户可用 Python <code>requests</code> / Node <code>axios</code> / Java <code>OkHttp</code> / Go <code>net/http</code> 等。</p>
+
+<h2 id="env">附录 A · .env 模板</h2>
+
+<pre><code># ====================================
+# 岐黄智脑 8602 接入凭据（gitignored）
+# ====================================
+# 由 8602 运营方提供，开户时一次性交付
+# 妥善保管，不要提交到 git / 不要发到聊天框
+
+# 网关地址（生产）
+QH_BASE_URL=http://111.231.63.73:8602
+
+# 租户 ID（运营方提供）
+QH_TENANT_ID=REPLACE_WITH_YOUR_TENANT_ID
+
+# 应用 Key（公开标识符，可放进配置中心）
+QH_APP_KEY=ak_REPLACE_WITH_YOUR_APP_KEY
+
+# 应用 Secret（私密！仅在控制台显示一次，必须即存）
+QH_APP_SECRET=sk_REPLACE_WITH_YOUR_APP_SECRET
+
+# --- 以下由客户后端运行期自动维护 ---
+# 登录后写入（2 小时有效，需自动 refresh）
+QH_ACCESS_TOKEN=
+QH_REFRESH_TOKEN=</code></pre>
+
+<h3>客户端示例（Python）</h3>
+<pre class="pre-title">qh_client.py</pre>
+<pre><code>import os
+import time
+import requests
+from dotenv import load_dotenv
+
+load_dotenv()
+
+BASE = os.environ["QH_BASE_URL"]
+APP_KEY = os.environ["QH_APP_KEY"]
+APP_SECRET = os.environ["QH_APP_SECRET"]
+
+class QHClient:
+    def __init__(self):
+        self.token = None
+        self.token_exp = 0
+
+    def _login(self):
+        r = requests.post(f"{BASE}/api/v1/auth/login", json={
+            "login_type": "password",
+            "username": APP_KEY,
+            "password": APP_SECRET,
+        }, timeout=10).json()
+        if r.get("code") != 0:
+            raise RuntimeError(f"login failed: {r}")
+        d = r["data"]
+        self.token = d["access_token"]
+        self.refresh_token = d["refresh_token"]
+        self.token_exp = time.time() + d["expires_in"]
+
+    def _refresh(self):
+        r = requests.post(f"{BASE}/api/v1/auth/refresh", json={
+            "refresh_token": self.refresh_token,
+        }, timeout=10).json()
+        d = r["data"]
+        self.token = d["access_token"]
+        self.refresh_token = d["refresh_token"]
+        self.token_exp = time.time() + d["expires_in"]
+
+    def call(self, method, path, **kwargs):
+        if not self.token or time.time() >= self.token_exp - 60:
+            self._login()
+        headers = kwargs.pop("headers", {})
+        headers["Authorization"] = f"Bearer {self.token}"
+        r = requests.request(method, f"{BASE}{path}", headers=headers, timeout=30, **kwargs)
+        if r.status_code == 401 and r.json().get("data", {}).get("code") == 1002:
+            self._refresh()
+            headers["Authorization"] = f"Bearer {self.token}"
+            r = requests.request(method, f"{BASE}{path}", headers=headers, timeout=30, **kwargs)
+        return r.json()
+
+# 使用示例
+qh = QHClient()
+resp = qh.call("POST", "/api/v1/agent/health-advisor/consult", json={
+    "question": "最近失眠、乏力",
+    "profile": {"age": 35, "gender": "female"},
+})
+print(resp["data"]["reply"])</code></pre>
+
+<h2 id="hmac">附录 B · HMAC 签名（/open/v1/* 外部 API 场景）</h2>
+
+<p><code>/open/v1/*</code> 路径采用 HMAC-SHA256 签名鉴权，面向不登录的外部第三方 API 调用场景。当前<b>仅供演示</b>，未来如需正式启用，本节将补充完整文档。</p>
+
+<p>签名串格式：</p>
+<pre><code>{app_key}\n{method}\n{path}\n{timestamp}\n{nonce}\n{body}</code></pre>
+
+<ul>
+  <li>算法：HMAC-SHA256，hex 编码</li>
+  <li>时间窗：±5 分钟（请求 timestamp 与服务端时间差不能超过 300s）</li>
+  <li>请求头：<code>X-App-Key</code> / <code>X-Signature</code> / <code>X-Timestamp</code> / <code>X-Nonce</code></li>
+  <li>密钥轮换：旧密钥 72 小时内并行有效</li>
+</ul>
+
+<p>客户当前<b>不需要关心本节</b>，使用第 3 章 JWT 路径即可。</p>
+
+<div class="footer">
+  岐黄智脑 8602 商业化平台 · 客户接入手册 v1.0 · 岐黄中台组出品 · 2026-08-19
+</div>
+
+</div>
+</body>
+</html>
