@@ -62,14 +62,14 @@ BUILTIN_AGENTS: Dict[str, Dict[str, Any]] = {
                 "回写钉业务实体（material_key→HA-XXXX 幂等），仅作辅助参考。",
     },
     "coach": {
-        "name": "话术陪练教练",
+        "name": "中医辨证教练",
         "kind": "business_embedded",          # 融入业务流的能力模块
         "engine": "qihuang-coach",             # 复用 8602 既有 edu/coach 能力（AI 出题陪练 + 四档评分）
         "router_prefix": "/api/v1/agent/coach",
         "capabilities": ["session", "evaluate", "dashboard"],
         "status": "active",
         "category": "edu",
-        "desc": "员工话术陪练/评分：上收 8602 既有 edu/coach 能力到 Agent 中台，"
+        "desc": "中医辨证 AI 陪练/评分：上收 8602 既有 edu/coach 能力到 Agent 中台，"
                 "AI 出题陪练 + 基于推理链四档评分(PERFECT/GOOD/PARTIAL/WRONG)，"
                 "回写 EduCoachSession（本店行级隔离），供业务 Agent B3 员工军师调用。",
     },

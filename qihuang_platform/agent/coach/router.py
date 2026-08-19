@@ -73,7 +73,7 @@ def _evaluate_answer(answer: str, ai_response: str, reasoning_chain: list) -> tu
 
 @router.post(
     "/coach/sessions",
-    summary="创建话术陪练会话（上收 edu/coach）",
+    summary="创建中医辨证陪练会话（上收 edu/coach）",
 )
 async def create_coach_session(
     req: CoachSessionRequest,
@@ -186,7 +186,7 @@ async def coach_evaluate(
 
 @router.get(
     "/coach/dashboard",
-    summary="本店话术陪练学情看板（上收 edu/coach）",
+    summary="本店中医辨证陪练学情看板（上收 edu/coach）",
 )
 async def coach_dashboard(
     request: Request,
