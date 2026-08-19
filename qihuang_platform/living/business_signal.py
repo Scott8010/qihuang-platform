@@ -5,9 +5,9 @@
 设计要点：
   - 默认开关 LIVING_BUSINESS_SIGNAL_ENABLED=false（仿真数据期关闭，零副作用，不污染闭环）。
     真实租户业务实证数据回灌后，置为 true 即可激活。
-  - 数据源可插拔（fetch_business_usage）：当前 8601 无节点使用统计接口、Neo4j 也无 usage 节点，
-    故现返回空 dict —— 不产生任何信号、不写入数据、不影响现有闭环。
-    真实客户上线后，在此接入：8601 未来提供的 /kg/api/usage，或 8602 业务调用日志 ETL。
+  - 数据源已落实（fetch_business_usage）：取自 8602 consult 引用日志（consult_attribution 表）。
+    该表由 agent.health_advisor.orchestrator 归因钩子在每次 consult 成功返回时 best-effort 写入，
+    按 kg_id 在窗口内的被采纳引用次数归一化为实证权重。无需依赖 8601 usage 接口。
   - 采集结果写入 KgFeedback(source='business', feedback_type='business_use', business_weight=W)，
     aggregator 已支持据此：① business_use 基础正加权 ② _business_multiplier 按 business_weight 放大。
 
@@ -19,6 +19,7 @@
 import logging
 import os
 from typing import Dict, Any
+from datetime import datetime, timezone, timedelta
 
 from sqlalchemy import func, select
 
@@ -34,15 +35,40 @@ _BUSINESS_SIGNAL_ENABLED = os.getenv(
 
 
 async def fetch_business_usage(db, client) -> Dict[str, float]:
-    """从真实业务数据源摄取某 kg_id 的业务实证权重。
+    """从 8602 consult 引用日志（consult_attribution 表）摄取某 kg_id 的业务实证权重。
 
-    返回 {kg_id: weight}，weight ∈ (0, 1] 表示该知识点的业务实证强度。
-    当前无数据源 → 返回空 dict（不污染仿真数据）。
-    真实客户上线后在此接入（示例）：
-      - 8601 GET /kg/api/usage -> {kg_id: 调用频次归一化}
-      - 或 8602 业务调用日志（capability 层按 kg_id 归因）ETL 聚合
+    返回 {kg_id: weight}，weight ∈ (0, 1] 表示该知识点的业务实证强度：
+      weight = min(1.0, 窗口内被采纳引用次数 / LIVING_BIZ_WEIGHT_DIVISOR)
+    默认：窗口 30 天（LIVING_BIZ_WINDOW_DAYS）、除数 5（LIVING_BIZ_WEIGHT_DIVISOR，
+    即 5 次被采纳引用→权重封顶 1.0）。
+
+    该表即「8602 consult 引用日志」，由 orchestrator 归因钩子（best-effort 后台任务）
+    在每次 consult 成功返回时写入。翻开关（LIVING_BUSINESS_SIGNAL_ENABLED=true）后，
+    每轮回路三采集即按此聚合，回灌 business_use 信号并经 LIVING_BUSINESS_GAIN 放大。
     """
-    return {}
+    try:
+        from qihuang_platform.db.models import ConsultAttribution
+    except Exception:
+        return {}
+    window_days = int(os.getenv("LIVING_BIZ_WINDOW_DAYS", "30"))
+    divisor = float(os.getenv("LIVING_BIZ_WEIGHT_DIVISOR", "5"))
+    if divisor <= 0:
+        divisor = 5.0
+    cutoff = datetime.now(timezone.utc) - timedelta(days=window_days)
+    rows = db.query(
+        ConsultAttribution.kg_id,
+        func.count(ConsultAttribution.id),
+    ).filter(
+        ConsultAttribution.adopted.is_(True),
+        ConsultAttribution.consulted_at >= cutoff,
+        ~ConsultAttribution.kg_id.like("pending:%"),
+    ).group_by(ConsultAttribution.kg_id).all()
+    out: Dict[str, float] = {}
+    for kg_id, cnt in rows:
+        if not kg_id:
+            continue
+        out[str(kg_id)] = min(1.0, cnt / divisor)
+    return out
 
 
 async def collect_business_signals() -> dict:

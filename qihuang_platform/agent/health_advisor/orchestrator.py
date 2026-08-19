@@ -124,7 +124,67 @@ class HealthAdvisor:
             except Exception as e:  # noqa: BLE001
                 logger.warning("[orchestrator] generate_report failed: %s", e)
         await self._emit_metering(tenant_id, req, _t0, trace_id, resp, code=0)
+
+        # ── 活态化 B · 回路三（业务实证加权）归因钩子 ──
+        # 把 consult 返回实体（方剂/证候）经 kg_client.resolve 解析成 kg_id，
+        # 落 consult_attribution 表，作为「业务实证使用信号」数据源。
+        # 背景任务触发，零侵入、best-effort，绝不阻断主响应。
+        try:
+            import asyncio
+            asyncio.create_task(self._record_attribution(tenant_id, req, resp, trace_id))
+        except RuntimeError:
+            pass
         return resp
+
+    async def _record_attribution(self, tenant_id, req, resp, trace_id):
+        """回路三归因：consult 成功返回实体落 consult_attribution 表（best-effort）。
+
+        非 partial 视为弱采纳（adopted=True）。解析失败/8601 不可达则跳过该行，
+        任何异常都不上抛（不污染主链路）。
+        """
+        try:
+            from qihuang_platform.db.config import SessionLocal
+            from qihuang_platform.db.models import ConsultAttribution
+            from qihuang_platform.living.kg_write_client import kg_client
+
+            names: list = []
+            for f in (resp.formulas or []):
+                nm = getattr(f, "name", None)
+                if nm:
+                    names.append(("formula", nm))
+            syn = getattr(resp, "syndrome", None)
+            syn_name = getattr(syn, "name", None) if syn else None
+            if syn_name and syn_name not in ("辨证资料不足", None):
+                names.append(("syndrome", syn_name))
+            if not names:
+                return
+
+            db = SessionLocal()
+            try:
+                for etype, ename in names:
+                    res = await kg_client.resolve(ename)
+                    matches = (res or {}).get("matches") or []
+                    label = "Formula" if etype == "formula" else "Syndrome"
+                    exact = [m for m in matches if label in (m.get("labels") or [])]
+                    chosen = exact[0] if exact else (matches[0] if matches else None)
+                    kg_id = chosen.get("kg_id") if chosen else None
+                    if not kg_id:
+                        continue
+                    db.add(ConsultAttribution(
+                        tenant_id=tenant_id,
+                        store_id=getattr(req, "store_id", None),
+                        kg_id=str(kg_id),
+                        entity_name=ename,
+                        entity_type=etype,
+                        adopted=not resp.partial,
+                        trace_id=trace_id,
+                        session_id=getattr(resp, "session_id", None),
+                    ))
+                db.commit()
+            finally:
+                db.close()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[orchestrator] attribution record failed: %s", e)
 
     async def _emit_metering(self, tenant_id, req, t0, trace_id, resp, code):
         """计费埋点（T6）：业务成功执行后记录一次调用；异常不阻断主流程。"""

@@ -372,6 +372,14 @@ try:
         print("[Platform] 角色权限管理路由已挂载 → /admin/v1/roles-admin, /admin/v1/permissions")
     except ImportError as e:
         print(f"[Platform] 角色权限管理模块未就绪: {e}")
+
+    # 多租户能力中心（二期）— 模板中心路由
+    try:
+        from qihuang_platform.template_center import template_center_router
+        app.include_router(template_center_router)
+        print("[Platform] 多租户能力中心路由已挂载 → /admin/v1/template-center")
+    except ImportError as e:
+        print(f"[Platform] 多租户能力中心模块未就绪: {e}")
 except ImportError as e:
     print(f"[Platform] 管理端全功能模块未就绪: {e}")
 

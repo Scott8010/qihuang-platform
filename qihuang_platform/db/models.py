@@ -440,6 +440,106 @@ class AgentDef(Base):
     updated_at = Column(DateTime, default=_now, onupdate=_now)
 
 
+# ═══════════════════════════════════════════════════
+# 5. 活态化业务实证（回路三）& 多租户能力中心（二期）域
+# ═══════════════════════════════════════════════════
+
+class ConsultAttribution(Base):
+    """活态化 B · 回路三（业务实证加权）归因表
+
+    consult 成功路径（非 partial = 弱采纳）时，把返回的实体（方剂/证候）名称
+    经 kg_client.resolve 解析成 kg_id 落库，作为「业务实证使用信号」的数据源。
+    fetch_business_usage 据此聚合某 kg_id 在窗口内的被引用次数 → 实证权重。
+    该表即「8602 consult 引用日志」：零侵入、best-effort、不阻断主响应。
+    """
+    __tablename__ = "consult_attribution"
+    id = Column(String(36), primary_key=True, default=_uid)
+    tenant_id = Column(String(36), ForeignKey("tenant.id"), nullable=True, index=True)
+    store_id = Column(String(36), index=True)
+    kg_id = Column(String(100), nullable=False, index=True)
+    entity_name = Column(String(100))                 # 解析前的原名称（方剂/证候名）
+    entity_type = Column(String(20), default="formula")  # formula / herb / syndrome
+    adopted = Column(Boolean, default=True)            # 非 partial 视为弱采纳
+    consulted_at = Column(DateTime, default=_now, index=True)
+    trace_id = Column(String(32))
+    session_id = Column(String(32))
+
+
+class StoreQuestionnaire(Base):
+    """门店问卷 — 门店采集用的结构化问卷模板（如体质/症状采集表）。"""
+    __tablename__ = "store_questionnaire"
+    id = Column(String(36), primary_key=True, default=_uid)
+    tenant_id = Column(String(36), ForeignKey("tenant.id"), nullable=False, index=True)
+    org_id = Column(String(36), ForeignKey("org.id"), nullable=True, index=True)
+    title = Column(String(200), nullable=False)
+    description = Column(Text)
+    schema_json = Column(JSON, default=dict)   # 问卷题目结构（字段名/类型/选项）
+    status = Column(String(20), default="active")  # active / draft / archived
+    created_by = Column(String(36))
+    created_at = Column(DateTime, default=_now)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+
+class DbTemplate(Base):
+    """能力中心模板 — 平台/机构维护的知识/数据模板（全模型，可自建编辑/克隆/同步提交）。"""
+    __tablename__ = "db_template"
+    id = Column(String(36), primary_key=True, default=_uid)
+    tenant_id = Column(String(36), ForeignKey("tenant.id"), nullable=True, index=True)
+    name = Column(String(200), nullable=False)
+    kind = Column(String(50), default="herb")  # herb/formula/syndrome/... 模板类型
+    content_json = Column(JSON, default=dict)  # 模板内容（字段结构 + 默认值）
+    current_version = Column(String(50), default="v1")
+    created_by = Column(String(36))
+    created_at = Column(DateTime, default=_now)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
+    __table_args__ = (
+        Index("idx_db_template_tenant_kind", "tenant_id", "kind"),
+    )
+
+
+class TemplateOwnership(Base):
+    """模板归属 — 平台↔机构 的模板归属与可见性关系。"""
+    __tablename__ = "template_ownership"
+    id = Column(String(36), primary_key=True, default=_uid)
+    template_id = Column(String(36), ForeignKey("db_template.id"), nullable=False, index=True)
+    owner_tenant_id = Column(String(36), ForeignKey("tenant.id"), nullable=True, index=True)
+    owner_org_id = Column(String(36), ForeignKey("org.id"), nullable=True, index=True)
+    visibility = Column(String(20), default="private")  # platform / public / private
+    source = Column(String(20), default="platform")     # platform / clone / self
+    created_at = Column(DateTime, default=_now)
+    __table_args__ = (
+        Index("idx_tpl_owner_org", "owner_org_id", "template_id"),
+    )
+
+
+class TemplateReviewSubmission(Base):
+    """模板审核提交 — 机构自建模板提交平台审核（强下架依据）。状态复用 PENDING/APPROVED/REJECTED。"""
+    __tablename__ = "template_review_submission"
+    id = Column(String(36), primary_key=True, default=_uid)
+    template_id = Column(String(36), ForeignKey("db_template.id"), nullable=False, index=True)
+    submitter_tenant_id = Column(String(36), ForeignKey("tenant.id"), nullable=True, index=True)
+    submitter_org_id = Column(String(36), ForeignKey("org.id"), nullable=True, index=True)
+    status = Column(String(20), default="PENDING")  # PENDING / APPROVED / REJECTED
+    reviewer_id = Column(String(36))
+    review_note = Column(Text)
+    submitted_at = Column(DateTime, default=_now)
+    reviewed_at = Column(DateTime)
+
+
+class TemplateVersion(Base):
+    """模板版本 — 每次编辑/提交生成版本快照，支撑平台↔机构模板归属全模型。"""
+    __tablename__ = "template_version"
+    id = Column(String(36), primary_key=True, default=_uid)
+    template_id = Column(String(36), ForeignKey("db_template.id"), nullable=False, index=True)
+    version_tag = Column(String(50), nullable=False)
+    snapshot_json = Column(JSON, default=dict)
+    created_by = Column(String(36))
+    created_at = Column(DateTime, default=_now)
+    __table_args__ = (
+        Index("idx_tplver_tpl_tag", "template_id", "version_tag"),
+    )
+
+
 PRESET_ROLES = [
     {"name": "super_admin", "display_name": "超级管理员", "description": "平台全局管理"},
     {"name": "tenant_admin", "display_name": "租户管理员", "description": "租户级管理"},
