@@ -234,6 +234,8 @@ export async function fetchTenants(): Promise<Tenant[]> {
         status: ["TRIAL", "ACTIVE", "READONLY", "EXPIRED", "CLOSED"].includes(statusUpper) ? statusUpper : "ACTIVE",
         expires: t.expires || t.expire_date || t.expired_at || "—",
         module3d: t.module_3d || t.module3d || false,
+        pendingPlan: t.pending_plan || null,
+        pendingEffectiveDate: t.pending_effective_date || null,
       };
     });
   } catch (e) { console.error("fetchTenants error", e); return []; }
@@ -478,6 +480,8 @@ export interface TenantPlanItem {
   status: string;
   plan: string;            // 当前套餐显示名（可能空）
   planId: string;          // 当前套餐 UUID（可能空）
+  pendingPlan: string | null;          // 待生效预约的目标套餐（scheduled 订阅）
+  pendingEffectiveDate: string | null; // 待生效日期（YYYY-MM-DD）
   orgs: number;
   users: number;
   usedCalls: number;
@@ -501,6 +505,8 @@ export async function fetchTenantExtended(pageSize = 20): Promise<TenantPlanItem
       status: (t.status || "active").toUpperCase(),
       plan: t.plan || "",
       planId: t.plan_id || "",
+      pendingPlan: t.pending_plan || null,
+      pendingEffectiveDate: t.pending_effective_date || null,
       orgs: t.orgs || 0,
       users: t.users || 0,
       usedCalls: t.usedCalls || t.used_calls || 0,
@@ -518,6 +524,11 @@ export async function upgradeSubscription(tenantId: string, planId: string): Pro
     `/admin/v1/tenants/${encodeURIComponent(tenantId)}/subscription/upgrade`,
     { plan_id: planId },
   );
+}
+
+/** POST /admin/v1/tenants/{tenantId}/subscription/cancel-pending — 取消待生效的预约升级 */
+export async function cancelPendingUpgrade(tenantId: string): Promise<MutateResult> {
+  return mutate("POST", `/admin/v1/tenants/${encodeURIComponent(tenantId)}/subscription/cancel-pending`);
 }
 
 /** GET /admin/v1/subscriptions — 真实返回的是订阅记录，不是分场景用量 */

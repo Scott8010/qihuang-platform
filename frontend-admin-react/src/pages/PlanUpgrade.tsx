@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowUpCircle, CheckCircle2, AlertCircle } from "lucide-react";
+import { Loader2, ArrowUpCircle, CheckCircle2, AlertCircle, Clock, XCircle } from "lucide-react";
 import { C, sceneMap } from "@/lib/types";
-import { fetchTenantExtended, fetchPlans, upgradeSubscription } from "@/lib/api";
+import { fetchTenantExtended, fetchPlans, upgradeSubscription, cancelPendingUpgrade } from "@/lib/api";
 import type { TenantPlanItem, PlanItem } from "@/lib/types";
 
 export default function PlanUpgrade() {
@@ -12,6 +12,7 @@ export default function PlanUpgrade() {
   const [loading, setLoading] = useState(true);
   const [target, setTarget] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState<Set<string>>(new Set());
+  const [cancelling, setCancelling] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
   // 套餐展示等级顺序：体验版 → 标准版 → 专业版 → 企业版（前端兜底，不依赖后端排序）
@@ -44,6 +45,19 @@ export default function PlanUpgrade() {
       await load();
     } else {
       setToast({ type: "err", text: r.msg || "升级提交失败" });
+    }
+  };
+
+  const doCancelPending = async (t: TenantPlanItem) => {
+    setCancelling((s) => new Set(s).add(t.id));
+    setToast(null);
+    const r = await cancelPendingUpgrade(t.id);
+    setCancelling((s) => { const n = new Set(s); n.delete(t.id); return n; });
+    if (r.ok) {
+      setToast({ type: "ok", text: `已取消 ${t.name} 的升级预约，保持当前套餐` });
+      await load();
+    } else {
+      setToast({ type: "err", text: r.msg || "取消失败" });
     }
   };
 
@@ -95,6 +109,8 @@ export default function PlanUpgrade() {
                 const samePlan = t.planId && target[t.id] === t.planId;
                 const hasTarget = !!target[t.id];
                 const busy = submitting.has(t.id);
+                const cancellingBusy = cancelling.has(t.id);
+                const hasPending = !!t.pendingPlan && !!t.pendingEffectiveDate;
                 return (
                   <tr key={t.id} className="border-b last:border-0 hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
                     <td className="px-5 py-3.5">
@@ -111,36 +127,69 @@ export default function PlanUpgrade() {
                     </td>
                     <td className="px-3 py-3.5" style={{ color: C.mid }}>
                       {t.plan || <span style={{ color: C.light }}>未配置</span>}
+                      {hasPending && (
+                        <span
+                          className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium"
+                          style={{ background: "#FBF4E4", color: "#8A6A1F", border: "1px solid #EDD9A8" }}
+                          title={`将于 ${t.pendingEffectiveDate} 生效`}
+                        >
+                          <Clock className="w-3 h-3" />
+                          预约升级中 · {t.pendingEffectiveDate} → {t.pendingPlan}
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-3.5">
-                      <select
-                        value={target[t.id] || ""}
-                        onChange={(e) => setTarget((m) => ({ ...m, [t.id]: e.target.value }))}
-                        className="text-[13px] rounded-lg border px-3 py-2 bg-white outline-none"
-                        style={{ borderColor: C.border, minWidth: 150 }}
-                      >
-                        <option value="">选择目标套餐</option>
-                        {plans.map((p) => (
-                          <option key={p.id} value={p.id} disabled={p.id === t.planId}>
-                            {p.name}{p.id === t.planId ? "（当前）" : ""}
-                          </option>
-                        ))}
-                      </select>
+                      {hasPending ? (
+                        <span className="text-[12px]" style={{ color: C.light }}>
+                          次月将生效，本月不可再改
+                        </span>
+                      ) : (
+                        <select
+                          value={target[t.id] || ""}
+                          onChange={(e) => setTarget((m) => ({ ...m, [t.id]: e.target.value }))}
+                          className="text-[13px] rounded-lg border px-3 py-2 bg-white outline-none"
+                          style={{ borderColor: C.border, minWidth: 150 }}
+                        >
+                          <option value="">选择目标套餐</option>
+                          {plans.map((p) => (
+                            <option key={p.id} value={p.id} disabled={p.id === t.planId}>
+                              {p.name}{p.id === t.planId ? "（当前）" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </td>
                     <td className="px-3 py-3.5">
-                      <Button
-                        size="sm"
-                        disabled={!hasTarget || samePlan || busy}
-                        style={{ background: hasTarget && !samePlan && !busy ? C.primary : "#C9D4CF" }}
-                        onClick={() => doUpgrade(t)}
-                      >
-                        {busy ? (
-                          <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
-                        ) : (
-                          <ArrowUpCircle className="w-3.5 h-3.5 mr-1" />
-                        )}
-                        升级
-                      </Button>
+                      {hasPending ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={cancellingBusy}
+                          style={{ borderColor: "#E5B8B3", color: "#B03A2E", background: "transparent" }}
+                          onClick={() => doCancelPending(t)}
+                        >
+                          {cancellingBusy ? (
+                            <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                          ) : (
+                            <XCircle className="w-3.5 h-3.5 mr-1" />
+                          )}
+                          取消预约
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          disabled={!hasTarget || samePlan || busy}
+                          style={{ background: hasTarget && !samePlan && !busy ? C.primary : "#C9D4CF" }}
+                          onClick={() => doUpgrade(t)}
+                        >
+                          {busy ? (
+                            <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                          ) : (
+                            <ArrowUpCircle className="w-3.5 h-3.5 mr-1" />
+                          )}
+                          升级
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 );

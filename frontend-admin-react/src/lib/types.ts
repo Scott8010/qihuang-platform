@@ -49,6 +49,8 @@ export interface Tenant {
   id: string; name: string; scene: "MED" | "HEALTH" | "EDU";
   plan: string; planId?: string; orgs: number; users: number;
   usedCalls: number; quotaCalls: number; status: string; expires: string; module3d: boolean;
+  pendingPlan?: string | null;          // 待生效预约的目标套餐
+  pendingEffectiveDate?: string | null; // 待生效日期（YYYY-MM-DD）
 }
 
 export interface RolePermission {
@@ -173,6 +175,8 @@ export interface TenantPlanItem {
   status: string;
   plan: string;            // 当前套餐显示名（可能为空）
   planId: string;          // 当前套餐 UUID（可能为空）
+  pendingPlan: string | null;          // 待生效预约的目标套餐
+  pendingEffectiveDate: string | null; // 待生效日期（YYYY-MM-DD）
   orgs: number;
   users: number;
   usedCalls: number;

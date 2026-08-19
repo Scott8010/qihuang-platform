@@ -1963,6 +1963,16 @@ async def list_tenants_extended(
                 CallLog.timestamp >= month_start,
             ).count()
 
+            # 待生效的预约升级（status=scheduled 且 start_date 在未来）
+            pend_sub = _scheduled_subscription(db, t.id)
+            pending_plan_name = None
+            pending_effective_date = None
+            if pend_sub:
+                pend_plan = db.query(Plan).filter_by(id=pend_sub.plan_id).first()
+                if pend_plan:
+                    pending_plan_name = pend_plan.display_name or pend_plan.plan_name
+                pending_effective_date = pend_sub.start_date.strftime("%Y-%m-%d") if pend_sub.start_date else None
+
             extra = t.extra or {}
             module_3d = extra.get("module_3d", False)
 
@@ -1970,6 +1980,8 @@ async def list_tenants_extended(
                 "id": t.id, "name": t.name, "display_name": t.display_name,
                 "scene": t.scene, "status": t.status,
                 "plan": plan_name, "plan_id": plan_id,
+                "pending_plan": pending_plan_name,
+                "pending_effective_date": pending_effective_date,
                 "orgs": orgs_count, "users": users_count,
                 "usedCalls": month_calls, "quotaCalls": quota,
                 "expires": expires,

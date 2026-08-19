@@ -112,12 +112,33 @@ async def list_tenants(
     plan_ids = {s.plan_id for s in subs}
     plans = {p.id: p for p in db.query(Plan).filter(Plan.id.in_(plan_ids)).all()} if plan_ids else {}
     sub_map = {s.tenant_id: plans.get(s.plan_id) for s in subs}
+
+    # 待生效的预约升级（status=scheduled 且 start_date 在未来），批量避免 N+1
+    from datetime import datetime as _dt, timezone as _tz
+    _now = _dt.now(_tz.utc).replace(tzinfo=None)
+    pend_subs = db.query(Subscription).filter(
+        Subscription.status == "scheduled",
+        Subscription.start_date > _now,
+    ).all()
+    pend_plan_ids = {s.plan_id for s in pend_subs}
+    pend_plans = {p.id: p for p in db.query(Plan).filter(Plan.id.in_(pend_plan_ids)).all()} if pend_plan_ids else {}
+    pend_map: dict = {}
+    for s in pend_subs:
+        if s.tenant_id in pend_map:
+            continue
+        pend_map[s.tenant_id] = {
+            "pending_plan": (pend_plans.get(s.plan_id).display_name or pend_plans.get(s.plan_id).plan_name) if pend_plans.get(s.plan_id) else "",
+            "pending_effective_date": s.start_date.strftime("%Y-%m-%d") if s.start_date else None,
+        }
+
     return success([{
         "id": t.id, "name": t.name, "display_name": t.display_name,
         "scene": t.scene, "status": t.status, "created_at": t.created_at.isoformat() if t.created_at else None,
         "plan_id": (sub_map.get(t.id).id if sub_map.get(t.id) else ""),
         "plan_name": (sub_map.get(t.id).plan_name if sub_map.get(t.id) else ""),
         "plan": ((sub_map.get(t.id).display_name or sub_map.get(t.id).plan_name) if sub_map.get(t.id) else ""),
+        "pending_plan": (pend_map.get(t.id) or {}).get("pending_plan") or None,
+        "pending_effective_date": (pend_map.get(t.id) or {}).get("pending_effective_date") or None,
     } for t in tenants])
 
 

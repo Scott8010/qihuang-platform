@@ -12,7 +12,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Search, Boxes, Loader2 } from "lucide-react";
+import { Plus, Search, Boxes, Loader2, Clock } from "lucide-react";
 import { C, sceneMap, statusMap } from "@/lib/types";
 import { fetchTenants, createTenant, deleteTenant } from "@/lib/api";
 import { toast } from "sonner";
@@ -215,7 +215,19 @@ export default function Tenants() {
                           {sceneMap[t.scene].label}
                         </span>
                       </td>
-                      <td className="px-3 py-3.5 align-middle whitespace-nowrap" style={{ color: C.mid }}>{t.plan}</td>
+                      <td className="px-3 py-3.5 align-middle whitespace-nowrap" style={{ color: C.mid }}>
+                        {t.plan}
+                        {(t as any).pendingPlan && (t as any).pendingEffectiveDate && (
+                          <span
+                            className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium"
+                            style={{ background: "#FBF4E4", color: "#8A6A1F", border: "1px solid #EDD9A8" }}
+                            title={`将于 ${(t as any).pendingEffectiveDate} 升级到 ${(t as any).pendingPlan}`}
+                          >
+                            <Clock className="w-3 h-3" />
+                            {(t as any).pendingEffectiveDate} → {(t as any).pendingPlan}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-3.5 align-middle whitespace-nowrap" style={{ color: C.mid }}>{t.orgs} / {t.users.toLocaleString()}</td>
                       <td className="px-3 py-3.5 align-middle">
                         <div className="flex justify-between text-[11px] mb-1 whitespace-nowrap" style={{ color: over ? "#B03A2E" : C.light }}>
