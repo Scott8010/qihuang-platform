@@ -68,3 +68,9 @@ frontend-admin-react/dist/
 frontend-admin-react/dist_prev_*/
 frontend-admin-react/dist_old_*/
 frontend-admin-react/admin_dist.tgz
+
+# Playwright 本地自验截图 + 临时 stub
+frontend-admin-react/_verify_caps/
+frontend-admin-react/stub_*.cjs
+frontend-admin-react/dbg_*.cjs
+frontend-admin-react/verify_*.cjs

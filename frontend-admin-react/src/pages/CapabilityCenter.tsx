@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,8 @@ import {
 } from "@/components/ui/dialog";
 import {
   Boxes, Globe, Lock, FilePlus2, Send, CheckCircle2, XCircle, Loader2,
-  ShieldCheck, Eye,
+  ShieldCheck, Eye, Copy, Check, ChevronDown, ChevronUp, Info, FlaskConical,
+  ListOrdered, MapPin, ClipboardList, BookOpen, Sparkles,
 } from "lucide-react";
 import { C } from "@/lib/types";
 import {
@@ -21,12 +22,502 @@ import { toast } from "sonner";
 /* ═══════════════════════════════════════════
    多租户能力中心 — 模板市场 + 平台审核工作台
    后端 /admin/v1/template-center/*（已上线）
+
+   业务定位（二期·多租户能力中心）：
+     解决门店问卷 / 课件知识切片 / 项目 SOP / 产品培训 / 话术脚本
+     等"可复用能力资产"在「平台 ↔ 机构」之间的归属与流转：
+       · 平台官方模板  → 全网租户可见（共享池基线）
+       · 机构自建模板  → 默认私有，仅本机构可见
+       · 同步提交平台  → 进入「审核工作台」
+       · 平台采纳      → 提升为共享池（public），其他机构可克隆复用
+       · 平台驳回/强下架→ 收回私有，不允许再出现于共享池
    ═══════════════════════════════════════════ */
 
 const KIND_LABEL: Record<string, string> = {
   herb: "中药", formula: "方剂", syndrome: "证候", disease: "疾病",
   script: "话术脚本", product: "产品培训", project: "项目培训", knowledge: "知识课件", other: "其他",
 };
+
+/* ─────────────── 详情弹窗用：JSON 语法高亮 + 字段平铺 ─────────────── */
+
+/** 简易 JSON 语法高亮 — 用 inline style，不依赖 head 注入。绿 key / 棕 string / 蓝 num / 紫 kw / 灰 brace */
+function JsonHighlight({ value }: { value: unknown }) {
+  const parts = useMemo(() => {
+    const text = JSON.stringify(value, null, 2);
+    type Piece = { t: "k" | "s" | "n" | "w" | "b" | "t"; v: string };
+    const out: Piece[] = [];
+    let i = 0;
+    const KW = /\b(true|false|null)\b/g;
+    const NUM = /-?\d+(\.\d+)?(e[+-]?\d+)?/gi;
+    const BR = /[{}[\],]/g;
+    while (i < text.length) {
+      const c = text[i];
+      if (c === '"') {
+        // 找到匹配的结束引号（处理 \"）
+        let j = i + 1;
+        while (j < text.length && text[j] !== '"') {
+          if (text[j] === "\\") j += 2;
+          else j++;
+        }
+        j = Math.min(j + 1, text.length);
+        const seg = text.slice(i, j);
+        // 判定是 key 还是 string：看紧跟其后是否有空白+: 
+        let m = j;
+        while (m < text.length && /\s/.test(text[m])) m++;
+        const isKey = text[m] === ":";
+        out.push({ t: isKey ? "k" : "s", v: seg });
+        i = j;
+        continue;
+      }
+      KW.lastIndex = i;
+      const kw = KW.exec(text);
+      NUM.lastIndex = i;
+      const num = NUM.exec(text);
+      BR.lastIndex = i;
+      const br = BR.exec(text);
+      const candidates = [kw, num, br].filter(Boolean) as RegExpExecArray[];
+      candidates.sort((a, b) => a.index - b.index);
+      const next = candidates[0];
+      if (next && next.index === i) {
+        out.push({ t: next[0] === "{" || next[0] === "}" || next[0] === "[" || next[0] === "]" || next[0] === "," ? "b" :
+                     KW.test(next[0]) ? "w" : "n", v: next[0] });
+        i += next[0].length;
+        KW.lastIndex = 0; NUM.lastIndex = 0; BR.lastIndex = 0;
+        continue;
+      }
+      // fallback 单字符
+      if (next && next.index > i) {
+        out.push({ t: "t", v: text.slice(i, next.index) });
+        i = next.index;
+        continue;
+      }
+      out.push({ t: "t", v: text.slice(i) });
+      break;
+    }
+    KW.lastIndex = 0; NUM.lastIndex = 0; BR.lastIndex = 0;
+    return out;
+  }, [value]);
+
+  const colorMap: Record<string, string> = {
+    k: "#2E5A4C",   // key → 深绿
+    s: "#8A6A1F",   // string value → 古铜金
+    n: "#2F6FB5",   // number → 蓝
+    w: "#8B3A8B",   // keyword → 紫
+    b: "#8FA9A0",   // structural → 浅灰
+    t: "#22312B",   // 普通文本 → 墨
+  };
+  return (
+    <code className="font-mono text-[11.5px] leading-relaxed block whitespace-pre">
+      {parts.map((p, i) => (
+        <span key={i} style={{ color: colorMap[p.t] }}>{p.v}</span>
+      ))}
+    </code>
+  );
+}
+
+/** 「复制到剪贴板」按钮，带成功反馈 */
+function CopyButton({ text, label = "复制" }: { text: string; label?: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      type="button"
+      className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded border hover:bg-white transition-colors"
+      style={{ borderColor: C.border, color: C.mid }}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          setDone(true);
+          setTimeout(() => setDone(false), 1200);
+        } catch {
+          toast.error("复制失败，请手动选择");
+        }
+      }}
+    >
+      {done ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+      {done ? "已复制" : label}
+    </button>
+  );
+}
+
+/* ─────────────── 详情弹窗用：4 套已知 schema 渲染器 ─────────────── */
+
+/** ① 知识课件 § 章节型（艾灸养生）：{category, content:[{title,body}], talk_script?} */
+function KnowledgeSectionsView({ data }: { data: Record<string, unknown> }) {
+  const items = Array.isArray(data.content) ? (data.content as Array<{ title?: string; body?: string }>) : [];
+  return (
+    <div className="space-y-3">
+      <FieldRow label="主题分类" value={safeStr(data.category)} icon={<BookOpen className="w-3.5 h-3.5" />} />
+      <div className="space-y-1.5">
+        <div className="text-[11px] flex items-center gap-1" style={{ color: C.light }}>
+          <ListOrdered className="w-3 h-3" />知识章节 <span className="text-[10px]">（共 {items.length} 节）</span>
+        </div>
+        <ol className="space-y-1.5">
+          {items.map((s, i) => (
+            <li key={i} className="flex gap-2 rounded-md border px-2.5 py-2" style={{ borderColor: C.border, background: "#FCFCFA" }}>
+              <span className="shrink-0 w-5 h-5 rounded-full text-[10.5px] font-bold flex items-center justify-center"
+                style={{ background: C.primary, color: "#fff" }}>{i + 1}</span>
+              <div className="min-w-0 flex-1">
+                <div className="text-[12.5px] font-medium" style={{ color: C.ink }}>{s.title || `第 ${i + 1} 节`}</div>
+                <div className="text-[11.5px] mt-0.5 leading-relaxed whitespace-pre-wrap" style={{ color: C.mid }}>{s.body || "—"}</div>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
+      {typeof data.talk_script === "string" && data.talk_script && (
+        <TalkScript value={data.talk_script} />
+      )}
+    </div>
+  );
+}
+
+/** ② 知识课件 § 穴位型（经络穴位）：{category, points:[{name,meridian,location,effect,moxa_method,cautions[],talk_script}], common_cautions[]} */
+function KnowledgePointsView({ data }: { data: Record<string, unknown> }) {
+  const points = Array.isArray(data.points) ? data.points as Array<Record<string, unknown>> : [];
+  const cautions = Array.isArray(data.common_cautions) ? data.common_cautions as string[] : [];
+  return (
+    <div className="space-y-3">
+      <FieldRow label="主题分类" value={safeStr(data.category)} icon={<BookOpen className="w-3.5 h-3.5" />} />
+      <div className="space-y-1.5">
+        <div className="text-[11px] flex items-center gap-1" style={{ color: C.light }}>
+          <MapPin className="w-3 h-3" />穴位 <span className="text-[10px]">（共 {points.length} 个）</span>
+        </div>
+        <div className="grid grid-cols-1 gap-1.5">
+          {points.map((p, i) => {
+            const cs = Array.isArray(p.cautions) ? p.cautions as string[] : [];
+            return (
+              <div key={i} className="rounded-md border px-2.5 py-2 space-y-1" style={{ borderColor: C.border, background: "#FCFCFA" }}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[12.5px] font-semibold" style={{ color: C.ink }}>{safeStr(p.name)}</span>
+                  {p.meridian ? (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#FBF4E4", color: "#8A6A1F" }}>
+                      {safeStr(p.meridian)}
+                    </span>
+                  ) : null}
+                </div>
+                {p.location ? <FieldRowInline label="定位" value={safeStr(p.location)} /> : null}
+                {p.effect ? <FieldRowInline label="功效" value={safeStr(p.effect)} /> : null}
+                {p.moxa_method ? <FieldRowInline label="灸法" value={safeStr(p.moxa_method)} /> : null}
+                {cs.length > 0 && (
+                  <FieldRowInline label="禁忌" value={cs.join(" · ")} tone="warn" />
+                )}
+                {typeof p.talk_script === "string" && p.talk_script && <TalkScript value={p.talk_script} />}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {cautions.length > 0 && (
+        <div className="rounded-md border px-2.5 py-2" style={{ borderColor: "#F0D9B5", background: "#FFF8EC" }}>
+          <div className="text-[11px] font-medium mb-1" style={{ color: "#8A6A1F" }}>⚠ 通用注意事项</div>
+          <ul className="text-[11.5px] space-y-0.5" style={{ color: "#6B5212" }}>
+            {cautions.map((c, i) => <li key={i}>· {c}</li>)}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** ③ 项目 SOP：{type, duration_min, flow:[{step,name,script}], cautions[], aftercare[]} */
+function ProjectFlowView({ data }: { data: Record<string, unknown> }) {
+  const flow = Array.isArray(data.flow) ? data.flow as Array<Record<string, unknown>> : [];
+  const cautions = Array.isArray(data.cautions) ? data.cautions as string[] : [];
+  const aftercare = Array.isArray(data.aftercare) ? data.aftercare as string[] : [];
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {data.type ? <FieldRow label="项目类型" value={safeStr(data.type)} /> : null}
+        {typeof data.duration_min === "number" ? (
+          <FieldRow label="时长" value={`${data.duration_min} 分钟`} />
+        ) : null}
+      </div>
+      <div className="space-y-1.5">
+        <div className="text-[11px] flex items-center gap-1" style={{ color: C.light }}>
+          <ClipboardList className="w-3 h-3" />服务流程 <span className="text-[10px]">（共 {flow.length} 步）</span>
+        </div>
+        <ol className="space-y-1">
+          {flow.map((s, i) => (
+            <li key={i} className="flex gap-2 rounded-md border px-2.5 py-1.5" style={{ borderColor: C.border, background: "#FCFCFA" }}>
+              <span className="shrink-0 w-5 h-5 rounded-full text-[10.5px] font-bold flex items-center justify-center"
+                style={{ background: C.accent, color: "#fff" }}>
+                {typeof s.step === "number" ? s.step : i + 1}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-[12px] font-medium" style={{ color: C.ink }}>{safeStr(s.name)}</div>
+                {s.script ? <div className="text-[11px] mt-0.5 leading-relaxed" style={{ color: C.mid }}>{safeStr(s.script)}</div> : null}
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
+      {cautions.length > 0 && (
+        <CautionsBlock title="禁忌 / 注意事项" items={cautions} />
+      )}
+      {aftercare.length > 0 && (
+        <CautionsBlock title="善后建议" items={aftercare} tone="info" />
+      )}
+    </div>
+  );
+}
+
+/** ④ 产品培训：{type, ingredients[], positioning, usage, suitable, cautions[], sales_points[]} */
+function ProductTrainingView({ data }: { data: Record<string, unknown> }) {
+  const ingredients = Array.isArray(data.ingredients) ? data.ingredients as string[] : [];
+  const cautions = Array.isArray(data.cautions) ? data.cautions as string[] : [];
+  const sales = Array.isArray(data.sales_points) ? data.sales_points as string[] : [];
+  return (
+    <div className="space-y-2.5">
+      <div className="flex flex-wrap gap-2">
+        {data.type ? <FieldRow label="品类" value={safeStr(data.type)} /> : null}
+        {data.positioning ? <FieldRow label="定位" value={safeStr(data.positioning)} /> : null}
+      </div>
+      {data.usage ? <FieldRow label="用法" value={safeStr(data.usage)} /> : null}
+      {data.suitable ? <FieldRow label="适宜人群" value={safeStr(data.suitable)} /> : null}
+      {ingredients.length > 0 && (
+        <div>
+          <div className="text-[11px] mb-1" style={{ color: C.light }}>配方 / 成分</div>
+          <div className="flex flex-wrap gap-1">
+            {ingredients.map((s, i) => (
+              <span key={i} className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: C.soft, color: C.primary }}>{s}</span>
+            ))}
+          </div>
+        </div>
+      )}
+      {sales.length > 0 && (
+        <div>
+          <div className="text-[11px] mb-1" style={{ color: C.light }}>销售卖点</div>
+          <div className="flex flex-wrap gap-1">
+            {sales.map((s, i) => (
+              <span key={i} className="text-[11px] px-2 py-0.5 rounded-full border" style={{ borderColor: "#F5EDD9", color: "#8A6A1F", background: "#FBF4E4" }}>{s}</span>
+            ))}
+          </div>
+        </div>
+      )}
+      {cautions.length > 0 && <CautionsBlock title="注意事项" items={cautions} />}
+    </div>
+  );
+}
+
+/** ⑤ 问卷草稿：{from_questionnaire, schema} 或 schema 详情 */
+function QuestionnaireDraftView({ data }: { data: Record<string, unknown> }) {
+  const schema = data.schema as Record<string, unknown> | undefined;
+  const title = (typeof schema?.title === "string" ? schema.title : "")
+    || (typeof data.title === "string" ? data.title : "")
+    || "问卷草稿";
+  const fields = Array.isArray(schema?.fields)
+    ? schema!.fields as Array<Record<string, unknown>>
+    : Array.isArray(schema?.questions)
+      ? schema!.questions as Array<Record<string, unknown>>
+      : [];
+  return (
+    <div className="space-y-2.5">
+      <FieldRow label="来源" value={`问卷 · ${safeStr(data.from_questionnaire) || "—"}`} icon={<FlaskConical className="w-3.5 h-3.5" />} />
+      <FieldRow label="名称" value={title} />
+      {schema?.description ? <FieldRow label="说明" value={safeStr(schema.description)} /> : null}
+      {fields.length > 0 && (
+        <div>
+          <div className="text-[11px] mb-1" style={{ color: C.light }}>字段（{fields.length}）</div>
+          <div className="rounded-md border divide-y" style={{ borderColor: C.border }}>
+            {fields.map((f, i) => (
+              <div key={i} className="px-2.5 py-1.5 flex items-baseline gap-2 text-[11.5px]" style={{ borderColor: C.border }}>
+                <span className="font-medium" style={{ color: C.ink }}>{String(f.label || f.name || f.key || `字段 ${i + 1}`)}</span>
+                <span className="text-[10px] px-1 py-0.5 rounded font-mono" style={{ background: C.soft, color: C.primary }}>
+                  {String(f.type || f.field_type || "—")}
+                </span>
+                {!!f.required && <span className="text-[10px] text-red-600">*必填</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 话术脚本（紫色特别行，店员可直接读） */
+function TalkScript({ value }: { value: string }) {
+  return (
+    <div className="rounded-md px-2 py-1.5 text-[11.5px] leading-relaxed italic"
+      style={{ background: "#F2EFEA", color: "#5B4F35", borderLeft: `3px solid ${C.accent}` }}>
+      💬 {value}
+    </div>
+  );
+}
+
+/** 顶部 key-value 横排 */
+function FieldRow({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+  return (
+    <div className="inline-flex items-center gap-1.5 text-[11.5px] px-2 py-1 rounded border" style={{ borderColor: C.border, background: "#F8FAF9" }}>
+      <span className="flex items-center gap-1" style={{ color: C.light }}>{icon}{label}</span>
+      <span style={{ color: C.ink }}>{value || "—"}</span>
+    </div>
+  );
+}
+function FieldRowInline({ label, value, tone }: { label: string; value: string; tone?: "warn" | "info" }) {
+  const color = tone === "warn" ? "#8A6A1F" : tone === "info" ? "#3D5A80" : C.mid;
+  return (
+    <div className="text-[11.5px] leading-relaxed">
+      <span style={{ color: C.light }}>{label}：</span>
+      <span style={{ color }}>{value}</span>
+    </div>
+  );
+}
+
+/** 把 unknown 安全转 string（避免 TS unknown→ReactNode 冲突） */
+function safeStr(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  return String(v);
+}
+
+/** 注意事项红/蓝块 */
+function CautionsBlock({ title, items, tone }: { title: string; items: string[]; tone?: "warn" | "info" }) {
+  const warn = tone !== "info";
+  return (
+    <div className="rounded-md border px-2.5 py-2"
+      style={{ borderColor: warn ? "#F0D9B5" : "#C9D9EA", background: warn ? "#FFF8EC" : "#F3F7FB" }}>
+      <div className="text-[11px] font-medium mb-1" style={{ color: warn ? "#8A6A1F" : "#3D5A80" }}>
+        {warn ? "⚠" : "ℹ"} {title}
+      </div>
+      <ul className="text-[11.5px] space-y-0.5" style={{ color: warn ? "#6B5212" : "#2F4A6A" }}>
+        {items.map((c, i) => <li key={i}>· {c}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+/** ⑥ 未知 schema fallback：KV 平铺 + 折叠 JSON + 复制 */
+function GenericKVView({ value, depth = 0 }: { value: unknown; depth?: number }) {
+  if (value === null || value === undefined) {
+    return <span className="text-[11.5px]" style={{ color: C.light }}>—</span>;
+  }
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return (
+      <span className="text-[11.5px] break-all" style={{ color: C.ink }}>
+        {typeof value === "string" ? `「${value}」` : String(value)}
+      </span>
+    );
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) return <span className="text-[11.5px]" style={{ color: C.light }}>（空）</span>;
+    return (
+      <ol className="space-y-1 list-decimal pl-4">
+        {value.map((v, i) => (
+          <li key={i} className="text-[11.5px]">
+            <GenericKVView value={v} depth={depth + 1} />
+          </li>
+        ))}
+      </ol>
+    );
+  }
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) return <span className="text-[11.5px]" style={{ color: C.light }}>（空对象）</span>;
+    return (
+      <div className={depth === 0 ? "space-y-1 rounded-md border p-2" : "space-y-1"} style={{ borderColor: C.border, background: depth === 0 ? "#FCFCFA" : undefined }}>
+        {entries.map(([k, v]) => (
+          <div key={k} className="grid grid-cols-[auto_1fr] gap-x-2 items-baseline text-[11.5px]">
+            <span className="font-medium" style={{ color: C.mid }}>{k}</span>
+            <GenericKVView value={v} depth={depth + 1} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
+}
+
+/* ─────────────── 内容渲染路由入口 ─────────────── */
+function TemplatePreview({ content }: { content: Record<string, unknown> }) {
+  // ① 知识课件章节型（艾灸养生）：category + content:[{title,body}]
+  if (Array.isArray(content.content) && (content.content as unknown[]).every(
+    (x) => x && typeof x === "object" && ("title" in (x as object) || "body" in (x as object))
+  )) {
+    return <KnowledgeSectionsView data={content} />;
+  }
+  // ② 知识课件穴位型（经络穴位）：points:[{name,meridian,...}]
+  if (Array.isArray(content.points) && (content.points as unknown[]).every(
+    (x) => x && typeof x === "object" && "name" in (x as object)
+  )) {
+    return <KnowledgePointsView data={content} />;
+  }
+  // ③ 项目 SOP：flow:[{step,name,script}]
+  if (Array.isArray(content.flow) && (content.flow as unknown[]).every(
+    (x) => x && typeof x === "object" && ("script" in (x as object) || "name" in (x as object))
+  )) {
+    return <ProjectFlowView data={content} />;
+  }
+  // ④ 产品培训：ingredients + positioning + (usage|suitable)
+  if (Array.isArray(content.ingredients) && (content.positioning || content.usage || content.suitable)) {
+    return <ProductTrainingView data={content} />;
+  }
+  // ⑤ 问卷草稿：{from_questionnaire, schema}
+  if (content.from_questionnaire || (content.schema && typeof content.schema === "object")) {
+    return <QuestionnaireDraftView data={content} />;
+  }
+  // ⑥ 自由 schema：先平铺，再附折叠 JSON
+  return <GenericSchemaView content={content} />;
+}
+
+/** 未知 schema：KV 平铺 + 折叠 JSON（语法高亮 + 复制） */
+function GenericSchemaView({ content }: { content: Record<string, unknown> }) {
+  const [rawOpen, setRawOpen] = useState(false);
+  const raw = useMemo(() => JSON.stringify(content, null, 2), [content]);
+  return (
+    <div className="space-y-3">
+      <GenericKVView value={content} />
+      <div>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded border hover:bg-white"
+          style={{ borderColor: C.border, color: C.mid }}
+          onClick={() => setRawOpen((o) => !o)}
+        >
+          {rawOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          {rawOpen ? "收起原始 JSON" : "展开原始 JSON"}
+        </button>
+        {rawOpen && (
+          <div className="mt-1.5 relative rounded-md border" style={{ borderColor: C.border, background: "#FCFCFA" }}>
+            <div className="absolute right-1.5 top-1.5">
+              <CopyButton text={raw} label="复制 JSON" />
+            </div>
+            <pre className="p-2.5 pt-8 overflow-auto max-h-72 m-0" style={{ background: "#FCFCFA" }}>
+              <JsonHighlight value={content} />
+            </pre>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** 详情元信息：归属 + 版本 + ID + Created（统一排版） */
+function TemplateMeta({ tpl }: { tpl: CapabilityTemplate }) {
+  const vis = visInfo(tpl.ownership?.visibility);
+  const isPlatform = tpl.ownership?.source === "platform";
+  return (
+    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
+      <span style={{ color: C.light }}>归属</span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ color: vis.color, background: vis.bg }}>
+          {vis.label === "共享池" ? <Globe className="w-3 h-3" /> : vis.label === "私有" ? <Lock className="w-3 h-3" /> : <ShieldCheck className="w-3 h-3" />}
+          {vis.label}
+        </span>
+        {isPlatform && <span className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: "#F5EDD9", color: "#8A6A1F" }}>官方模板</span>}
+        {tpl.ownership?.source && (
+          <span className="text-[11px] font-mono" style={{ color: C.light }}>· source={tpl.ownership.source}</span>
+        )}
+      </span>
+      <span style={{ color: C.light }}>版本</span><span style={{ color: C.ink }}>{tpl.current_version}</span>
+      <span style={{ color: C.light }}>创建</span>
+      <span style={{ color: C.ink }}>{(tpl.created_at || "").replace("T", " ").slice(0, 19) || "—"}</span>
+      <span style={{ color: C.light }}>ID</span>
+      <span className="font-mono text-[11px] break-all" style={{ color: C.mid }}>{tpl.id}</span>
+    </div>
+  );
+}
 
 function visInfo(v: string | null | undefined) {
   if (v === "platform") return { label: "平台模板", color: "#2E5A4C", bg: "#EAF2EE" };
@@ -165,7 +656,7 @@ export default function CapabilityCenter() {
 
   return (
     <div className="space-y-4">
-      {/* 标题 */}
+      {/* 标题 + 业务定位说明卡 */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <Boxes className="w-5 h-5" style={{ color: C.primary }} />
@@ -175,6 +666,22 @@ export default function CapabilityCenter() {
         <Button size="sm" style={{ background: C.primary }} onClick={() => setCreateOpen(true)}>
           <FilePlus2 className="w-4 h-4 mr-1" /> 新建模板
         </Button>
+      </div>
+
+      {/* 业务定位卡：告诉运营"这页面解决啥问题" */}
+      <div className="rounded-lg border p-3 grid grid-cols-1 md:grid-cols-4 gap-2 text-[11.5px]" style={{ borderColor: C.border, background: "#F8FAF9" }}>
+        <div className="md:col-span-1 flex items-center gap-2 font-medium" style={{ color: C.ink }}>
+          <Info className="w-4 h-4" style={{ color: C.accent }} />
+          这页面解决什么
+        </div>
+        <div className="md:col-span-3" style={{ color: C.mid }}>
+          把门店"可复用能力资产"（培训课件 / 穴位知识 / 项目 SOP / 产品培训 / 话术脚本 / 问卷草稿）
+          在 <b>平台 ↔ 机构</b> 之间流转——
+          <span className="inline-block mx-1 px-1.5 rounded" style={{ background: "#EAF2EE", color: C.primary }}>平台官方</span>
+          是共享池基线，机构可克隆自用；
+          <span className="inline-block mx-1 px-1.5 rounded" style={{ background: "#F1EFE8", color: "#5F5E5A" }}>机构自建</span>
+          默认私有，可提交平台审核——采纳即入共享池、驳回即被强收回私有。
+        </div>
       </div>
 
       {/* Tabs */}
@@ -331,21 +838,42 @@ export default function CapabilityCenter() {
 
       {/* 模板详情 */}
       <Dialog open={!!viewTpl} onOpenChange={(o) => { if (!o) setViewTpl(null); }}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>模板详情</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="w-4 h-4" style={{ color: C.primary }} />
+              模板详情 · {viewTpl?.name}
+            </DialogTitle>
+            <DialogDescription>
+              {viewTpl?.kind && (
+                <span className="text-[11px] px-1.5 py-0.5 rounded mr-1.5" style={{ background: C.soft, color: C.primary }}>
+                  {KIND_LABEL[viewTpl.kind] || viewTpl.kind}
+                </span>
+              )}
+              <span>此模板归属与归属流转见「归属模型」说明</span>
+            </DialogDescription>
           </DialogHeader>
           {viewTpl && (
-            <div className="space-y-2 text-[13px]">
-              <div><span style={{ color: C.light }}>名称：</span><b>{viewTpl.name}</b></div>
-              <div><span style={{ color: C.light }}>类型：</span>{KIND_LABEL[viewTpl.kind] || viewTpl.kind} · 版本 {viewTpl.current_version}</div>
-              <div><span style={{ color: C.light }}>归属：</span>{visInfo(viewTpl.ownership?.visibility).label}（{viewTpl.ownership?.source || "—"}）</div>
-              <div><span style={{ color: C.light }}>创建：</span>{viewTpl.created_at || "—"}</div>
+            <div className="space-y-3">
+              <div className="rounded-md p-2.5" style={{ background: "#F8FAF9", border: `1px solid ${C.border}` }}>
+                <TemplateMeta tpl={viewTpl} />
+              </div>
               <div>
-                <div className="text-[12px] mb-1" style={{ color: C.light }}>内容：</div>
-                <pre className="text-[11px] bg-[#F8FAF9] rounded p-2 overflow-auto max-h-48 font-mono" style={{ color: C.mid }}>
-                  {JSON.stringify(viewTpl.content_json, null, 2)}
-                </pre>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="text-[12px] font-medium flex items-center gap-1" style={{ color: C.mid }}>
+                    <Sparkles className="w-3.5 h-3.5" style={{ color: C.accent }} />
+                    内容（{viewTpl.kind === "knowledge" ? "课件知识切片" :
+                          viewTpl.kind === "project" ? "项目 SOP" :
+                          viewTpl.kind === "product" ? "产品培训" :
+                          viewTpl.kind === "script" ? "话术脚本" :
+                          viewTpl.kind === "herb" || viewTpl.kind === "formula" || viewTpl.kind === "syndrome" ? "知识图谱·智能体引用" :
+                          "结构化模板"}）
+                  </div>
+                  <CopyButton text={JSON.stringify(viewTpl.content_json, null, 2)} label="复制 JSON" />
+                </div>
+                <div className="rounded-md border p-2.5 max-h-[420px] overflow-auto" style={{ borderColor: C.border }}>
+                  <TemplatePreview content={(viewTpl.content_json as Record<string, unknown>) || {}} />
+                </div>
               </div>
             </div>
           )}
