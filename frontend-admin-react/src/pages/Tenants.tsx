@@ -184,18 +184,29 @@ export default function Tenants() {
       {/* 租户表 */}
       <Card className="border" style={{ borderColor: C.border }}>
         <CardContent className="p-0">
-          <table className="w-full text-[13px]">
+          <table className="w-full text-[13px] table-fixed">
+            <colgroup>
+              <col style={{ width: "22%" }} />
+              <col style={{ width: "84px" }} />
+              <col style={{ width: "100px" }} />
+              <col style={{ width: "110px" }} />
+              <col style={{ width: "200px" }} />
+              <col style={{ width: "92px" }} />
+              <col style={{ width: "84px" }} />
+              <col style={{ width: "108px" }} />
+              <col style={{ width: "148px" }} />
+            </colgroup>
             <thead>
-              <tr className="border-b text-left" style={{ borderColor: C.border, color: C.light }}>
-                <th className="px-5 py-3 font-medium">租户</th>
-                <th className="px-3 py-3 font-medium">场景</th>
-                <th className="px-3 py-3 font-medium">套餐</th>
-                <th className="px-3 py-3 font-medium">机构 / 用户</th>
-                <th className="px-3 py-3 font-medium w-[190px]">月调用量 / 配额</th>
-                <th className="px-3 py-3 font-medium">3D 模块</th>
-                <th className="px-3 py-3 font-medium">状态</th>
-                <th className="px-3 py-3 font-medium">到期时间</th>
-                <th className="px-5 py-3 font-medium text-right">操作</th>
+              <tr className="border-b" style={{ borderColor: C.border, background: C.soft }}>
+                <th className="px-5 py-3 text-left text-[12px] font-semibold whitespace-nowrap" style={{ color: C.mid, letterSpacing: "0.04em" }}>租户</th>
+                <th className="px-3 py-3 text-left text-[12px] font-semibold whitespace-nowrap" style={{ color: C.mid, letterSpacing: "0.04em" }}>场景</th>
+                <th className="px-3 py-3 text-left text-[12px] font-semibold whitespace-nowrap" style={{ color: C.mid, letterSpacing: "0.04em" }}>套餐</th>
+                <th className="px-3 py-3 text-left text-[12px] font-semibold whitespace-nowrap" style={{ color: C.mid, letterSpacing: "0.04em" }}>机构 / 用户</th>
+                <th className="px-3 py-3 text-left text-[12px] font-semibold whitespace-nowrap" style={{ color: C.mid, letterSpacing: "0.04em" }}>月调用量 / 配额</th>
+                <th className="px-3 py-3 text-left text-[12px] font-semibold whitespace-nowrap" style={{ color: C.mid, letterSpacing: "0.04em" }}>3D 模块</th>
+                <th className="px-3 py-3 text-left text-[12px] font-semibold whitespace-nowrap" style={{ color: C.mid, letterSpacing: "0.04em" }}>状态</th>
+                <th className="px-3 py-3 text-left text-[12px] font-semibold whitespace-nowrap" style={{ color: C.mid, letterSpacing: "0.04em" }}>到期时间</th>
+                <th className="px-4 py-3 text-right text-[12px] font-semibold whitespace-nowrap" style={{ color: C.mid, letterSpacing: "0.04em" }}>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -204,38 +215,42 @@ export default function Tenants() {
                 const pct = hasQuota ? Math.min(100, Math.round((t.usedCalls / t.quotaCalls) * 100)) : 0;
                 const over = hasQuota && pct >= 95;
                 return (
-                  <tr key={t.id} className="border-b last:border-0 hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
-                    <td className="px-5 py-3.5">
-                      <div className="font-medium" style={{ color: C.ink }}>{t.name}</div>
-                      <div className="text-[11px]" style={{ color: C.light }}>{t.id}</div>
+                  <tr key={t.id} className="border-b last:border-0 hover:bg-[#F8FAF9] transition-colors" style={{ borderColor: C.border }}>
+                    <td className="px-5 py-3.5 align-middle">
+                      <div className="font-medium whitespace-nowrap" style={{ color: C.ink }}>{t.name}</div>
+                      <div className="text-[11px] font-mono truncate max-w-[200px]" style={{ color: C.light }} title={t.id}>{t.id}</div>
                     </td>
-                    <td className="px-3 py-3.5">
-                      <span className="px-2 py-0.5 rounded text-[11px]" style={{ color: sceneMap[t.scene].color, background: sceneMap[t.scene].bg }}>
+                    <td className="px-3 py-3.5 align-middle">
+                      <span className="inline-block px-2.5 py-1 rounded text-[11px] font-medium whitespace-nowrap" style={{ color: sceneMap[t.scene].color, background: sceneMap[t.scene].bg }}>
                         {sceneMap[t.scene].label}
                       </span>
                     </td>
-                    <td className="px-3 py-3.5" style={{ color: C.mid }}>{t.plan}</td>
-                    <td className="px-3 py-3.5" style={{ color: C.mid }}>{t.orgs} / {t.users.toLocaleString()}</td>
-                    <td className="px-3 py-3.5">
-                      <div className="flex justify-between text-[11px] mb-1" style={{ color: over ? "#B03A2E" : C.light }}>
+                    <td className="px-3 py-3.5 align-middle whitespace-nowrap" style={{ color: C.mid }}>{t.plan}</td>
+                    <td className="px-3 py-3.5 align-middle whitespace-nowrap" style={{ color: C.mid }}>{t.orgs} / {t.users.toLocaleString()}</td>
+                    <td className="px-3 py-3.5 align-middle">
+                      <div className="flex justify-between text-[11px] mb-1 whitespace-nowrap" style={{ color: over ? "#B03A2E" : C.light }}>
                         <span>{t.usedCalls.toLocaleString()} / {hasQuota ? t.quotaCalls.toLocaleString() : "不限"}</span>
                         <span>{hasQuota ? `${pct}%` : "—"}</span>
                       </div>
                       <Progress value={pct} className="h-1.5" />
                     </td>
-                    <td className="px-3 py-3.5">
+                    <td className="px-3 py-3.5 align-middle whitespace-nowrap">
                       {t.module3d
-                        ? <Badge variant="outline" className="border-amber-300 text-[11px]" style={{ color: C.gold }}>已开通</Badge>
+                        ? <Badge variant="outline" className="border-amber-300 text-[11px] font-medium" style={{ color: C.gold }}>已开通</Badge>
                         : <span className="text-[12px]" style={{ color: C.light }}>—</span>}
                     </td>
-                    <td className="px-3 py-3.5">
-                      <span className={`px-2 py-0.5 rounded border text-[11px] ${statusMap[t.status].cls}`}>{statusMap[t.status].label}</span>
+                    <td className="px-3 py-3.5 align-middle whitespace-nowrap">
+                      <span className={`inline-block px-2.5 py-1 rounded border text-[11px] font-medium ${statusMap[t.status].cls}`}>{statusMap[t.status].label}</span>
                     </td>
-                    <td className="px-3 py-3.5" style={{ color: C.mid }}>{t.expires}</td>
-                    <td className="px-5 py-3.5 text-right">
-                      <Button variant="ghost" size="sm" className="text-[12px]" style={{ color: C.primary }} onClick={() => setDetail(t)}>详情</Button>
-                      <Button variant="ghost" size="sm" className="text-[12px]" style={{ color: C.mid }}>续费</Button>
-                      <Button variant="ghost" size="sm" className="text-[12px]" style={{ color: "#B03A2E" }} onClick={() => setDelTenant(t)}>删除</Button>
+                    <td className="px-3 py-3.5 align-middle whitespace-nowrap text-[12px]" style={{ color: C.mid }}>{t.expires}</td>
+                    <td className="px-4 py-3.5 align-middle text-right">
+                      <div className="inline-flex items-center gap-1">
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-[12px] hover:bg-[#EAF2EE]" style={{ color: C.primary }} onClick={() => setDetail(t)}>详情</Button>
+                        <span className="w-px h-3" style={{ background: C.border }} />
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-[12px] hover:bg-gray-100" style={{ color: C.mid }}>续费</Button>
+                        <span className="w-px h-3" style={{ background: C.border }} />
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-[12px] hover:bg-red-50" style={{ color: "#B03A2E" }} onClick={() => setDelTenant(t)}>删除</Button>
+                      </div>
                     </td>
                   </tr>
                 );
