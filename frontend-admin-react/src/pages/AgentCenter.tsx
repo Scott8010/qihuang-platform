@@ -96,7 +96,7 @@ export default function AgentCenter() {
       </div>
 
       {/* ═══ 构件 0：Agent 中台 · 运营驾驶舱 ═══ */}
-      <AgentOverview agents={agents} />
+      <AgentOverview />
 
       {/* ═══ 构件 A：能力资源池 ═══ */}
       <section>
@@ -417,7 +417,7 @@ function Metric({ label, value, color, sub, icon, dark }: {
 const SCENE_COLORS: Record<string, string> = { HEALTH: "#2E5A4C", MED: "#B03A2E", EDU: "#C8A45D" };
 const SCENE_NAMES: Record<string, string> = { HEALTH: "大健康", MED: "医疗", EDU: "培训" };
 
-function AgentOverview({ agents }: { agents: AgentDef[] }) {
+function AgentOverview() {
   const [dash, setDash] = useState<any>(null);
   const [sceneUsage, setSceneUsage] = useState<any[]>([]);
   const [agentUsage, setAgentUsage] = useState<any[]>([]);
@@ -585,7 +585,7 @@ function AgentOverview({ agents }: { agents: AgentDef[] }) {
                         <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #E3ECE8" }}
                           formatter={(v: any) => [`${v} 次`, "调用"]} />
                         <Bar dataKey="calls" radius={[0, 4, 4, 0]} barSize={14}>
-                          {usageData.map((x: any, i: number) => (
+                          {usageData.map((_: any, i: number) => (
                             <Cell key={i} fill={i === 0 ? "#8A6A1F" : i === 1 ? "#2E5A4C" : "#3D7363"} />
                           ))}
                         </Bar>
