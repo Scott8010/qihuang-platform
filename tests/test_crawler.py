@@ -33,6 +33,17 @@ def test_classify_unknown():
     assert cls.confidence == 0.0
 
 
+def test_new_sources_registered_offline():
+    # 新增真实源已注册；allow_network=False 时不触网、返回 0 条（离线安全）
+    from qihuang_platform.control.crawler.sources import get_source, list_sources
+    for key in ("baike-tcm", "ctext", "jicheng", "tcm-encyclopedia", "static-demo"):
+        assert key in list_sources(), f"{key} 未在 SOURCES 注册"
+        assert get_source(key) is not None, f"{key} 适配器为空"
+    rep = run_crawl("baike-tcm", allow_network=False, commit=False)
+    assert rep.total == 0, rep.to_dict()
+    assert rep.ingested == 0, rep.to_dict()
+
+
 # ───────────────────── 摄入管线（需测试库） ─────────────────────
 def test_run_crawl_static_demo(client):
     session = SessionLocal()
