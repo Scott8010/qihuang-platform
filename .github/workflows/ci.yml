@@ -215,6 +215,26 @@ jobs:
           REMOTE_USER: ${{ secrets.SSH_USER }}
           TARGET: "/root/qihuang_platform/frontend-admin-react/dist/"
 
+      - name: SSH 部署（命理/风水 H5 静态页）
+        uses: easingthemes/ssh-deploy@main
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          ARGS: "-rlgoDzvc -i --exclude='.git/'"
+          SOURCE: "fortune-h5/"
+          REMOTE_HOST: ${{ secrets.SSH_HOST }}
+          REMOTE_USER: ${{ secrets.SSH_USER }}
+          TARGET: "/root/qihuang_platform/fortune-h5/"
+
+      - name: SSH 部署（H5 C 端代理脚本）
+        uses: easingthemes/ssh-deploy@main
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          ARGS: "-rlgoDzvc -i --exclude='.git/'"
+          SOURCE: "scripts/fortune_proxy.py"
+          REMOTE_HOST: ${{ secrets.SSH_HOST }}
+          REMOTE_USER: ${{ secrets.SSH_USER }}
+          TARGET: "/root/qihuang_platform/scripts/"
+
       - name: 重启服务（systemd 单一真源，避免与 nohup/pkill 冲突）
         run: |
           mkdir -p ~/.ssh
@@ -225,6 +245,8 @@ jobs:
             cd /root/qihuang_platform
             echo "[1/2] 重启 8602（systemd qihuang-admin.service）..."
             systemctl restart qihuang-admin
+            echo "[1.5/2] 重启命理/风水 H5 代理（若存在）..."
+            systemctl restart fortune-h5 2>/dev/null || true
             echo "[2/2] 等待健康检查..."
             for i in $(seq 1 30); do
               if curl -sf -o /dev/null http://localhost:8602/platform/health; then
