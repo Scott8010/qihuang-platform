@@ -392,6 +392,14 @@ try:
         print("[Platform] 多租户能力中心路由已挂载 → /admin/v1/template-center")
     except ImportError as e:
         print(f"[Platform] 多租户能力中心模块未就绪: {e}")
+
+    # 多租户能力中心 — 开放接口（HMAC 友好，供颐掌柜 HB 等外部系统接入）
+    try:
+        from qihuang_platform.template_center.open_router import template_center_open_router
+        app.include_router(template_center_open_router)
+        print("[Platform] 能力中心开放接口已挂载 → /api/v1/template-center (HMAC/JWT)")
+    except ImportError as e:
+        print(f"[Platform] 能力中心开放接口未就绪: {e}")
 except ImportError as e:
     print(f"[Platform] 管理端全功能模块未就绪: {e}")
 
