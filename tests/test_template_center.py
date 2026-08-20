@@ -264,6 +264,52 @@ def test_template_export_import(client, admin_token):
     assert len(r.json()["data"]["versions"]) >= 1
 
 
+def test_template_version_rollback_and_stats(client, admin_token):
+    """⑥ 续：版本历史查询 + 版本回滚 + 运营统计聚合。"""
+    H = {"Authorization": f"Bearer {admin_token}"}
+
+    # 建模板（v1）并编辑（v2），产生 v1 快照
+    r = client.post("/admin/v1/template-center/templates", headers=H, json={
+        "name": "可回滚模板", "kind": "herb",
+        "content_json": {"k": "v1"},
+    })
+    assert r.status_code == 200, r.text
+    tid = r.json()["data"]["id"]
+    r = client.put(f"/admin/v1/template-center/templates/{tid}", headers=H, json={
+        "content_json": {"k": "v2"},
+    })
+    assert r.status_code == 200, r.text
+    assert r.json()["data"]["current_version"] == "v2"
+
+    # 版本历史：应含 v1 快照
+    r = client.get(f"/admin/v1/template-center/templates/{tid}/versions", headers=H)
+    assert r.status_code == 200, r.text
+    items = r.json()["data"]["items"]
+    assert r.json()["data"]["current_version"] == "v2"
+    assert any(v["version_tag"] == "v1" for v in items)
+
+    # 回滚到 v1：内容应恢复为 {"k": "v1"}，current_version=v1
+    r = client.post(f"/admin/v1/template-center/templates/{tid}/rollback", headers=H,
+                    json={"version_tag": "v1"})
+    assert r.status_code == 200, r.text
+    assert r.json()["data"]["current_version"] == "v1"
+    assert r.json()["data"]["content_json"] == {"k": "v1"}
+
+    # 回滚后再查版本历史：v1 之外应多一条回滚时快照的 v2（保证可再撤销）
+    r = client.get(f"/admin/v1/template-center/templates/{tid}/versions", headers=H)
+    assert r.status_code == 200, r.text
+    tags = [v["version_tag"] for v in r.json()["data"]["items"]]
+    assert "v1" in tags and "v2" in tags
+
+    # 运营统计：聚合数字非空、结构完整
+    r = client.get("/admin/v1/template-center/stats", headers=H)
+    assert r.status_code == 200, r.text
+    d = r.json()["data"]
+    assert d["totals"]["templates"] >= 1
+    assert d["totals"]["versions"] >= 1
+    assert "templates_by_kind" in d and "reviews" in d and "sync" in d and "disable_requests" in d
+
+
 def test_template_center_cleanup(client, admin_token):
     db = SessionLocal()
     try:

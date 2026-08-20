@@ -6,6 +6,10 @@
   - 问卷→模板草稿（门店问卷沉淀为能力中心模板）
   - 机构自建模板同步提交平台审核（template_review_submission）
   - 平台审核：采纳 / 强下架（REJECTED = 强制从共享池下架）
+  - 跨租户双向同步：平台→机构下发(push) / 机构→平台贡献(contribute) + 血缘(lineage)
+  - 关插件申请(机构/开放通道) + 平台审批(approve/reject)
+  - 模板导出/导入 JSON（跨环境迁移/备份）
+  - 版本历史查询 / 版本回滚 / 运营统计聚合（Stage C 深度运营）
 
 鉴权约定：
   - 读/机构自建：get_current_user（机构用户即可）
@@ -730,6 +734,10 @@ class TemplateImportReq(BaseModel):
     visibility: str = "private"
 
 
+class TemplateRollbackReq(BaseModel):
+    version_tag: str                               # 要回滚到的目标版本号，如 v1 / v2
+
+
 def _serialize_version(v: TemplateVersion) -> Dict[str, Any]:
     return {
         "version_tag": v.version_tag,
@@ -825,3 +833,102 @@ async def import_template(
         TemplateVersion.template_id == new_t.id).all()
     data["versions"] = [_serialize_version(v) for v in versions]
     return success(data=data, message="模板已导入")
+
+
+# ─────────────────────────── 版本历史 & 回滚（Stage C 深度运营） ───────────────────────────
+
+@router.get("/templates/{template_id}/versions")
+async def list_template_versions(
+    template_id: str,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_user),
+):
+    """模板版本快照列表（按时间倒序），供前端做版本历史展示与回滚。"""
+    t = db.query(DbTemplate).filter(DbTemplate.id == template_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail=error("NOT_FOUND", "模板不存在"))
+    versions = db.query(TemplateVersion).filter(
+        TemplateVersion.template_id == template_id).order_by(
+        TemplateVersion.created_at.desc()).all()
+    return success(data={
+        "items": [_serialize_version(v) for v in versions],
+        "current_version": t.current_version,
+        "total": len(versions),
+    })
+
+
+@router.post("/templates/{template_id}/rollback")
+async def rollback_template(
+    template_id: str,
+    req: TemplateRollbackReq,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_user),
+):
+    """版本回滚：把模板内容恢复到指定版本的快照，并把 current_version 指向该版本。
+
+    回滚前先把「当前内容」快照为一次新版本（version_tag=当前版本号），保证可再撤销。
+    已是目标版本则直接返回，避免产生冗余快照。
+    """
+    t = db.query(DbTemplate).filter(DbTemplate.id == template_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail=error("NOT_FOUND", "模板不存在"))
+    if req.version_tag == t.current_version:
+        own = _get_ownership(db, template_id, None)
+        return success(data=_serialize_template(t, own), message="已是该版本，无需回滚")
+    ver = db.query(TemplateVersion).filter(
+        TemplateVersion.template_id == template_id,
+        TemplateVersion.version_tag == req.version_tag,
+    ).first()
+    if not ver:
+        raise HTTPException(status_code=404, detail=error("NOT_FOUND", f"版本 {req.version_tag} 不存在"))
+    user_id = getattr(request.state, "user_id", None)
+    # 先快照当前状态（保留可撤销）
+    db.add(TemplateVersion(
+        template_id=t.id,
+        version_tag=t.current_version,
+        snapshot_json=t.content_json,
+        created_by=user_id,
+    ))
+    t.content_json = ver.snapshot_json
+    t.current_version = req.version_tag
+    db.commit()
+    db.refresh(t)
+    own = _get_ownership(db, template_id, None)
+    return success(data=_serialize_template(t, own), message=f"已回滚至 {req.version_tag}")
+
+
+# ─────────────────────────── 运营统计（Stage C 深度运营） ───────────────────────────
+
+@router.get("/stats")
+async def template_center_stats(
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_user),
+):
+    """能力中心运营统计：模板/版本/克隆/审核/跨租户同步/关插件 聚合一览。"""
+    total_templates = db.query(func.count(DbTemplate.id)).scalar() or 0
+    by_kind_rows = db.query(DbTemplate.kind, func.count(DbTemplate.id)).group_by(
+        DbTemplate.kind).all()
+    templates_by_kind = {k: c for k, c in by_kind_rows}
+    total_versions = db.query(func.count(TemplateVersion.id)).scalar() or 0
+    total_clones = db.query(func.count(TemplateOwnership.id)).filter(
+        TemplateOwnership.source == "clone").scalar() or 0
+    review_rows = db.query(
+        TemplateReviewSubmission.status, func.count(TemplateReviewSubmission.id)
+    ).group_by(TemplateReviewSubmission.status).all()
+    reviews = {s: c for s, c in review_rows}
+    sync_rows = db.query(
+        CrossTenantSyncLog.action, func.count(CrossTenantSyncLog.id)
+    ).group_by(CrossTenantSyncLog.action).all()
+    sync = {a: c for a, c in sync_rows}
+    disable_rows = db.query(
+        PluginDisableRequest.status, func.count(PluginDisableRequest.id)
+    ).group_by(PluginDisableRequest.status).all()
+    disable = {s: c for s, c in disable_rows}
+    return success(data={
+        "totals": {"templates": total_templates, "versions": total_versions, "clones": total_clones},
+        "templates_by_kind": templates_by_kind,
+        "reviews": reviews,
+        "sync": sync,
+        "disable_requests": disable,
+    })

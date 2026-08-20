@@ -980,3 +980,51 @@ export async function rejectCapabilitySubmission(submissionId: string, note: str
     review_note: note,
   });
 }
+
+export interface CapabilityVersion {
+  version_tag: string;
+  snapshot_json: Record<string, unknown>;
+  created_by: string | null;
+  created_at: string | null;
+}
+
+export interface CapabilityStats {
+  totals: { templates: number; versions: number; clones: number };
+  templates_by_kind: Record<string, number>;
+  reviews: Record<string, number>;
+  sync: Record<string, number>;
+  disable_requests: Record<string, number>;
+}
+
+/** GET /admin/v1/template-center/templates/{id}/versions — 版本快照列表 */
+export async function fetchCapabilityTemplateVersions(
+  templateId: string,
+): Promise<{ items: CapabilityVersion[]; current_version: string; total: number }> {
+  try {
+    const r = await get<{ code: number; data: { items?: CapabilityVersion[]; current_version?: string; total?: number } }>(
+      `/admin/v1/template-center/templates/${encodeURIComponent(templateId)}/versions`,
+    );
+    return {
+      items: r?.data?.items || [],
+      current_version: r?.data?.current_version || "",
+      total: r?.data?.total || 0,
+    };
+  } catch (e) { console.error("fetchCapabilityTemplateVersions", e); return { items: [], current_version: "", total: 0 }; }
+}
+
+/** POST /admin/v1/template-center/templates/{id}/rollback — 回滚到指定版本 */
+export async function rollbackCapabilityTemplate(
+  templateId: string, versionTag: string,
+): Promise<MutateResult> {
+  return mutate("POST", `/admin/v1/template-center/templates/${encodeURIComponent(templateId)}/rollback`, {
+    version_tag: versionTag,
+  });
+}
+
+/** GET /admin/v1/template-center/stats — 运营统计聚合 */
+export async function fetchCapabilityStats(): Promise<CapabilityStats | null> {
+  try {
+    const r = await get<{ code: number; data: CapabilityStats }>("/admin/v1/template-center/stats");
+    return r?.data || null;
+  } catch (e) { console.error("fetchCapabilityStats", e); return null; }
+}

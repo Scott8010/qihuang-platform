@@ -10,12 +10,14 @@ import {
   Boxes, Globe, Lock, FilePlus2, Send, CheckCircle2, XCircle, Loader2,
   ShieldCheck, Eye, Copy, Check, ChevronDown, ChevronUp, Info, FlaskConical,
   ListOrdered, MapPin, ClipboardList, BookOpen, Sparkles,
+  History, Undo2, BarChart3,
 } from "lucide-react";
 import { C } from "@/lib/types";
 import {
   fetchCapabilityTemplates, fetchCapabilitySubmissions, createCapabilityTemplate,
   submitCapabilityTemplate, approveCapabilitySubmission, rejectCapabilitySubmission,
-  type CapabilityTemplate, type CapabilitySubmission,
+  fetchCapabilityTemplateVersions, rollbackCapabilityTemplate, fetchCapabilityStats,
+  type CapabilityTemplate, type CapabilitySubmission, type CapabilityVersion, type CapabilityStats,
 } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -429,6 +431,16 @@ function GenericKVView({ value, depth = 0 }: { value: unknown; depth?: number })
   return null;
 }
 
+/** 运营统计小方块 */
+function StatTile({ label, value, tone }: { label: string; value: number; tone?: "warn" }) {
+  return (
+    <div className="rounded-md border px-2.5 py-2 text-center" style={{ borderColor: C.border, background: "#fff" }}>
+      <div className="text-[18px] font-bold leading-none" style={{ color: tone === "warn" ? "#8A6A1F" : C.primary }}>{value}</div>
+      <div className="text-[11px] mt-1" style={{ color: C.light }}>{label}</div>
+    </div>
+  );
+}
+
 /* ─────────────── 内容渲染路由入口 ─────────────── */
 function TemplatePreview({ content }: { content: Record<string, unknown> }) {
   // ① 知识课件章节型（艾灸养生）：category + content:[{title,body}]
@@ -578,6 +590,9 @@ export default function CapabilityCenter() {
   const [submissions, setSubmissions] = useState<CapabilitySubmission[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // 运营统计
+  const [stats, setStats] = useState<CapabilityStats | null>(null);
+
   // 新建模板
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
@@ -587,6 +602,8 @@ export default function CapabilityCenter() {
 
   // 详情
   const [viewTpl, setViewTpl] = useState<CapabilityTemplate | null>(null);
+  const [versions, setVersions] = useState<CapabilityVersion[]>([]);
+  const [rollbackBusy, setRollbackBusy] = useState(false);
 
   // 审核
   const [reviewSub, setReviewSub] = useState<CapabilitySubmission | null>(null);
@@ -595,13 +612,48 @@ export default function CapabilityCenter() {
 
   const load = async () => {
     setLoading(true);
-    const [ts, ss] = await Promise.all([fetchCapabilityTemplates(), fetchCapabilitySubmissions()]);
+    const [ts, ss, st] = await Promise.all([
+      fetchCapabilityTemplates(),
+      fetchCapabilitySubmissions(),
+      fetchCapabilityStats(),
+    ]);
     setTemplates(ts);
     setSubmissions(ss);
+    setStats(st);
     setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
+
+  // 详情打开时拉取该模板的版本快照列表
+  useEffect(() => {
+    if (viewTpl) {
+      fetchCapabilityTemplateVersions(viewTpl.id).then((r) => setVersions(r.items));
+    } else {
+      setVersions([]);
+    }
+  }, [viewTpl]);
+
+  const doRollback = async (tag: string) => {
+    if (!viewTpl) return;
+    setRollbackBusy(true);
+    const r = await rollbackCapabilityTemplate(viewTpl.id, tag);
+    setRollbackBusy(false);
+    if (r.ok && r.data) {
+      const d = r.data as { current_version?: string; content_json?: Record<string, unknown> };
+      toast.success(`已回滚至 ${tag}`);
+      setViewTpl((prev) => prev ? {
+        ...prev,
+        current_version: d.current_version ?? tag,
+        content_json: d.content_json ?? prev.content_json,
+      } : prev);
+      const vr = await fetchCapabilityTemplateVersions(viewTpl.id);
+      setVersions(vr.items);
+      await load();
+    } else {
+      toast.error(r.msg || "回滚失败");
+    }
+  };
 
   const doCreate = async () => {
     if (!newName.trim()) { toast.error("请填写模板名称"); return; }
@@ -683,6 +735,27 @@ export default function CapabilityCenter() {
           默认私有，可提交平台审核——采纳即入共享池、驳回即被强收回私有。
         </div>
       </div>
+
+      {/* 运营统计卡片 */}
+      {stats && (
+        <div className="rounded-lg border p-3" style={{ borderColor: C.border, background: "#F8FAF9" }}>
+          <div className="flex items-center gap-2 mb-2 text-[12px] font-medium" style={{ color: C.ink }}>
+            <BarChart3 className="w-4 h-4" style={{ color: C.accent }} /> 运营统计（能力中心全景）
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+            <StatTile label="模板总数" value={stats.totals.templates} />
+            <StatTile label="版本快照" value={stats.totals.versions} />
+            <StatTile label="克隆副本" value={stats.totals.clones} />
+            <StatTile label="审核·待审" value={stats.reviews.PENDING || 0} tone="warn" />
+            <StatTile label="同步·下发" value={stats.sync.push || 0} />
+            <StatTile label="同步·贡献" value={stats.sync.contribute || 0} />
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px]" style={{ color: C.light }}>
+            <span>审核：已采纳 {stats.reviews.APPROVED || 0} · 已驳回 {stats.reviews.REJECTED || 0}</span>
+            <span>关插件申请：待审 {stats.disable_requests.PENDING || 0} · 已批 {stats.disable_requests.APPROVED || 0} · 已拒 {stats.disable_requests.REJECTED || 0}</span>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b pb-2" style={{ borderColor: C.border }}>
@@ -873,6 +946,43 @@ export default function CapabilityCenter() {
                 </div>
                 <div className="rounded-md border p-2.5 max-h-[420px] overflow-auto" style={{ borderColor: C.border }}>
                   <TemplatePreview content={(viewTpl.content_json as Record<string, unknown>) || {}} />
+                </div>
+              </div>
+
+              {/* 版本历史 */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="text-[12px] font-medium flex items-center gap-1" style={{ color: C.mid }}>
+                    <History className="w-3.5 h-3.5" style={{ color: C.accent }} />
+                    版本历史（{versions.length}）
+                  </div>
+                </div>
+                <div className="rounded-md border p-2.5 max-h-[260px] overflow-auto space-y-1.5" style={{ borderColor: C.border }}>
+                  {versions.length === 0 && (
+                    <div className="text-[11.5px]" style={{ color: C.light }}>暂无历史版本（至少编辑一次才会生成快照）</div>
+                  )}
+                  {versions.map((v) => {
+                    const isCurrent = v.version_tag === viewTpl?.current_version;
+                    return (
+                      <div key={v.version_tag} className="flex items-center justify-between gap-2 rounded-md px-2.5 py-2" style={{ border: `1px solid ${C.border}`, background: isCurrent ? "#EAF2EE" : "#FCFCFA" }}>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[12.5px] font-semibold" style={{ color: C.ink }}>{v.version_tag}</span>
+                            {isCurrent && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: C.primary, color: "#fff" }}>当前</span>}
+                          </div>
+                          <div className="text-[11px]" style={{ color: C.light }}>
+                            {(v.created_at || "").replace("T", " ").slice(0, 19) || "—"}
+                            {v.created_by ? ` · ${v.created_by.slice(0, 8)}` : ""}
+                          </div>
+                        </div>
+                        <Button size="sm" variant="outline" className="h-7 text-[12px]" style={{ color: C.primary }}
+                          disabled={isCurrent || rollbackBusy}
+                          onClick={() => doRollback(v.version_tag)}>
+                          <Undo2 className="w-3.5 h-3.5 mr-1" /> 回滚
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
