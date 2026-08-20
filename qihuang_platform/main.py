@@ -403,6 +403,14 @@ try:
 except ImportError as e:
     print(f"[Platform] 管理端全功能模块未就绪: {e}")
 
+# 知识图谱摄入爬虫路由（需求7 Stage B HTTP 触发入口）
+try:
+    from qihuang_platform.control.crawler.router import crawler_router
+    app.include_router(crawler_router)
+    print("[Platform] 知识图谱摄入爬虫路由已挂载 → /admin/v1/crawler")
+except ImportError as e:
+    print(f"[Platform] 知识图谱摄入爬虫模块未就绪: {e}")
+
 
 # ═══════════════════════════════════════════════════════════════
 # Phase 0: Mock 路由挂载（契约冻结后，前端并行开发用）
