@@ -153,7 +153,7 @@ disclaimer_tap     → 免责声明点击</div>
   </div>
 
   <div class="disclaimer">
-    ⚠️ 本页为命理运程前端演示（单文件 H5，数据来自本地 mock 层）。所有内容均为娱乐参考，<b>不作为医疗、投资或人生决策依据</b>。正式版将由 fortune Agent 引擎自动生成并接入 agent 中台。
+    ⚠️ 本页命盘与日签由 8602 fortune Agent 规则引擎实时推算（无本地后端时回退演示数据）。所有内容均为娱乐参考，<b>不作为医疗、投资或人生决策依据</b>。
   </div>
 </div>
 
@@ -374,25 +374,65 @@ function finish() {
 castBtn.addEventListener('click', cast);
 
 /* =========================================================
- * 5) 真实引擎接入骨架（预留） —— 接真 API 时启用
+ * 5) 真实引擎接入（接 8602 fortune Agent 规则引擎，经本地代理同源托管）
+ *    默认用演示四柱（庚申 丙戌 丁巳 辛丑）真算；无后端时回退 MOCK。
  * =======================================================*/
-/*
-async function fetchBazi() {
-  // 后端：agent/fortune/router.py  POST /api/v1/agent/fortune/archive
-  const res = await fetch('/api/v1/agent/fortune/archive', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ birthday: '1980-10-10', hour: 12, minute: 0, lng: 121.47 })
-  });
-  const data = await res.json();
-  // 期望返回结构与 MOCK 同构：{ meta, pillars, profile, scores, yiji, jishi, luck, clothes, tea, health }
-  return data;
-}
-// fetchBazi().then(renderBazi);
-*/
+const GAN_WX = {甲:'木',乙:'木',丙:'火',丁:'火',戊:'土',己:'土',庚:'金',辛:'金',壬:'水',癸:'水'};
+const ZHI_WX = {子:'水',丑:'土',寅:'木',卯:'木',辰:'土',巳:'火',午:'火',未:'土',申:'金',酉:'金',戌:'土',亥:'水'};
+const PILLAR_LAB = ['年柱','月柱','日柱','时柱'];
+const RANK_BG = {大吉:'#9b2d20', 次吉:'#c9a227', 平:'#e8e8e8', 忌:'#3a7d5d'};
 
-/* 启动：先渲染 mock 数据 */
-renderBazi(MOCK);
+function _pillarEl(gz){ const g=gz[0], z=gz[1]; return (GAN_WX[g]||'')+(ZHI_WX[z]?('/'+ZHI_WX[z]):''); }
+function _post(url, body){ return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()); }
+function _get(url){ return fetch(url).then(r=>r.json()); }
+
+function adaptBazi(arch, daily){
+  const a = arch.data || {}, d = daily.data || {};
+  const pillars = (a.pillars||[]).map((gz,i)=>({lab:PILLAR_LAB[i]||('柱'+i), gz:gz, el:_pillarEl(gz)}));
+  const profile = [
+    {k:'日主', v:`${a.day_master||''}（${a.day_master_wx||''}）· ${a.strength||''}`},
+    {k:'五行', v: Object.entries(a.wuxing_count||{}).map(([w,n])=>`${w}${n}`).join(' ')},
+    {k:'喜用神', v:`喜 ${ (a.favorable||[]).join('·')||'-' }${ (a.unfavorable&&a.unfavorable.length)?'；忌 '+(a.unfavorable||[]).join('·'):'' }`},
+  ];
+  const scores = Object.entries(d.scores||{}).map(([k,v])=>({v:String(v), k}));
+  const yiji = [...(d.yi||[]).map(t=>({t:'宜 '+t,c:'good'})), ...(d.ji||[]).map(t=>({t:'忌 '+t,c:'bad'}))];
+  const jishi = {
+    time:`财神位 ${ (d.shen&&d.shen.财神位)||'-' } · 喜神位 ${ (d.shen&&d.shen.喜神位)||'-' }`,
+    dir:`日干 ${ d.day_ganzhi||'-' }（${ d.day_wx||'' }）`,
+    animal:`冲 ${ (d.zodiac&&d.zodiac.冲)||'-' } · 合 ${ (d.zodiac&&d.zodiac.合)||'-' }`
+  };
+  const luck = { color:(d.lucky_colors||[]).join('、')||'-', num:(d.lucky_numbers||[]).join('、')||'-' };
+  const clothes = Object.entries(d.clothes||{}).map(([w,o])=>({
+    lv:o.rank, t:`${w}（${ (o.color||[]).join('/') }）`, bg:RANK_BG[o.rank]||'#888', fg:o.rank==='平'?'#444':undefined
+  }));
+  const tea = Object.entries(d.tea||{}).map(([w,o])=>({t:`${o.rank} ${o.tea||w}（${w}）`}));
+  const pa = d.personal_advice||{};
+  const health = {
+    tip: pa.health_tip || `日干属${d.day_wx||'-'}，结合喜用五行顺时调养。`,
+    luck: pa.luck_tip || `多接触喜用五行对应的方位、人际与行业。`
+  };
+  return {
+    meta:{ date:d.date||a.date||'今日', title:'命理运程日签', sub:`八字：${(a.pillars||[]).join(' ')} · 日主${a.day_master||''}` },
+    pillars, profile, scores,
+    scoreTip:`今日日干为${d.day_wx||'-'}${d.day_tenshen_note?('，'+d.day_tenshen_note):''}。${a.strength||''}之命，顺势而为、借伙伴之力。`,
+    yiji, jishi, luck, clothes,
+    clothesTip: pa.clothes_tip || '依据当日日干五行与你的命盘喜用，优选大吉/次吉色。',
+    tea, teaTip: pa.clothes_tip || '五行茶饮结合命盘喜用，温润为宜。', health
+  };
+}
+
+async function loadBazi(){
+  const PILLARS = '庚申 丙戌 丁巳 辛丑';
+  try{
+    const arch = await _post('/api/v1/agent/fortune/archive', { user_id:'h5-demo', pillars:PILLARS, persist:false });
+    const daily = await _get('/api/v1/agent/fortune/daily?pillars='+encodeURIComponent(PILLARS));
+    if(arch && arch.code===0 && daily && daily.code===0){ renderBazi(adaptBazi(arch, daily)); }
+    else { renderBazi(MOCK); }
+  }catch(e){ console.warn('[fortune] 后端不可用，回退演示', e); renderBazi(MOCK); }
+}
+
+/* 启动：接真引擎（无后端时自动回退 MOCK 演示） */
+loadBazi();
 </script>
 </body>
 </html>

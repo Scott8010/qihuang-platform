@@ -45,12 +45,19 @@ FORCE_LOCAL = bool(os.getenv("FORTUNE_LOCAL"))
 MODE = "local" if (FORCE_LOCAL or not BEARER) else "remote"
 
 app = FastAPI(title="fortune-c-end-proxy", version="1.0")
-_H5 = os.path.join(HERE, "fortune-h5.html")
+_BAZI = os.path.join(ROOT, "fortune-h5", "bazi.html")
+_FENG = os.path.join(ROOT, "fortune-h5", "fengshui.html")
 
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    with open(_H5, "r", encoding="utf-8") as f:
+    with open(_BAZI, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+@app.get("/fengshui", response_class=HTMLResponse)
+async def fengshui():
+    with open(_FENG, "r", encoding="utf-8") as f:
         return f.read()
 
 

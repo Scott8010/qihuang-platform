@@ -117,7 +117,7 @@
     </div>
 
     <div class="analysis" id="analysis" style="display:none">
-      <div class="attip">演示结论（样例三室一厅）—— 真实调用将把上方要素作为 floor_plan 提交 /fortune/geo，返回同结构 findings（项 / 方位 / 卦 / 评级 / 建议）</div>
+      <div class="attip">真实结论由 8602 fortune Agent 规则引擎（geo_fengshui）实时推算：把上方要素作为 floor_plan 提交 /fortune/geo，返回同结构 findings（项 / 方位 / 卦 / 评级 / 建议）；无本地后端时回退演示数据。</div>
       <div id="analysisRows"></div>
     </div>
   </div>
@@ -173,7 +173,7 @@
   </div>
 
   <div class="disclaimer">
-    风水堪舆为传统人居环境文化，本页为前端演示（单文件 H5，数据来自本地 mock 层），所有结论仅供娱乐与文化参考，不构成装修、医疗或人生决策依据。
+    风水堪舆为传统人居环境文化，本页命盘与方位吉凶由 8602 fortune Agent 规则引擎（geo_fengshui）实时推算（无本地后端时回退演示数据），所有结论仅供娱乐与文化参考，不构成装修、医疗或人生决策依据。
   </div>
 
   <div class="dev">埋点设计（≤2，落在情绪高点）
@@ -310,8 +310,9 @@ function selectOri(o, btn) {
   _ori = o; _zhai = ZHAI[o] || null;
   document.querySelectorAll('#oriBtns button').forEach(b => b.classList.remove('on'));
   btn.classList.add('on');
-  if (_zhai) applyBazhai(_zhai); // 选坐向后切换九宫为本宅吉凶
   renderOri();
+  // 真引擎：有坐向后调用引擎重标九宫 + 宅信息；失败回退 client 八宅推算
+  loadGeo(_ori, _gps, null).then(ok => { if (!ok && _zhai) applyBazhai(_zhai); });
 }
 function degToZhai(deg) { // 朝向度数 → 坐山 trigram
   const idx = Math.round(((deg + 180) % 360) / 45) % 8; // 坐 = 朝向反向
@@ -371,32 +372,105 @@ function runAnalysis() {
     '横梁': document.getElementById('fpBeam').checked,
     '穿堂': document.getElementById('fpThrough').checked
   };
-  // 演示：真实环境以此 fp 作为 floor_plan 提交 POST /fortune/geo
   console.log('[fortune/geo body.floor_plan]', JSON.stringify(fp));
-  document.getElementById('analysis').style.display = 'block';
-  document.getElementById('analysis').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  // 真实：以此 fp 作为 floor_plan 提交 POST /fortune/geo；失败回退演示结论
+  loadGeo(_ori, _gps, fp).then(ok => {
+    if (!ok) {
+      renderAnalysis(MOCK.analysis);
+      renderLayout(MOCK.layout);
+      renderYiji(MOCK.yiji);
+      renderOri();
+    }
+    document.getElementById('analysis').style.display = 'block';
+    document.getElementById('analysis').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
 }
 
 /* =========================================================
- * 6) 真实引擎接入骨架（预留） —— 接真 API 时启用
+ * 6) 真实引擎接入（geo_fengshui 规则引擎）
+ *    后端：agent/geo/router.py  POST /api/v1/agent/fortune/geo
+ *    请求体 GeoRequest：{ orientation, gps, floor_plan, user_id }
+ *    返回：success(data={ material_id, jiu_gong, bagua_mansions,
+ *                       lucky_dirs, unlucky_dirs, floor_plan_analysis,
+ *                       advice, house_trigram, east_west_zhai, ... })
  * =======================================================*/
-/*
-async function fetchGeo() {
-  // 后端：agent/geo/router.py  POST /api/v1/agent/geo
-  const fp = { ... }; // 同上 floor_plan
-  const res = await fetch('/api/v1/agent/geo', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      orientation: _ori, gps: _gps, floor_plan: fp
-    })
-  });
-  const data = await res.json();
-  // 期望返回结构与 MOCK 同构：{ grid9, analysis, layout, yiji }
-  return data;
+const GRID_ORDER = ['巽', '离', '坤', '震', '中', '兑', '艮', '坎', '乾']; // 固定 3x3 方位序
+function _post(url, body) {
+  return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
 }
-// fetchGeo().then(d => { renderGrid9(d.grid9); renderAnalysis(d.analysis); renderLayout(d.layout); renderYiji(d.yiji); });
-*/
+function _gradeDir(dir, lucky, unlucky) {
+  if (lucky && lucky.indexOf(dir) >= 0) return 'g';
+  if (unlucky && unlucky.indexOf(dir) >= 0) return 'b';
+  return 'n';
+}
+function adaptFengshui(geo) {
+  const g = geo || {};
+  const jg = g.jiu_gong || [];
+  const noteMap = {}; jg.forEach(c => { noteMap[c.trigram] = c.note; });
+  const trigramToDir = {}; (g.bagua_mansions || []).forEach(m => { trigramToDir[m.trigram] = m.dir; });
+  const lucky = g.lucky_dirs || [], unlucky = g.unlucky_dirs || [];
+
+  // 九宫：固定方位序，吉凶按引擎八宅真值着色
+  const grid9 = GRID_ORDER.map(tri => {
+    if (tri === '中') return { gua: '中', dir: '中', note: noteMap['中'] || '太极位 · 宜空净', def: 'n' };
+    const dir = trigramToDir[tri] || tri;
+    return { gua: tri, dir: dir, note: noteMap[tri] || '', def: _gradeDir(dir, lucky, unlucky) };
+  });
+
+  // 户型峦头分析：floor_plan_analysis.findings
+  const fpa = g.floor_plan_analysis || {};
+  const analysis = (fpa.findings || []).map(f => {
+    const rk = f.评级 || '';
+    const grade = rk.indexOf('吉') >= 0 ? 'good'
+      : (rk.indexOf('凶') >= 0 || rk.indexOf('煞') >= 0 || rk.indexOf('缺失') >= 0) ? 'bad' : 'warn';
+    return { fi: f.项 || '-', fd: (f.方位 || '-') + ' · ' + (f.卦 || '-'), grade: grade, gt: rk || '-', adv: f.建议 || '' };
+  });
+
+  // 调理建议：engine.advice[]
+  const layout = (g.advice || []).map((t, i) => ({ h: '调理建议 ' + (i + 1), t: t }));
+
+  // 宜/忌摘要：八宅吉凶方 + 开运色
+  const yiji = [];
+  if (lucky.length) yiji.push({ t: '宜：大门/主卧落吉方（' + lucky.join('、') + '）', c: 'good' });
+  if (unlucky.length) yiji.push({ t: '忌：卫生间/灶台压凶方（' + unlucky.join('、') + '）', c: 'bad' });
+  yiji.push({ t: '宜：户型方正、坐向明确', c: 'good' });
+  yiji.push({ t: '开运色：黄/棕（土）· 白/金（金）', c: 'info' });
+
+  return { grid9: grid9, analysis: analysis, layout: layout, yiji: yiji,
+           meta: { house: g.house_trigram, ew: g.east_west_zhai, summary: fpa.summary || '' } };
+}
+
+async function loadGeo(orientation, gps, floor_plan) {
+  try {
+    const body = { user_id: 'h5-demo' };
+    if (orientation) body.orientation = orientation;
+    if (gps) body.gps = gps;
+    if (floor_plan) body.floor_plan = floor_plan;
+    const res = await _post('/api/v1/agent/fortune/geo', body);
+    if (res && res.code === 0 && res.data) {
+      const A = adaptFengshui(res.data);
+      renderGrid9(A.grid9);
+      renderAnalysis(A.analysis);
+      renderLayout(A.layout);
+      renderYiji(A.yiji);
+      const r = document.getElementById('oriRes');
+      if (r) {
+        let s = '';
+        if (A.meta.house) s += '本宅坐向：<b>' + A.meta.house + '宅</b>（' + (A.meta.ew || '') + '）<br>';
+        s += '吉方：' + (res.data.lucky_dirs || []).join('、') + '；凶方：' + (res.data.unlucky_dirs || []).join('、');
+        if (A.meta.summary) s += '<br><span style="color:var(--muted)">' + A.meta.summary + '</span>';
+        s += '<br><span style="color:var(--muted)">已接 8602 fortune 规则引擎（geo_fengshui）实时推算</span>';
+        r.innerHTML = s;
+      }
+      document.getElementById('analysis').style.display = 'block';
+      return true;
+    }
+    return false;
+  } catch (e) {
+    console.warn('[geo] 引擎不可用，回退演示', e);
+    return false;
+  }
+}
 
 /* 启动 */
 fillSelects();
