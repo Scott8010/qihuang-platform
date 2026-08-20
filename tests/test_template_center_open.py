@@ -21,24 +21,24 @@ def _cleanup(db):
 def test_open_template_center_create_submit(client, admin_token):
     H = {"Authorization": f"Bearer {admin_token}"}
 
-    # 1) 机构自建模板（HB 视角：带 org_id）
+    # 1) 机构自建模板（HB 视角：带 org_id=org_default，CI PG 该 org 已存在）
     r = client.post("/api/v1/template-center/templates", headers=H, json={
         "name": "HB 测试模板·艾灸话术",
         "kind": "herb",
         "content_json": {"intro": "回传测试"},
-        "org_id": "org_hb_test",
+        "org_id": "org_default",
         "visibility": "private",
     })
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["code"] == 0 or body.get("success") is True
     tid = body["data"]["id"]
-    assert body["data"]["ownership"]["owner_org_id"] == "org_hb_test"
+    assert body["data"]["ownership"]["owner_org_id"] == "org_default"
     assert body["data"]["ownership"]["source"] == "self"
     assert body["data"]["ownership"]["visibility"] == "private"
 
     # 2) 列表能查到
-    r = client.get("/api/v1/template-center/templates?org_id=org_hb_test", headers=H)
+    r = client.get("/api/v1/template-center/templates?org_id=org_default", headers=H)
     assert r.status_code == 200, r.text
     assert r.json()["data"]["total"] >= 1
 
@@ -51,7 +51,7 @@ def test_open_template_center_create_submit(client, admin_token):
     r = client.post(f"/api/v1/template-center/templates/{tid}/submit", headers=H)
     assert r.status_code == 200, r.text
     assert r.json()["data"]["status"] == "PENDING"
-    assert r.json()["data"]["submitter_org_id"] == "org_hb_test"
+    assert r.json()["data"]["submitter_org_id"] == "org_default"
 
     # 5) 幂等：再 submit 返回已有 PENDING
     r = client.post(f"/api/v1/template-center/templates/{tid}/submit", headers=H)
@@ -64,11 +64,11 @@ def test_open_template_center_body_org_id_overrides_state(client, admin_token):
     H = {"Authorization": f"Bearer {admin_token}"}
     r = client.post("/api/v1/template-center/templates", headers=H, json={
         "name": "覆盖归属测试", "kind": "herb",
-        "content_json": {}, "org_id": "org_override_test", "visibility": "private",
+        "content_json": {}, "org_id": "org_default", "visibility": "private",
     })
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["data"]["ownership"]["owner_org_id"] == "org_override_test"
+    assert body["data"]["ownership"]["owner_org_id"] == "org_default"
     assert body["data"]["ownership"]["source"] == "self"
     # 注：API Key 路径下 state.org_id 为 None，body 不传 org_id 时 source=platform。
     # 该路径在代码层走通（open_router.py open_create_template 第 84 行判断），
