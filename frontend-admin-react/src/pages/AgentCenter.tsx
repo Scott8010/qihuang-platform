@@ -14,8 +14,8 @@ import { C } from "@/lib/types";
 import {
   fetchAgentCenter, toggleAgent, fetchAgentDashboard, fetchPlanAgentMatrix, setPlanAgents,
   getIdentity, consultHealthAdvisor, consultStoreCoach,
-  fetchDashboard, fetchSceneUsage, fetchAgentUsage,
-  type AgentDef, type PlanAgentRow, type HealthAdvisorConsultResult,
+  fetchDashboard, fetchSceneUsage, fetchAgentUsage, fetchAgentBusinessSignals,
+  type AgentDef, type PlanAgentRow, type HealthAdvisorConsultResult, type AgentBusinessSignals,
 } from "@/lib/api";
 
 /* ═══════════════════════════════════════════
@@ -32,6 +32,66 @@ const stateLabel: Record<string, string> = {
 const stateColor: Record<string, string> = {
   blocked: "#B03A2E", review: "#8A6A1F", pending: "#C8A45D", passed: "#2E5A4C",
 };
+
+/** 活态化 P1-B · 业务实证采纳榜（自取数据，独立于主组件） */
+const BIZ_TYPE_LABEL: Record<string, string> = {
+  formula: "方剂", herb: "草药", syndrome: "证候", disease: "疾病",
+};
+
+function BusinessSignalsPanel() {
+  const [data, setData] = useState<AgentBusinessSignals | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    fetchAgentBusinessSignals().then((d) => { setData(d); setLoading(false); });
+  }, []);
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <Zap className="w-4 h-4" style={{ color: C.accent }} />
+        <span className="text-[14px] font-medium" style={{ color: C.ink }}>活态化 P1-B · 业务实证采纳榜</span>
+        <span className="text-[11px] px-1.5 py-0.5 rounded-full" style={{ background: "#FBF4E4", color: "#8A6A1F" }}>回路三</span>
+        {data && !data.signal_enabled && (
+          <span className="text-[11px] px-1.5 py-0.5 rounded-full" style={{ background: "#F1EFE8", color: "#5F5E5A" }}>回灌未激活</span>
+        )}
+      </div>
+      <Card className="border" style={{ borderColor: C.border }}>
+        <CardContent className="p-4 space-y-3">
+          <div className="text-[11.5px]" style={{ color: C.light }}>
+            聚合 health-advisor 每次成功 consult 的实体引用日志（consult_attribution），反映「哪些知识点被真实业务采纳」。
+            开关 <span className="font-mono">LIVING_BUSINESS_SIGNAL_ENABLED=true</span> 后，该信号即回灌知识置信度加权，系统「越用越聪明」。
+          </div>
+          {loading ? (
+            <div className="py-6 text-center text-[12px]" style={{ color: C.light }}><Loader2 className="w-4 h-4 animate-spin inline mr-2" />加载中…</div>
+          ) : !data || data.totals.references === 0 ? (
+            <div className="py-6 text-center text-[12px]" style={{ color: C.light }}>暂无业务实证数据（真实/仿真 consult 产生引用日志后才会出现）</div>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-2 text-[11.5px]" style={{ color: C.mid }}>
+                <span className="px-2 py-1 rounded" style={{ background: C.soft, color: C.primary }}>近 {data.window_days} 天引用 {data.totals.references} 次</span>
+                <span className="px-2 py-1 rounded" style={{ background: C.soft, color: C.primary }}>涉及知识点 {data.totals.distinct_kg} 个</span>
+              </div>
+              <div className="space-y-1.5">
+                {data.top.map((s, i) => (
+                  <div key={s.kg_id} className="flex items-center gap-2 rounded-md border px-2.5 py-2" style={{ borderColor: C.border, background: "#FCFCFA" }}>
+                    <span className="shrink-0 w-5 h-5 rounded-full text-[10.5px] font-bold flex items-center justify-center" style={{ background: C.primary, color: "#fff" }}>{i + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[12.5px] font-medium truncate" style={{ color: C.ink }}>{s.entity_name || s.kg_id}</div>
+                      <div className="text-[11px] font-mono truncate" style={{ color: C.light }}>{s.kg_id}</div>
+                    </div>
+                    {s.entity_type && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#F5EDD9", color: "#8A6A1F" }}>{BIZ_TYPE_LABEL[s.entity_type] || s.entity_type}</span>
+                    )}
+                    <span className="text-[12px] font-semibold" style={{ color: C.primary }}>{s.ref_count} 次</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
 
 export default function AgentCenter() {
   const [agents, setAgents] = useState<AgentDef[]>([]);
@@ -97,6 +157,9 @@ export default function AgentCenter() {
 
       {/* ═══ 构件 0：Agent 中台 · 运营驾驶舱 ═══ */}
       <AgentOverview />
+
+      {/* ═══ 构件 0.5：活态化 P1-B · 业务实证采纳榜（回路三） ═══ */}
+      <BusinessSignalsPanel />
 
       {/* ═══ 构件 A：能力资源池 ═══ */}
       <section>

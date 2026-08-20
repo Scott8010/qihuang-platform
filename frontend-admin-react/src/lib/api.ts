@@ -827,6 +827,28 @@ export async function fetchAgentUsage(): Promise<{ usage: AgentUsageItem[]; tota
   } catch (e) { console.error("fetchAgentUsage error", e); return { usage: [], totalCalls: 0 }; }
 }
 
+export interface AgentBusinessSignal {
+  kg_id: string;
+  entity_name: string | null;
+  entity_type: string | null;
+  ref_count: number;
+}
+
+export interface AgentBusinessSignals {
+  window_days: number;
+  signal_enabled: boolean;
+  totals: { references: number; distinct_kg: number };
+  top: AgentBusinessSignal[];
+}
+
+/** GET /admin/v1/agent-business-signals — 活态化 P1-B 业务实证采纳榜（consult 引用日志聚合） */
+export async function fetchAgentBusinessSignals(): Promise<AgentBusinessSignals | null> {
+  try {
+    const r = await get<{ code: number; data: AgentBusinessSignals }>("/admin/v1/agent-business-signals");
+    return r?.data || null;
+  } catch (e) { console.error("fetchAgentBusinessSignals", e); return null; }
+}
+
 // ═══ 中医健康顾问（health-advisor）═══
 // 后端契约见 qihuang_platform/agent/health_advisor/router.py
 // POST /api/v1/agent/health-advisor/consult（需登录态，复用 _token）

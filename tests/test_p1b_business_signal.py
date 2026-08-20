@@ -176,3 +176,43 @@ def test_business_gain_amplifies(monkeypatch, client):
             _cleanup(db)
         finally:
             db.close()
+
+
+def test_agent_business_signals_endpoint(client, admin_token):
+    """④ 活态 P1-B 前端面板的后端数据端点：聚合 consult_attribution（排除 pending 噪声）。"""
+    from datetime import datetime, timezone
+    H = {"Authorization": f"Bearer {admin_token}"}
+    db = SessionLocal()
+    try:
+        _cleanup(db)
+        now = datetime.now(timezone.utc)
+        for _ in range(3):
+            db.add(ConsultAttribution(
+                tenant_id="tenant_default", kg_id="kg-a", entity_name="麻黄汤",
+                entity_type="formula", adopted=True, consulted_at=now))
+        for _ in range(2):
+            db.add(ConsultAttribution(
+                tenant_id="tenant_default", kg_id="kg-b", entity_name="桂枝汤",
+                entity_type="formula", adopted=True, consulted_at=now))
+        # pending 解析噪声应被排除
+        db.add(ConsultAttribution(
+            tenant_id="tenant_default", kg_id="pending:xyz", entity_name=None,
+            entity_type=None, adopted=False, consulted_at=now))
+        db.commit()
+    finally:
+        db.close()
+
+    r = client.get("/admin/v1/agent-business-signals", headers=H)
+    assert r.status_code == 200, r.text
+    d = r.json()["data"]
+    assert d["totals"]["references"] == 5, d["totals"]
+    assert d["totals"]["distinct_kg"] == 2, d["totals"]
+    assert d["top"][0]["kg_id"] == "kg-a"
+    assert d["top"][0]["ref_count"] == 3
+    assert d["top"][1]["kg_id"] == "kg-b"
+
+    db = SessionLocal()
+    try:
+        _cleanup(db)
+    finally:
+        db.close()

@@ -28,7 +28,7 @@ from qihuang_platform.db.models import (
     Tenant, User, Role, UserRole, RolePermission, Permission,
     Org, ApiKey, AgentDef,
     MedCase, MedReport, HealthAssessment, HealthPlan,
-    EduCoachSession, EduExamRecord,
+    EduCoachSession, EduExamRecord, ConsultAttribution,
 )
 import bcrypt
 from qihuang_platform.rbac.service import validate_password
@@ -2363,6 +2363,69 @@ async def get_plan_agents(plan_id: str, admin: dict = Depends(get_current_admin)
     finally:
         db.close()
     return success(data={"plan_id": plan_id, "agents": agents})
+
+
+@router.get("/agent-business-signals", summary="活态化 P1-B·业务实证采纳榜（consult 引用日志聚合）")
+async def agent_business_signals(
+    limit: int = 20,
+    admin: dict = Depends(get_current_admin),
+):
+    """回路三业务实证：聚合 consult_attribution（health-advisor 每次成功 consult 的实体引用日志）。
+
+    返回近窗口内被引用最多的知识点 Top-N（方剂/证候/草药），作为「越用越聪明」的业务实证信号源；
+    同时给出总量指标。开关 LIVING_BUSINESS_SIGNAL_ENABLED=true 后，该数据即回灌知识置信度加权。
+    注意：该表由 orchestrator 归因钩子在 consult 成功时 best-effort 写入，仅真实/仿真 consult 会产生数据。
+    """
+    db = SessionLocal()
+    try:
+        from qihuang_platform.living.business_signal import _BUSINESS_SIGNAL_ENABLED
+        window_days = int(os.getenv("LIVING_BIZ_WINDOW_DAYS", "30"))
+        limit = max(1, min(50, limit))
+        cutoff = _now() - timedelta(days=window_days)
+        rows = (
+            db.query(
+                ConsultAttribution.kg_id,
+                func.max(ConsultAttribution.entity_name),
+                func.max(ConsultAttribution.entity_type),
+                func.count(ConsultAttribution.id),
+            )
+            .filter(
+                ConsultAttribution.consulted_at >= cutoff,
+                ~ConsultAttribution.kg_id.like("pending:%"),
+            )
+            .group_by(ConsultAttribution.kg_id)
+            .order_by(func.count(ConsultAttribution.id).desc())
+            .limit(limit)
+            .all()
+        )
+        top = [
+            {"kg_id": k, "entity_name": n, "entity_type": t, "ref_count": c}
+            for k, n, t, c in rows
+        ]
+        distinct_kg = (
+            db.query(func.count(func.distinct(ConsultAttribution.kg_id)))
+            .filter(
+                ConsultAttribution.consulted_at >= cutoff,
+                ~ConsultAttribution.kg_id.like("pending:%"),
+            )
+            .scalar() or 0
+        )
+        total_ref = (
+            db.query(func.count(ConsultAttribution.id))
+            .filter(
+                ConsultAttribution.consulted_at >= cutoff,
+                ~ConsultAttribution.kg_id.like("pending:%"),
+            )
+            .scalar() or 0
+        )
+        return success(data={
+            "window_days": window_days,
+            "signal_enabled": _BUSINESS_SIGNAL_ENABLED,
+            "totals": {"references": total_ref, "distinct_kg": distinct_kg},
+            "top": top,
+        })
+    finally:
+        db.close()
 
 
 @router.put("/plans/{plan_id}/agents", summary="设置套餐的 Agent 专家团组合")
