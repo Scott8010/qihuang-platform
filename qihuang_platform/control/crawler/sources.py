@@ -153,10 +153,14 @@ SOURCES: Dict[str, SourceAdapter] = {
             "https://baike.baidu.com/item/四君子汤",
             "https://baike.baidu.com/item/补中益气汤",
             # disease 疾病
+            # ⚠️ 已知百度硬反爬拦截（生产机实测 bot/浏览器UA/cookie/移动版/同义词 全 403）：
+            #   咳嗽 / 高血压 / 脾胃虚弱 / 肝肾阴虚 / 气血两虚 / 感冒灵颗粒 / 板蓝根颗粒 / 复方甘草片
+            #   → 需开放第二源出口白名单(如 zysj.com)+合规评审，或付费百科API，方能在 crawler 接入。
+            #   已验证可爬同义词：糖尿病 → 2型糖尿病（已替换下方种子）。
             "https://baike.baidu.com/item/感冒",
             "https://baike.baidu.com/item/咳嗽",
             "https://baike.baidu.com/item/高血压",
-            "https://baike.baidu.com/item/糖尿病",
+            "https://baike.baidu.com/item/2型糖尿病",
             # syndrome 证候
             "https://baike.baidu.com/item/脾胃虚弱",
             "https://baike.baidu.com/item/肝肾阴虚",

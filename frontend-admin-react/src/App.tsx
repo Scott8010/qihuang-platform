@@ -251,7 +251,7 @@ export default function App() {
         <main className="flex-1 overflow-y-auto p-6">
           {page === "dashboard" && <Dashboard go={setPage} />}
           {page === "agents" && <AgentCenter />}
-          {page === "tenants" && <Tenants />}
+          {page === "tenants" && <Tenants go={setPage} />}
           {page === "users" && <Users />}
           {page === "roles" && <Roles />}
           {page === "keys" && <ApiKeys />}

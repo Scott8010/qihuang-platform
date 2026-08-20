@@ -26,7 +26,7 @@ const tabs = [
   { id: "EDU", label: "培训" },
 ];
 
-export default function Tenants() {
+export default function Tenants({ go }: { go: (p: string) => void }) {
   const [list, setList] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("ALL");
@@ -249,7 +249,7 @@ export default function Tenants() {
                         <div className="inline-flex items-center gap-1">
                           <Button variant="ghost" size="sm" className="h-7 px-2 text-[12px] hover:bg-[#EAF2EE]" style={{ color: C.primary }} onClick={() => setDetail(t)}>详情</Button>
                           <span className="w-px h-3" style={{ background: C.border }} />
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-[12px] hover:bg-gray-100" style={{ color: C.mid }}>续费</Button>
+                          <Button variant="ghost" size="sm" className="h-7 px-2 text-[12px] hover:bg-gray-100" style={{ color: C.mid }} onClick={() => go("billing")}>续费</Button>
                           <span className="w-px h-3" style={{ background: C.border }} />
                           <Button variant="ghost" size="sm" className="h-7 px-2 text-[12px] hover:bg-red-50" style={{ color: "#B03A2E" }} onClick={() => setDelTenant(t)}>删除</Button>
                         </div>
