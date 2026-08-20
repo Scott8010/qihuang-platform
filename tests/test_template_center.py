@@ -316,3 +316,62 @@ def test_template_center_cleanup(client, admin_token):
         _cleanup(db)
     finally:
         db.close()
+
+
+# ─────────────────────────── 开放接口契约加固（2026-08-20 HB 反馈） ───────────────────────────
+
+def test_open_create_requires_org_id_via_api_key(client, api_key_info):
+    """🔴 致命坑回归：API Key 路径漏传 org_id → 必须 400，绝不允许静默归平台。"""
+    path = "/api/v1/template-center/templates"
+    hh, body = _open_hmac_headers(api_key_info, "POST", path, {
+        "name": "漏 org_id 的模板",
+        "kind": "herb",
+        "content_json": {"x": 1},
+        "visibility": "private",
+        # 故意不传 org_id
+    })
+    r = client.post(path, headers=hh, content=body)
+    assert r.status_code == 400, r.text
+    assert r.json()["code"] == 1004, r.text
+    assert "org_id" in r.json()["message"].lower()
+
+
+def test_open_create_rejects_invalid_kind_via_api_key(client, api_key_info):
+    """kind 不在 {herb,script,product,project} → 必须 422（pydantic 校验）。"""
+    path = "/api/v1/template-center/templates"
+    hh, body = _open_hmac_headers(api_key_info, "POST", path, {
+        "name": "非法 kind 模板",
+        "kind": "syndrome",          # 不在 HB 开放枚举内
+        "org_id": "org_default",
+        "content_json": {"x": 1},
+    })
+    r = client.post(path, headers=hh, content=body)
+    assert r.status_code == 422, r.text
+    assert "kind" in r.text
+
+
+def test_open_create_with_org_id_self_via_api_key(client, api_key_info):
+    """API Key 路径带 org_id + 合法 kind → 200，归属 self + owner_org_id 正确。"""
+    path = "/api/v1/template-center/templates"
+    hh, body = _open_hmac_headers(api_key_info, "POST", path, {
+        "name": "HB 门店话术 v1",
+        "kind": "script",
+        "org_id": "org_default",
+        "content_json": {"steps": ["问候"]},
+        "visibility": "private",
+    })
+    r = client.post(path, headers=hh, content=body)
+    assert r.status_code == 200, r.text
+    data = r.json()["data"]
+    assert data["ownership"]["owner_org_id"] == "org_default"
+    assert data["ownership"]["source"] == "self"
+    assert data["kind"] == "script"
+    # 清理刚建模板，避免污染后续统计
+    tid = data["id"]
+    db = SessionLocal()
+    try:
+        db.query(TemplateOwnership).filter(TemplateOwnership.template_id == tid).delete()
+        db.query(DbTemplate).filter(DbTemplate.id == tid).delete()
+        db.commit()
+    finally:
+        db.close()

@@ -13,6 +13,7 @@ ERROR_CODES = {
     "INVALID_PARAM":          {"code": 1001, "message": "参数错误"},
     "MISSING_PARAM":          {"code": 1002, "message": "缺少必要参数"},
     "INVALID_FORMAT":         {"code": 1003, "message": "格式错误"},
+    "ORG_ID_REQUIRED":        {"code": 1004, "message": "API Key 路径创建机构模板必须携带 org_id"},
 
     # 认证 2xxx
     "UNAUTHORIZED":           {"code": 2001, "message": "未授权"},

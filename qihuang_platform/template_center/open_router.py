@@ -16,7 +16,7 @@
   （保留 HB 后续可纯平台官方模板的扩展位）。
 """
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Any, Dict
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -43,12 +43,24 @@ template_center_open_router = router
 
 # ─────────────────────────── Pydantic ───────────────────────────
 
+# HB 调用契约：kind 仅允许这 4 类（默认 herb）
+OPEN_TEMPLATE_KINDS = ("herb", "script", "product", "project")
+
 class OpenTemplateCreateReq(BaseModel):
     name: str
     kind: str = "herb"
     content_json: Dict[str, Any] = Field(default_factory=dict)
-    org_id: Optional[str] = None       # HB 调用时传=其机构 id；不传视为平台
+    org_id: Optional[str] = None       # HB 调用时传=其机构 id；API Key 路径必填
     visibility: str = "private"
+
+    @field_validator("kind")
+    @classmethod
+    def _validate_kind(cls, v: str) -> str:
+        if v not in OPEN_TEMPLATE_KINDS:
+            raise ValueError(
+                f"kind 必须为 {list(OPEN_TEMPLATE_KINDS)} 之一（默认 herb）"
+            )
+        return v
 
 
 # ─────────────────────────── 模板创建（机构自建 / 平台落库） ───────────────────────────
@@ -70,6 +82,19 @@ async def open_create_template(
     user_id = getattr(request.state, "user_id", None)
     app_key = getattr(request.state, "app_key", None)
     org_id = req.org_id or getattr(request.state, "org_id", None)
+    # 🔴 HB 集成致命坑（2026-08-20 反馈）：
+    # API Key 路径下 8602 只注入 tenant_id，不注入 org_id/user_id。
+    # 若此处不卡死，HB 漏传 org_id 时模板会静默归为「平台官方」而非「HB 机构自建」。
+    # 故 API Key 路径强制要求请求体携带 org_id；JWT 路径可回退 request.state.org_id。
+    if app_key and not org_id:
+        raise HTTPException(
+            status_code=400,
+            detail=error(
+                "ORG_ID_REQUIRED",
+                "API Key 路径创建机构模板必须在请求体携带 org_id，"
+                "否则模板会被归为平台官方而非 HB 机构自建",
+            ),
+        )
     if not user_id and app_key:
         user_id = f"apikey:{app_key}"
     t = DbTemplate(
