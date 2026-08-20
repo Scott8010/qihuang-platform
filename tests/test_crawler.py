@@ -33,6 +33,29 @@ def test_classify_unknown():
     assert cls.confidence == 0.0
 
 
+def test_classify_hints_page_level_injection():
+    # 百科页正文中后部才出现性味/归经等强特征，切块后单块无关键词。
+    # 页面级先行分类结果以 hints 注入 → 块级弱特征也能归到页面类。
+    text = "人参，伞形目五加科人参属多年生草本植物，喜阴凉，叶片无气孔和栅栏组织。"
+    # 无 hints：保持 unknown（现状不回归）
+    assert classify_entry(text=text).entity_type == "unknown"
+    # 有 hints（页面级判 herb）：命中加权 +2 → 归 herb
+    cls = classify_entry(text=text, hints=["herb"])
+    assert cls.entity_type == "herb", f"hints 注入应归 herb，实得 {cls.entity_type}"
+    # 块内强特征仍可压倒 hints（hint 只是加权不是强制）
+    strong = classify_entry(text="国药准字Z4402xxxx，中成药制剂，适应症感冒。", hints=["herb"])
+    assert strong.entity_type == "drug", f"块内强特征应压倒 hints，实得 {strong.entity_type}"
+    # pipeline 侧：RawEntry.meta["hints"] 传导到 ingest 的分类
+    res = ingest_entry(
+        type("FakeSession", (), {"add": lambda self, x: None, "flush": lambda self: None})(),
+        RawEntry(name="人参", text=text, url="https://baike.so.com/doc/1236301-32377083.html",
+                 meta={"source": "baike-360", "hints": ["herb"]}),
+        "baike-360",
+    )
+    assert res["ingested"] is True, f"hints 传导后应摄入成功：{res}"
+    assert res["classification"].entity_type == "herb"
+
+
 def test_new_sources_registered_offline():
     # 新增真实源已注册；allow_network=False 时不触网、返回 0 条（离线安全）
     from qihuang_platform.control.crawler.sources import get_source, list_sources

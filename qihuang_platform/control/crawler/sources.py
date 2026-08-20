@@ -20,6 +20,8 @@ from urllib.parse import urlsplit, urlunsplit, quote
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from .classify import classify_entry
+
 _USER_AGENT = "QihuangCrawler/0.1 (+https://yshealth.com.cn; educational)"
 
 
@@ -99,14 +101,18 @@ class HttpPageAdapter(SourceAdapter):
         html = re.sub(r"\n\s*\n+", "\n", html)
         return html.strip()
 
-    def _html_to_entries(self, html: str, url: str) -> List[RawEntry]:
+    def _html_to_entries(self, html: str, url: str, hints: Optional[List[str]] = None) -> List[RawEntry]:
         text = self._strip_tags(html)
         blocks = [b.strip() for b in re.split(r"\n+", text) if len(b.strip()) >= self.min_block_len]
         out: List[RawEntry] = []
         for b in blocks:
             lines = [l.strip() for l in b.split("\n") if l.strip()]
             name = lines[0][:40] if lines else b[:40]
-            out.append(RawEntry(name=name, text=b, url=url, meta={"source": self.key}))
+            meta = {"source": self.key}
+            if hints:
+                # 页面级先行分类结果注入块级（classify_entry hints 加权 +2）
+                meta["hints"] = hints
+            out.append(RawEntry(name=name, text=b, url=url, meta=meta))
         return out
 
     def fetch(self, limit: Optional[int] = None, allow_network: bool = False) -> List[RawEntry]:
@@ -117,7 +123,12 @@ class HttpPageAdapter(SourceAdapter):
         for url in self.seed_urls:
             try:
                 html = self._fetch_html(url, headers=self.headers)
-                out.extend(self._html_to_entries(html, url))
+                # 页面级先行分类：整页全文判一次类（百科页正文中后部才出现
+                # 性味/归经/组成等强特征，切块后单块关键词不足 → 用页面类
+                # 作 hints 提升块级命中率；页面 unknown 则保持现状）
+                page_cls = classify_entry(text=self._strip_tags(html))
+                hints = [page_cls.entity_type] if page_cls.entity_type != "unknown" else None
+                out.extend(self._html_to_entries(html, url, hints=hints))
             except Exception as e:  # 单源失败不中断其余
                 print(f"[crawler] 抓取失败 {url}: {e}")
             time.sleep(1.0)  # 基础限速：1 req/s

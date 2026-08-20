@@ -32,7 +32,10 @@ def ingest_entry(
     min_confidence: float = 0.2,
 ) -> Dict[str, Any]:
     """单条语料：分类 → 落 KgReviewItem。返回摄入结果字典。"""
-    cls: Classification = classify_entry(raw.name, raw.text)
+    # hints 来自源页面级先行分类（见 sources.HttpPageAdapter.fetch），
+    # 命中 +2 加权，提升百科长文切块后的分类命中率；无 hints 时行为不变。
+    hints = (raw.meta or {}).get("hints")
+    cls: Classification = classify_entry(raw.name, raw.text, hints=hints)
     if cls.entity_type == "unknown" or cls.confidence < min_confidence:
         return {
             "ingested": False,
