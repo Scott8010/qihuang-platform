@@ -178,31 +178,27 @@ SOURCES: Dict[str, SourceAdapter] = {
             "https://baike.baidu.com/item/复方甘草片",
         ],
     ),
-    # ── 360 百科·中医条目（2026-08-21 新增第二源）──
+    # ── 360 百科·中医条目（2026-08-21 新增第二源，生产实测修正）──
     # 背景：百度百科主源已被生产机 IP 级反爬封禁(全 403)，zysj/zhongyoo 不可达、
     #   39kf 已变质为手游站、wikipedia 受 GFW 封锁。360 百科为国内站、部署网可达、
-    #   search?word=词条&src=index 自动 302 跳真实词条页(如 人参→doc/1236301-xxx.html)、
     #   含真实中医正文（性味/归经/证候/组成等关键词命中）。
-    # 专补百度硬反爬拦截的 9 个热门病种/OTC 词条，并校验 herb/formula 类分类正确。
-    # 用浏览器级 UA 绕过 360 基础反爬；抓取仍需 allow_network=True。
+    # ⚠️ 2026-08-21 生产实测：/doc/search?word=...&src=index 搜索入口会被 360 概率性
+    #   弹验证码(qcaptcha.so.com)，不稳定；但 /doc/{id}-{id}.html 直连词条页
+    #   从不被拦、返回完整正文(人参 35KB 实测)。故种子改为"预解析直连 URL"，
+    #   不再依赖 search 跳转。已解析 5 个：人参/当归/高血压/糖尿病/咳嗽。
+    # 其余 8 个(脾胃虚弱/肝肾阴虚/气血两虚/感冒灵/板蓝根/复方甘草片/六味地黄丸/桂枝汤)
+    #   因 search 验证码无法预解析 ID → 由 baike-com(快懂百科) 源覆盖其中 2 个，
+    #   剩余 6 个缺口见"第三源待接入"合规登记。
     "baike-360": HttpPageAdapter(
         "baike-360",
         seed_urls=[
-            # 百度硬反爬拦截、360 可补的热门病种/OTC（覆盖 5 类）
-            "https://baike.so.com/doc/search?word=咳嗽&src=index",
-            "https://baike.so.com/doc/search?word=高血压&src=index",
-            "https://baike.so.com/doc/search?word=糖尿病&src=index",
-            "https://baike.so.com/doc/search?word=脾胃虚弱&src=index",
-            "https://baike.so.com/doc/search?word=肝肾阴虚&src=index",
-            "https://baike.so.com/doc/search?word=气血两虚&src=index",
-            "https://baike.so.com/doc/search?word=感冒灵颗粒&src=index",
-            "https://baike.so.com/doc/search?word=板蓝根颗粒&src=index",
-            "https://baike.so.com/doc/search?word=复方甘草片&src=index",
-            # 校验 360 对 herb/formula 类亦能正确分类
-            "https://baike.so.com/doc/search?word=人参&src=index",
-            "https://baike.so.com/doc/search?word=当归&src=index",
-            "https://baike.so.com/doc/search?word=六味地黄丸&src=index",
-            "https://baike.so.com/doc/search?word=桂枝汤&src=index",
+            # herb 中药/药材（直连词条页，生产实测可用）
+            "https://baike.so.com/doc/1236301-32377083.html",   # 人参
+            "https://baike.so.com/doc/5337371-5572810.html",    # 当归
+            # disease 疾病（直连词条页，生产实测可用）
+            "https://baike.so.com/doc/1784617-1887217.html",    # 高血压
+            "https://baike.so.com/doc/30506585-32302042.html",  # 糖尿病
+            "https://baike.so.com/doc/5375990-5612102.html",    # 咳嗽
         ],
         headers={
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
@@ -212,6 +208,31 @@ SOURCES: Dict[str, SourceAdapter] = {
             "Referer": "https://baike.so.com/",
         },
     ),
+    # ── 快懂百科·中医条目（2026-08-21 新增第三源，专补 360 search 缺口）──
+    # 奇虎系百科(与 360 同门)，/wiki/{词条} 直连词条路径 → 302 到 /wikiid/{id} 词条页。
+    # 生产机实测：200、150-600KB 真实正文、零验证码、robots 未禁通用爬虫。
+    # 覆盖 360 无法预解析 ID 的 drug/formula 词条：复方甘草片、六味地黄丸。
+    # ⚠️ 无词条的词(桂枝汤/四君子汤等方剂、脾胃虚弱等证候)返回 404/聚合页 → 不列入种子。
+    "baike-com": HttpPageAdapter(
+        "baike-com",
+        seed_urls=[
+            # 与 360 双源互备的 herb/disease（快懂正文更全，150-600KB）
+            "https://www.baike.com/wiki/人参",
+            "https://www.baike.com/wiki/当归",
+            "https://www.baike.com/wiki/高血压",
+            "https://www.baike.com/wiki/糖尿病",
+            # drug 成药（360 search 被验证码拦、快懂可直连 → 关键补位）
+            "https://www.baike.com/wiki/复方甘草片",
+            # formula 方剂（360 search 被验证码拦、快懂可直连 → 关键补位）
+            "https://www.baike.com/wiki/六味地黄丸",
+        ],
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            "Referer": "https://www.baike.com/",
+        },
+    ),
     # ── 扩展点（可达但当前正文受限，保留待深链/API 接入）──
     # ctext：可达，但是哲学库 TOC 页、无中医正文 → 低产
     "ctext": HttpPageAdapter("ctext", seed_urls=["https://ctext.org/shang-han-lun/zh"]),
@@ -219,18 +240,25 @@ SOURCES: Dict[str, SourceAdapter] = {
     "jicheng": HttpPageAdapter("jicheng", seed_urls=["https://jicheng.tw/tcm/"]),
 }
 
-# ── 合规登记（2026-08-20 实测，2026-08-21 复核，部署网=沙箱+生产）──
+# ── 合规登记（2026-08-20 实测，2026-08-21 复核+修正，部署网=沙箱+生产）──
 #   ✅ baike-tcm / tcm-encyclopedia：百度百科，可达+真实正文 → 真爬
 #      ⚠️ 2026-08-21 复查：百度对生产机 IP 已启用反爬封禁(人参/当归/感冒等全 403)，
 #         主源当前不可爬，需冷却期 + 礼貌限速(降频/Retry-After)后恢复。库内 151 条安全。
-#   ✅ baike-360（2026-08-21 新增第二源）：360 百科，国内站可达+真实正文 → 真爬，
-#         专补百度硬反爬拦截的 9 个热门词条。robots 未全局禁爬(仅针对 SEO 爬虫)。
+#   ✅ baike-360（2026-08-21 第二源，生产实测修正）：360 百科，国内站可达+真实正文 → 真爬，
+#         ⚠️ 修正：/doc/search 入口概率性弹验证码(qcaptcha.so.com) → 种子已改为 5 个
+#           预解析直连词条页(/doc/{id}.html)，直连页实测不被拦(人参 35KB)。robots 未全局禁爬。
+#   ✅ baike-com（2026-08-21 第三源）：快懂百科(奇虎系)，/wiki/{词条} 直连 → 真爬，
+#         生产实测 200/150-600KB 正文/零验证码，覆盖 drug(formula 复方甘草片)+formula(六味地黄丸)
+#         等 360 search 无法解析的补位词条。
+#   🔲 第三源待接入：脾胃虚弱/肝肾阴虚/气血两虚(syndrome)、感冒灵颗粒/板蓝根颗粒(drug)、
+#         桂枝汤(formula) —— 360 search 验证码 + 快懂无词条(404/聚合页) + dayi 搜索 JS 渲染。
+#         候选：dayi.org.cn 精细解析 或 权威方剂库(如 药智数据/中成药处方数据库)。
 #   ⚠️ ctext / jicheng：可达但无可用正文 → 扩展点（低产）
 #   ❌ shidianguji：robots.txt `Disallow: /` 全站禁爬 → 不接入
 #   ❌ cintcm / tcmip：需登录/结构化库 + 出网白名单拦截 → 待人工授权
 #   ❌ wikisource：出网白名单拦截（超时）→ 待放开后接入
 #   ❌ zysj.com.cn：DNS 通但正文页连接失败(源站/WAF 不稳) + 39kf.com 已变质为手游站
-#      → 原定第二源候选均不可用语料，已改投 360 百科。
+#      → 原定第二源候选均不可用语料，已改投 360 百科 + 快懂百科。
 
 
 def get_source(key: str) -> Optional[SourceAdapter]:
