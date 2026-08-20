@@ -46,6 +46,7 @@ def init_db():
     """初始化数据库表（开发/首次部署时调用）"""
     Base.metadata.create_all(bind=engine)
     _migrate_living_columns()
+    _migrate_template_center_columns()
 
 
 def _migrate_living_columns():
@@ -77,3 +78,19 @@ def _migrate_living_columns():
             ))
     except Exception as e:  # 迁移失败不应阻断平台启动
         print("WARN: kg_feedback migration skipped:", e)
+
+
+def _migrate_template_center_columns():
+    """能力中心二期：为已有 db_template 表增补 parent_template_id 血缘列。
+
+    create_all 不会为已存在的表追加新列，故 PG 用 ALTER TABLE 显式补齐；
+    SQLite 不支持 ADD COLUMN IF NOT EXISTS，且新表已由 create_all 创建好，故静默跳过。
+    """
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE db_template ADD COLUMN IF NOT EXISTS "
+                "parent_template_id VARCHAR(36)"
+            ))
+    except Exception as e:  # 迁移失败不应阻断平台启动
+        print("WARN: db_template migration skipped:", e)

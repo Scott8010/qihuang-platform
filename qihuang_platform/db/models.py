@@ -518,6 +518,7 @@ class DbTemplate(Base):
     kind = Column(String(50), default="herb")  # herb/formula/syndrome/... 模板类型
     content_json = Column(JSON, default=dict)  # 模板内容（字段结构 + 默认值）
     current_version = Column(String(50), default="v1")
+    parent_template_id = Column(String(36), nullable=True, index=True)  # 克隆血缘：源模板 id（平台↔机构）
     created_by = Column(String(36))
     created_at = Column(DateTime, default=_now)
     updated_at = Column(DateTime, default=_now, onupdate=_now)
@@ -567,6 +568,37 @@ class TemplateVersion(Base):
     __table_args__ = (
         Index("idx_tplver_tpl_tag", "template_id", "version_tag"),
     )
+
+
+class CrossTenantSyncLog(Base):
+    """跨租户同步审计日志 — 平台→机构下发 / 机构→平台贡献，每次同步留痕（支撑 Stage C 运营）。"""
+    __tablename__ = "cross_tenant_sync_log"
+    id = Column(String(36), primary_key=True, default=_uid)
+    action = Column(String(20), nullable=False)          # push（平台→机构）/ contribute（机构→平台）
+    source_template_id = Column(String(36), nullable=False, index=True)
+    target_template_id = Column(String(36), index=True)  # 同步生成的新模板 id
+    from_tenant_id = Column(String(36), index=True)
+    from_org_id = Column(String(36), index=True)
+    to_tenant_id = Column(String(36), index=True)
+    to_org_id = Column(String(36), index=True)
+    created_by = Column(String(36))
+    created_at = Column(DateTime, default=_now)
+
+
+class PluginDisableRequest(Base):
+    """关插件申请 — 决策①=B：机构长可申请关插件，平台审核（强治理红线）。"""
+    __tablename__ = "plugin_disable_request"
+    id = Column(String(36), primary_key=True, default=_uid)
+    tenant_id = Column(String(36), ForeignKey("tenant.id"), nullable=True, index=True)
+    org_id = Column(String(36), ForeignKey("org.id"), nullable=True, index=True)
+    plugin_key = Column(String(50), nullable=False)      # health-advisor / store-coach / ...
+    reason = Column(Text)
+    submitter_id = Column(String(36))                    # 申请人（机构长/机构管理员）
+    status = Column(String(20), default="PENDING")       # PENDING / APPROVED / REJECTED
+    reviewer_id = Column(String(36))
+    review_note = Column(Text)
+    submitted_at = Column(DateTime, default=_now)
+    reviewed_at = Column(DateTime)
 
 
 PRESET_ROLES = [

@@ -26,6 +26,7 @@ from qihuang_platform.db.config import get_db
 from qihuang_platform.db.models import (
     DbTemplate, TemplateOwnership, TemplateReviewSubmission,
     TemplateVersion, StoreQuestionnaire,
+    CrossTenantSyncLog, PluginDisableRequest, Org,
 )
 
 router = APIRouter(prefix="/admin/v1/template-center", tags=["多租户能力中心-模板"])
@@ -440,3 +441,387 @@ async def questionnaire_to_draft(
     db.refresh(t)
     own = _get_ownership(db, t.id, q.org_id)
     return success(data=_serialize_template(t, own), message="问卷已沉淀为模板草稿")
+
+
+# ─────────────────────────── 序列化（⑤ 同步 / ⑤-a 关插件） ───────────────────────────
+
+def _serialize_sync_log(log: CrossTenantSyncLog) -> Dict[str, Any]:
+    return {
+        "id": log.id,
+        "action": log.action,
+        "source_template_id": log.source_template_id,
+        "target_template_id": log.target_template_id,
+        "from_tenant_id": log.from_tenant_id,
+        "from_org_id": log.from_org_id,
+        "to_tenant_id": log.to_tenant_id,
+        "to_org_id": log.to_org_id,
+        "created_by": log.created_by,
+        "created_at": log.created_at.isoformat() if log.created_at else None,
+    }
+
+
+def _serialize_disable_request(d: PluginDisableRequest) -> Dict[str, Any]:
+    return {
+        "id": d.id,
+        "tenant_id": d.tenant_id,
+        "org_id": d.org_id,
+        "plugin_key": d.plugin_key,
+        "reason": d.reason,
+        "submitter_id": d.submitter_id,
+        "status": d.status,
+        "reviewer_id": d.reviewer_id,
+        "review_note": d.review_note,
+        "submitted_at": d.submitted_at.isoformat() if d.submitted_at else None,
+        "reviewed_at": d.reviewed_at.isoformat() if d.reviewed_at else None,
+    }
+
+
+# ─────────────────────────── ⑤ 核心：跨租户双向同步 ───────────────────────────
+
+class PushTemplateReq(BaseModel):
+    target_org_ids: List[str]
+    target_tenant_id: Optional[str] = None
+    visibility: str = "private"
+
+
+@router.post("/templates/{template_id}/push")
+async def push_template_to_orgs(
+    template_id: str,
+    req: PushTemplateReq,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_admin),
+):
+    """平台→机构批量下发：把官方模板克隆到 N 家机构。
+
+    - 每家机构生成 source='clone' 副本，parent_template_id 指向源（血缘）；
+    - 每次同步写 CrossTenantSyncLog 审计（支撑 Stage C 运营）。
+    - 机构不存在则跳过，不中断批量。
+    """
+    src = db.query(DbTemplate).filter(DbTemplate.id == template_id).first()
+    if not src:
+        raise HTTPException(status_code=404, detail=error("NOT_FOUND", "源模板不存在"))
+    user_id = getattr(request.state, "user_id", None)
+    created_ids = []
+    logs = []
+    for org_id in req.target_org_ids:
+        org = db.query(Org).filter(Org.id == org_id).first()
+        if not org:
+            continue
+        tenant_id = req.target_tenant_id or org.tenant_id
+        new_t = DbTemplate(
+            tenant_id=tenant_id,
+            name=src.name + "（平台下发）",
+            kind=src.kind,
+            content_json=src.content_json,
+            current_version="v1",
+            parent_template_id=src.id,
+            created_by=user_id,
+        )
+        db.add(new_t)
+        db.flush()
+        db.add(TemplateOwnership(
+            template_id=new_t.id,
+            owner_tenant_id=tenant_id,
+            owner_org_id=org_id,
+            visibility=req.visibility,
+            source="clone",
+        ))
+        logs.append(CrossTenantSyncLog(
+            action="push",
+            source_template_id=src.id,
+            target_template_id=new_t.id,
+            from_tenant_id=src.tenant_id,
+            to_tenant_id=tenant_id,
+            to_org_id=org_id,
+            created_by=user_id,
+        ))
+        created_ids.append(new_t.id)
+    db.add_all(logs)
+    db.commit()
+    return success(data={
+        "pushed_count": len(created_ids),
+        "target_template_ids": created_ids,
+    }, message=f"已下发至 {len(created_ids)} 家机构")
+
+
+@router.get("/templates/{template_id}/lineage")
+async def get_template_lineage(
+    template_id: str,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_user),
+):
+    """血缘视图：源模板 + 其全部直接克隆副本（parent_template_id == 源）。"""
+    src = db.query(DbTemplate).filter(DbTemplate.id == template_id).first()
+    if not src:
+        raise HTTPException(status_code=404, detail=error("NOT_FOUND", "模板不存在"))
+    children = db.query(DbTemplate).filter(
+        DbTemplate.parent_template_id == template_id).all()
+    return success(data={
+        "source": _serialize_template(src),
+        "clones": [_serialize_template(c) for c in children],
+        "clone_count": len(children),
+    })
+
+
+class ContributeTemplateReq(BaseModel):
+    visibility: str = "public"        # 贡献到平台共享池默认公开
+    submit_for_review: bool = False   # 是否同步提交平台审核（进入策展池）
+
+
+@router.post("/templates/{template_id}/contribute")
+async def contribute_template_to_platform(
+    template_id: str,
+    req: ContributeTemplateReq,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_user),
+):
+    """机构→平台克隆记血缘：把机构模板贡献到平台共享池（source='clone' + parent_template_id）。"""
+    src = db.query(DbTemplate).filter(DbTemplate.id == template_id).first()
+    if not src:
+        raise HTTPException(status_code=404, detail=error("NOT_FOUND", "源模板不存在"))
+    user_id = getattr(request.state, "user_id", None)
+    tenant_id = getattr(request.state, "tenant_id", None)
+    org_id = getattr(request.state, "org_id", None)
+    new_t = DbTemplate(
+        tenant_id=None,  # 平台池：无租户归属
+        name=src.name + "（机构贡献）",
+        kind=src.kind,
+        content_json=src.content_json,
+        current_version="v1",
+        parent_template_id=src.id,
+        created_by=user_id,
+    )
+    db.add(new_t)
+    db.flush()
+    db.add(TemplateOwnership(
+        template_id=new_t.id,
+        owner_tenant_id=None,
+        owner_org_id=None,
+        visibility=req.visibility,
+        source="clone",
+    ))
+    db.add(CrossTenantSyncLog(
+        action="contribute",
+        source_template_id=src.id,
+        target_template_id=new_t.id,
+        from_tenant_id=tenant_id,
+        from_org_id=org_id,
+        to_tenant_id=None,
+        created_by=user_id,
+    ))
+    if req.submit_for_review:
+        db.add(TemplateReviewSubmission(
+            template_id=new_t.id,
+            submitter_tenant_id=tenant_id,
+            submitter_org_id=org_id,
+            status="PENDING",
+        ))
+    db.commit()
+    db.refresh(new_t)
+    own = _get_ownership(db, new_t.id, None)
+    data = _serialize_template(new_t, own)
+    if req.submit_for_review:
+        data["review_status"] = "PENDING"
+    return success(data=data, message="已贡献至平台共享池")
+
+
+# ─────────────────────────── ⑤-a 关插件申请（决策①=B：机构长可申请） ───────────────────────────
+
+class PluginDisableReq(BaseModel):
+    reason: Optional[str] = None
+
+
+@router.post("/orgs/{org_id}/plugins/{plugin_key}/disable-request")
+async def create_plugin_disable_request(
+    org_id: str,
+    plugin_key: str,
+    req: PluginDisableReq,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_user),
+):
+    """机构长申请关闭某插件（平台审核后才生效）。幂等：已有 PENDING 不重复建。"""
+    tenant_id = getattr(request.state, "tenant_id", None)
+    user_id = getattr(request.state, "user_id", None)
+    existing = db.query(PluginDisableRequest).filter(
+        PluginDisableRequest.org_id == org_id,
+        PluginDisableRequest.plugin_key == plugin_key,
+        PluginDisableRequest.status == "PENDING",
+    ).first()
+    if existing:
+        return success(data=_serialize_disable_request(existing), message="已有待审申请")
+    d = PluginDisableRequest(
+        tenant_id=tenant_id,
+        org_id=org_id,
+        plugin_key=plugin_key,
+        reason=req.reason,
+        status="PENDING",
+        submitter_id=user_id,
+    )
+    db.add(d)
+    db.commit()
+    db.refresh(d)
+    return success(data=_serialize_disable_request(d), message="关插件申请已提交，等待平台审核")
+
+
+@router.get("/plugin-disable-requests")
+async def list_plugin_disable_requests(
+    request: Request,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_admin),
+):
+    """平台查看关插件申请列表（按状态过滤）。"""
+    q = db.query(PluginDisableRequest)
+    if status:
+        q = q.filter(PluginDisableRequest.status == status)
+    rows = q.order_by(PluginDisableRequest.submitted_at.desc()).all()
+    return success(data={"items": [_serialize_disable_request(s) for s in rows], "total": len(rows)})
+
+
+@router.post("/plugin-disable-requests/{request_id}/approve")
+async def approve_plugin_disable_request(
+    request_id: str,
+    req: ReviewDecisionReq,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_admin),
+):
+    """平台批准关插件：status=APPROVED（生效依据；HB/8602 读取已批准项执行下架）。"""
+    d = db.query(PluginDisableRequest).filter(PluginDisableRequest.id == request_id).first()
+    if not d:
+        raise HTTPException(status_code=404, detail=error("NOT_FOUND", "申请不存在"))
+    d.status = "APPROVED"
+    d.reviewer_id = getattr(request.state, "user_id", None)
+    d.review_note = req.review_note
+    d.reviewed_at = datetime.now(timezone.utc)
+    db.commit()
+    return success(data=_serialize_disable_request(d))
+
+
+@router.post("/plugin-disable-requests/{request_id}/reject")
+async def reject_plugin_disable_request(
+    request_id: str,
+    req: ReviewDecisionReq,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_admin),
+):
+    """平台驳回关插件：status=REJECTED。"""
+    d = db.query(PluginDisableRequest).filter(PluginDisableRequest.id == request_id).first()
+    if not d:
+        raise HTTPException(status_code=404, detail=error("NOT_FOUND", "申请不存在"))
+    d.status = "REJECTED"
+    d.reviewer_id = getattr(request.state, "user_id", None)
+    d.review_note = req.review_note
+    d.reviewed_at = datetime.now(timezone.utc)
+    db.commit()
+    return success(data=_serialize_disable_request(d))
+
+
+# ─────────────────────────── ⑥ Stage C：版本回滚 + 导出/导入 JSON ───────────────────────────
+
+class TemplateImportReq(BaseModel):
+    export: Dict[str, Any]                         # 由 /export 产出的 JSON 载荷
+    target_org_id: Optional[str] = None
+    target_tenant_id: Optional[str] = None
+    visibility: str = "private"
+
+
+def _serialize_version(v: TemplateVersion) -> Dict[str, Any]:
+    return {
+        "version_tag": v.version_tag,
+        "snapshot_json": v.snapshot_json,
+        "created_by": v.created_by,
+        "created_at": v.created_at.isoformat() if v.created_at else None,
+    }
+
+
+@router.get("/templates/{template_id}/export")
+async def export_template(
+    template_id: str,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_user),
+):
+    """导出模板为 JSON（含归属 + 全量版本快照），供跨环境迁移/备份（Stage C 深度运营）。"""
+    t = db.query(DbTemplate).filter(DbTemplate.id == template_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail=error("NOT_FOUND", "模板不存在"))
+    own = _get_ownership(db, template_id, None)
+    versions = db.query(TemplateVersion).filter(
+        TemplateVersion.template_id == template_id).order_by(
+        TemplateVersion.created_at.asc()).all()
+    payload = {
+        "kind": "qihuang.template_center.template",
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "template": {
+            "name": t.name,
+            "kind": t.kind,
+            "content_json": t.content_json,
+            "current_version": t.current_version,
+        },
+        "ownership": {
+            "visibility": own.visibility if own else "private",
+            "source": own.source if own else "self",
+        },
+        "versions": [_serialize_version(v) for v in versions],
+    }
+    return success(data=payload)
+
+
+@router.post("/templates/import")
+async def import_template(
+    req: TemplateImportReq,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_user),
+):
+    """导入模板 JSON（由 /export 产出）：重建为新模板（新 id），克隆版本快照。
+
+    - 带 target_org_id → source='self'（机构私有）；否则 source='platform'。
+    - 血缘不跨环境保留（新模板 parent_template_id 为空）。
+    """
+    exp = req.export or {}
+    tpl = exp.get("template") or {}
+    name = tpl.get("name", "导入模板")
+    kind = tpl.get("kind", "herb")
+    content_json = tpl.get("content_json", {})
+    if not content_json and not tpl:
+        raise HTTPException(status_code=400, detail=error("BAD_REQUEST", "导出载荷为空"))
+    tenant_id = req.target_tenant_id or getattr(request.state, "tenant_id", None)
+    user_id = getattr(request.state, "user_id", None)
+    org_id = req.target_org_id
+    new_t = DbTemplate(
+        tenant_id=tenant_id,
+        name=name + "（导入）",
+        kind=kind,
+        content_json=content_json,
+        current_version=tpl.get("current_version", "v1"),
+        created_by=user_id,
+    )
+    db.add(new_t)
+    db.flush()
+    db.add(TemplateOwnership(
+        template_id=new_t.id,
+        owner_tenant_id=tenant_id,
+        owner_org_id=org_id,
+        visibility=req.visibility,
+        source="self" if org_id else "platform",
+    ))
+    for v in exp.get("versions", []):
+        db.add(TemplateVersion(
+            template_id=new_t.id,
+            version_tag=v.get("version_tag", "v1"),
+            snapshot_json=v.get("snapshot_json", {}),
+            created_by=user_id,
+        ))
+    db.commit()
+    db.refresh(new_t)
+    own = _get_ownership(db, new_t.id, org_id)
+    data = _serialize_template(new_t, own)
+    versions = db.query(TemplateVersion).filter(
+        TemplateVersion.template_id == new_t.id).all()
+    data["versions"] = [_serialize_version(v) for v in versions]
+    return success(data=data, message="模板已导入")

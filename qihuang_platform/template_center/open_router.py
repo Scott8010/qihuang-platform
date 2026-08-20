@@ -28,6 +28,7 @@ from qihuang_platform.db.models import (
     DbTemplate,
     TemplateOwnership,
     TemplateReviewSubmission,
+    PluginDisableRequest,
 )
 from qihuang_platform.template_center.router import (
     _serialize_template,
@@ -169,3 +170,54 @@ async def open_submit_template(
     db.commit()
     db.refresh(sub)
     return success(data=_serialize_submission(sub))
+
+
+# ─────────────────────────── 关插件申请（决策①=B：机构长可申请，开放通道） ───────────────────────────
+
+class OpenPluginDisableReq(BaseModel):
+    org_id: str                                  # API Key 路径只注入 tenant_id，org_id 必须请求体携带
+    plugin_key: str                             # health-advisor / store-coach / ...
+    reason: Optional[str] = None
+
+
+@router.post("/plugins/disable-request")
+async def open_create_plugin_disable_request(
+    req: OpenPluginDisableReq,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_principal),
+):
+    """机构通过开放通道申请关闭某插件（决策①=B）。幂等：已有 PENDING 不重复建。
+
+    - API Key 路径：tenant_id 取密钥绑定租户，org_id 由请求体携带；
+    - JWT 路径：取 request.state.tenant_id / org_id（请求体可覆盖）。
+    """
+    tenant_id = getattr(request.state, "tenant_id", None)
+    user_id = getattr(request.state, "user_id", None)
+    app_key = getattr(request.state, "app_key", None)
+    if not user_id and app_key:
+        user_id = f"apikey:{app_key}"
+    existing = db.query(PluginDisableRequest).filter(
+        PluginDisableRequest.org_id == req.org_id,
+        PluginDisableRequest.plugin_key == req.plugin_key,
+        PluginDisableRequest.status == "PENDING",
+    ).first()
+    if existing:
+        return success(data={
+            "id": existing.id, "status": existing.status,
+        }, message="已有待审申请")
+    d = PluginDisableRequest(
+        tenant_id=tenant_id,
+        org_id=req.org_id,
+        plugin_key=req.plugin_key,
+        reason=req.reason,
+        status="PENDING",
+        submitter_id=user_id,
+    )
+    db.add(d)
+    db.commit()
+    db.refresh(d)
+    return success(data={
+        "id": d.id, "org_id": d.org_id, "plugin_key": d.plugin_key,
+        "status": d.status,
+    }, message="关插件申请已提交，等待平台审核")
