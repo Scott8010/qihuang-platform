@@ -57,10 +57,10 @@ export default function Monitor() {
         )}
       </div>
 
-      {/* LLM用量 + 审计日志 */}
-      <div className="grid grid-cols-5 gap-4">
+      {/* LLM用量 + 审计日志（上下结构，各占满宽，避免窄列拥挤） */}
+      <div className="grid grid-cols-1 gap-4">
         {/* LLM 共识集群用量 */}
-        <Card className="col-span-2 border shadow-none" style={{ borderColor: C.border }}>
+        <Card className="border shadow-none" style={{ borderColor: C.border }}>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <Cpu className="w-4 h-4" style={{ color: C.primary }} />
@@ -111,7 +111,7 @@ export default function Monitor() {
         </Card>
 
         {/* 审计日志 */}
-        <Card className="col-span-3 border shadow-none" style={{ borderColor: C.border }}>
+        <Card className="border shadow-none" style={{ borderColor: C.border }}>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <ScrollText className="w-4 h-4" style={{ color: C.primary }} />
