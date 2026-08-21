@@ -244,6 +244,33 @@ SOURCES: Dict[str, SourceAdapter] = {
             "Referer": "https://www.baike.com/",
         },
     ),
+    # ── 中国医药信息查询平台 dayi.org.cn（2026-08-21 新增第四源，专补 syndrome/drug/formula 缺口）──
+    # 背景：360 search 验证码 + 快懂百科无证候/部分成药词条(404/聚合页)，第三源缺口
+    #   = 脾胃虚弱/肝肾阴虚/气血两虚(syndrome) + 感冒灵/板蓝根颗粒(drug) + 桂枝汤(formula)。
+    # dayi = 国家卫健委/中医药管理局指导的权威医药库，四库直链模式：
+    #   /symptom/{id} 证候库、/disease/{id} 疾病库、/drug/{id} 药品库、/prescriptions/{id} 处方库。
+    # 生产机实测 2026-08-21：全部 200、正文 8-20KB、证候词(症情分析/治法/方药)与
+    #   药品词(成分/功效/适应症/不良反应)命中充分，无验证码。
+    "tcm-dayi": HttpPageAdapter(
+        "tcm-dayi",
+        seed_urls=[
+            # syndrome 证候（快懂 404 缺口，dayi 症情分析/治法/方药全结构化）
+            "https://www.dayi.org.cn/symptom/1143354",    # 脾胃虚弱证
+            "https://www.dayi.org.cn/disease/1160333",    # 肝肾阴虚（疾病库版，19KB 最全）
+            "https://m.dayi.org.cn/symptom/600180",       # 气血两虚证
+            # drug 成药（快懂聚合页缺口，dayi 药品说明书结构化）
+            "https://www.dayi.org.cn/drug/1017673",       # 感冒灵颗粒
+            "https://www.dayi.org.cn/drug/1015679",       # 板蓝根颗粒
+            # formula 方剂（快懂 404 缺口）
+            "https://www.dayi.org.cn/prescriptions/901847",  # 桂枝汤
+        ],
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            "Referer": "https://www.dayi.org.cn/",
+        },
+    ),
     # ── 扩展点（可达但当前正文受限，保留待深链/API 接入）──
     # ctext：可达，但是哲学库 TOC 页、无中医正文 → 低产
     "ctext": HttpPageAdapter("ctext", seed_urls=["https://ctext.org/shang-han-lun/zh"]),
@@ -261,9 +288,10 @@ SOURCES: Dict[str, SourceAdapter] = {
 #   ✅ baike-com（2026-08-21 第三源）：快懂百科(奇虎系)，/wiki/{词条} 直连 → 真爬，
 #         生产实测 200/150-600KB 正文/零验证码，覆盖 drug(formula 复方甘草片)+formula(六味地黄丸)
 #         等 360 search 无法解析的补位词条。
-#   🔲 第三源待接入：脾胃虚弱/肝肾阴虚/气血两虚(syndrome)、感冒灵颗粒/板蓝根颗粒(drug)、
-#         桂枝汤(formula) —— 360 search 验证码 + 快懂无词条(404/聚合页) + dayi 搜索 JS 渲染。
-#         候选：dayi.org.cn 精细解析 或 权威方剂库(如 药智数据/中成药处方数据库)。
+#   ✅ tcm-dayi（2026-08-21 第四源）：中国医药信息查询平台(卫健委/中医药管理局指导)，
+#         四库直链 /symptom /disease /drug /prescriptions，生产实测 200/8-20KB 正文/零验证码，
+#         专补第三源缺口：脾胃虚弱证/肝肾阴虚/气血两虚(syndrome) + 感冒灵/板蓝根颗粒(drug) + 桂枝汤(formula)。
+#         权威度高于百科（词条多经国家中医药管理局名词术语项目审核认证）。
 #   ⚠️ ctext / jicheng：可达但无可用正文 → 扩展点（低产）
 #   ❌ shidianguji：robots.txt `Disallow: /` 全站禁爬 → 不接入
 #   ❌ cintcm / tcmip：需登录/结构化库 + 出网白名单拦截 → 待人工授权
