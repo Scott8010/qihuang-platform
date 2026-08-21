@@ -86,6 +86,18 @@ class HealthAdvisor:
         sizhen = await L1Client.sizhen(symptoms=symptoms, tongue=tongue, pulse=pulse)
         constitution, formulas, suggestions = parse_sizhen(sizhen)
 
+        # ── ⚠️ 2026-08-22 老黄质疑「一句失眠乏力为什么判平和质」护栏 ──
+        # 根因：L1 sizhen 在无舌象/脉象时兜底返回默认体质（如平和质，score=None 无置信度），
+        # 若原样透传 = 把"编的"当"辨证结果"给用户，误导。
+        # 护栏：舌象、脉象任一缺失（体质判定的核心四诊依据不完整）→ 体质降级为「暂不判定」，
+        # 不落具体体质名；回复中明确提示需补舌脉（S6 有 partial 兜底文案）。
+        if (not tongue or not pulse) and constitution and constitution.type:
+            logger.info(
+                "[orchestrator] 缺舌脉(%s/%s) → 体质降级为暂不判定（原L1兜底:%s）",
+                tongue or "-", pulse or "-", constitution.type,
+            )
+            constitution = Constitution(type=None, desc=None, score=None)
+
         # ── syndrome 提取（规则兜底，预留 LLM）──
         chat = await L1Client.chat(message=req.question)
         syndrome = extract_syndrome_rule(sizhen, chat)
@@ -215,6 +227,9 @@ class HealthAdvisor:
         parts: list[str] = []
         if constitution and constitution.type:
             parts.append(f"【体质辨识】{constitution.type}：{constitution.desc or ''}".strip())
+        elif partial:
+            # 2026-08-22 护栏：缺舌脉时体质降级为「暂不判定」，明确告知而非静默跳过
+            parts.append("【体质辨识】暂不判定（需补充舌象/脉象后辨识）")
         if syndrome and syndrome.name:
             parts.append(f"【辨证倾向】{syndrome.name}（置信度：{syndrome.confidence or '未知'}）")
         if formulas:
