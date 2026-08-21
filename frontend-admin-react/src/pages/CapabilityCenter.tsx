@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   Boxes, Globe, Lock, FilePlus2, Send, CheckCircle2, XCircle, Loader2,
-  ShieldCheck, Eye, Copy, Check, ChevronDown, ChevronUp, Info, FlaskConical,
+  ShieldCheck, Eye, Info, FlaskConical,
   ListOrdered, MapPin, ClipboardList, BookOpen, Sparkles,
   History, Undo2, BarChart3, Pencil,
 } from "lucide-react";
@@ -41,106 +41,6 @@ const KIND_LABEL: Record<string, string> = {
   script: "话术脚本", product: "产品培训", project: "项目培训", knowledge: "知识课件", other: "其他",
 };
 
-/* ─────────────── 详情弹窗用：JSON 语法高亮 + 字段平铺 ─────────────── */
-
-/** 简易 JSON 语法高亮 — 用 inline style，不依赖 head 注入。绿 key / 棕 string / 蓝 num / 紫 kw / 灰 brace */
-function JsonHighlight({ value }: { value: unknown }) {
-  const parts = useMemo(() => {
-    const text = JSON.stringify(value, null, 2);
-    type Piece = { t: "k" | "s" | "n" | "w" | "b" | "t"; v: string };
-    const out: Piece[] = [];
-    let i = 0;
-    const KW = /\b(true|false|null)\b/g;
-    const NUM = /-?\d+(\.\d+)?(e[+-]?\d+)?/gi;
-    const BR = /[{}[\],]/g;
-    while (i < text.length) {
-      const c = text[i];
-      if (c === '"') {
-        // 找到匹配的结束引号（处理 \"）
-        let j = i + 1;
-        while (j < text.length && text[j] !== '"') {
-          if (text[j] === "\\") j += 2;
-          else j++;
-        }
-        j = Math.min(j + 1, text.length);
-        const seg = text.slice(i, j);
-        // 判定是 key 还是 string：看紧跟其后是否有空白+: 
-        let m = j;
-        while (m < text.length && /\s/.test(text[m])) m++;
-        const isKey = text[m] === ":";
-        out.push({ t: isKey ? "k" : "s", v: seg });
-        i = j;
-        continue;
-      }
-      KW.lastIndex = i;
-      const kw = KW.exec(text);
-      NUM.lastIndex = i;
-      const num = NUM.exec(text);
-      BR.lastIndex = i;
-      const br = BR.exec(text);
-      const candidates = [kw, num, br].filter(Boolean) as RegExpExecArray[];
-      candidates.sort((a, b) => a.index - b.index);
-      const next = candidates[0];
-      if (next && next.index === i) {
-        out.push({ t: next[0] === "{" || next[0] === "}" || next[0] === "[" || next[0] === "]" || next[0] === "," ? "b" :
-                     KW.test(next[0]) ? "w" : "n", v: next[0] });
-        i += next[0].length;
-        KW.lastIndex = 0; NUM.lastIndex = 0; BR.lastIndex = 0;
-        continue;
-      }
-      // fallback 单字符
-      if (next && next.index > i) {
-        out.push({ t: "t", v: text.slice(i, next.index) });
-        i = next.index;
-        continue;
-      }
-      out.push({ t: "t", v: text.slice(i) });
-      break;
-    }
-    KW.lastIndex = 0; NUM.lastIndex = 0; BR.lastIndex = 0;
-    return out;
-  }, [value]);
-
-  const colorMap: Record<string, string> = {
-    k: "#2E5A4C",   // key → 深绿
-    s: "#8A6A1F",   // string value → 古铜金
-    n: "#2F6FB5",   // number → 蓝
-    w: "#8B3A8B",   // keyword → 紫
-    b: "#8FA9A0",   // structural → 浅灰
-    t: "#22312B",   // 普通文本 → 墨
-  };
-  return (
-    <code className="font-mono text-[11.5px] leading-relaxed block whitespace-pre">
-      {parts.map((p, i) => (
-        <span key={i} style={{ color: colorMap[p.t] }}>{p.v}</span>
-      ))}
-    </code>
-  );
-}
-
-/** 「复制到剪贴板」按钮，带成功反馈 */
-function CopyButton({ text, label = "复制" }: { text: string; label?: string }) {
-  const [done, setDone] = useState(false);
-  return (
-    <button
-      type="button"
-      className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded border hover:bg-white transition-colors"
-      style={{ borderColor: C.border, color: C.mid }}
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text);
-          setDone(true);
-          setTimeout(() => setDone(false), 1200);
-        } catch {
-          toast.error("复制失败，请手动选择");
-        }
-      }}
-    >
-      {done ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-      {done ? "已复制" : label}
-    </button>
-  );
-}
 
 /* ─────────────── 详情弹窗用：4 套已知 schema 渲染器 ─────────────── */
 
@@ -476,32 +376,9 @@ function TemplatePreview({ content }: { content: Record<string, unknown> }) {
 
 /** 未知 schema：KV 平铺 + 折叠 JSON（语法高亮 + 复制） */
 function GenericSchemaView({ content }: { content: Record<string, unknown> }) {
-  const [rawOpen, setRawOpen] = useState(false);
-  const raw = useMemo(() => JSON.stringify(content, null, 2), [content]);
   return (
-    <div className="space-y-3">
+    <div>
       <GenericKVView value={content} />
-      <div>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded border hover:bg-white"
-          style={{ borderColor: C.border, color: C.mid }}
-          onClick={() => setRawOpen((o) => !o)}
-        >
-          {rawOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-          {rawOpen ? "收起原始 JSON" : "展开原始 JSON"}
-        </button>
-        {rawOpen && (
-          <div className="mt-1.5 relative rounded-md border" style={{ borderColor: C.border, background: "#FCFCFA" }}>
-            <div className="absolute right-1.5 top-1.5">
-              <CopyButton text={raw} label="复制 JSON" />
-            </div>
-            <pre className="p-2.5 pt-8 overflow-auto max-h-72 m-0" style={{ background: "#FCFCFA" }}>
-              <JsonHighlight value={content} />
-            </pre>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
@@ -998,7 +875,6 @@ export default function CapabilityCenter() {
                           viewTpl.kind === "herb" || viewTpl.kind === "formula" || viewTpl.kind === "syndrome" ? "知识图谱·智能体引用" :
                           "结构化模板"}）
                   </div>
-                  <CopyButton text={JSON.stringify(viewTpl.content_json, null, 2)} label="复制 JSON" />
                 </div>
                 <div className="rounded-md border p-2.5 max-h-[420px] overflow-auto" style={{ borderColor: C.border }}>
                   <TemplatePreview content={(viewTpl.content_json as Record<string, unknown>) || {}} />
