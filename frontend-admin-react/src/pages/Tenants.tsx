@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger,
 } from "@/components/ui/dialog";
@@ -12,9 +13,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Search, Boxes, Loader2, Clock } from "lucide-react";
+import { Plus, Search, Boxes, Loader2, Clock, UploadCloud, X, FileText } from "lucide-react";
 import { C, sceneMap, statusMap } from "@/lib/types";
-import { fetchTenants, fetchPlans, createTenant, deleteTenant } from "@/lib/api";
+import { fetchTenants, fetchPlans, createTenant, deleteTenant, uploadFile } from "@/lib/api";
 import { toast } from "sonner";
 import type { Tenant, PlanItem } from "@/lib/types";
 import TenantDetail from "./TenantDetail";
@@ -35,10 +36,20 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
   const [detail, setDetail] = useState<Tenant | null>(null);
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [uploading, setUploading] = useState<"" | "business" | "medical">("");
   const [form, setForm] = useState({
     name: "", scene: "HEALTH", plan: "standard",
-    contactName: "", contactPhone: "", m3d: false,
+    contactName: "", contactPhone: "", contactEmail: "",
+    addressCountry: "中国", addressProvince: "", addressCity: "", addressDistrict: "",
+    orgIntro: "",
+    licenseBusiness: "", licenseBusinessName: "",
+    licenseMedical: "", licenseMedicalName: "",
+    m3d: false,
   });
+
+  // 电话：手机 11 位 / 座机带区号；邮箱常规校验（与后端 _ONBOARD_* 一致）
+  const PHONE_RE = /^(1[3-9]\d{9}|(\+?\d{1,4}-)?0\d{2,3}-?\d{7,8})$/;
+  const EMAIL_RE = /^[\w.+-]+@[\w-]+(\.[\w-]+)+$/;
 
   // 打开弹窗时拉真实套餐库（价格/配额/说明一并展示，不硬编码）
   useEffect(() => {
@@ -85,9 +96,18 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
   );
 
   const create = async () => {
-    if (!form.name.trim()) { toast.error("请填写租户名称"); return; }
+    if (!form.name.trim()) { toast.error("请填写机构名称"); return; }
     if (!form.contactName.trim()) { toast.error("请填写联系人姓名"); return; }
     if (!form.contactPhone.trim()) { toast.error("请填写联系电话"); return; }
+    if (!PHONE_RE.test(form.contactPhone.trim())) {
+      toast.error("电话格式不正确：手机须为 11 位（1 开头），座机须带区号（如 021-12345678）"); return;
+    }
+    if (form.contactEmail.trim() && !EMAIL_RE.test(form.contactEmail.trim())) { toast.error("电子邮箱格式不正确"); return; }
+    const isMed = form.scene === "MED";
+    if (isMed) {
+      if (!form.licenseBusiness) { toast.error("医疗场景必须上传营业执照"); return; }
+      if (!form.licenseMedical) { toast.error("医疗场景必须上传医疗机构执业许可证"); return; }
+    }
     setSubmitting(true);
     const r: any = await createTenant({
       name: form.name.trim(),
@@ -95,16 +115,41 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
       plan: form.plan,
       contactName: form.contactName.trim(),
       contactPhone: form.contactPhone.trim(),
+      contactEmail: form.contactEmail.trim() || undefined,
+      addressCountry: form.addressCountry.trim() || undefined,
+      addressProvince: form.addressProvince.trim() || undefined,
+      addressCity: form.addressCity.trim() || undefined,
+      addressDistrict: form.addressDistrict.trim() || undefined,
+      orgIntro: form.orgIntro.trim() || undefined,
+      licenseBusiness: form.licenseBusiness || undefined,
+      licenseBusinessName: form.licenseBusinessName || undefined,
+      licenseMedical: form.licenseMedical || undefined,
+      licenseMedicalName: form.licenseMedicalName || undefined,
       module3d: form.m3d,
     });
     setSubmitting(false);
     if (r?.code === 0) {
       toast.success(`租户 ${form.name} 开户成功：套餐已生效、根机构已创建`);
       setOpen(false);
-      setForm({ name: "", scene: "HEALTH", plan: "standard", contactName: "", contactPhone: "", m3d: false });
+      setForm({ name: "", scene: "HEALTH", plan: "standard", contactName: "", contactPhone: "", contactEmail: "", addressCountry: "中国", addressProvince: "", addressCity: "", addressDistrict: "", orgIntro: "", licenseBusiness: "", licenseBusinessName: "", licenseMedical: "", licenseMedicalName: "", m3d: false });
       await load();
     } else {
-      toast.error(r?.message || r?.msg || "开户失败，请重试");
+      // 后端校验失败（如医疗两证缺失/电话格式）提示原话，不假装成功
+      toast.error(r?.message || r?.msg || r?.detail?.[0]?.msg || "开户失败，请重试");
+    }
+  };
+
+  // 证照上传（营业执照 / 医疗机构执业许可证）
+  const handleUpload = async (kind: "business" | "medical", file: File) => {
+    setUploading(kind);
+    const r = await uploadFile(file, kind === "business" ? "license_business" : "license_medical");
+    setUploading("");
+    if (r.ok && r.data) {
+      if (kind === "business") setForm({ ...form, licenseBusiness: r.data.url, licenseBusinessName: r.data.name });
+      else setForm({ ...form, licenseMedical: r.data.url, licenseMedicalName: r.data.name });
+      toast.success(`已上传 ${r.data.name}`);
+    } else {
+      toast.error(r.msg || "上传失败，请重试");
     }
   };
 
@@ -146,76 +191,177 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
               <Plus className="w-4 h-4 mr-1" /> 新建租户开户
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[520px]">
+          <DialogContent className="sm:max-w-[680px] max-h-[88vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle style={{ color: C.primary }}>新建租户开户</DialogTitle>
+              <DialogDescription className="text-xs" style={{ color: C.light }}>
+                完整机构信息 + 资质证照 + 套餐订阅一次落库，全程审计留痕
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2 text-[13px]">
-              <div className="space-y-1.5">
-                <Label>租户名称（合同主体）<span style={{ color: "#B03A2E" }}> *</span></Label>
-                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="如：某某中医馆连锁有限公司" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+              {/* ── ① 机构信息 ── */}
+              <div className="rounded-xl p-4 space-y-3" style={{ background: C.soft }}>
+                <div className="text-[12px] font-semibold tracking-wider" style={{ color: C.primary }}>① 机构信息</div>
                 <div className="space-y-1.5">
-                  <Label>场景类型（创建后不可变更）</Label>
-                  <Select value={form.scene} onValueChange={(v) => setForm({ ...form, scene: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="MED">医疗场景</SelectItem>
-                      <SelectItem value="HEALTH">大健康场景</SelectItem>
-                      <SelectItem value="EDU">培训学习场景</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>机构名称（合同主体）<span style={{ color: "#B03A2E" }}> *</span></Label>
+                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="如：某某中医馆连锁有限公司" />
                 </div>
-                <div className="space-y-1.5">
-                  <Label>套餐</Label>
-                  <Select value={form.plan} onValueChange={(v) => setForm({ ...form, plan: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {plans.length === 0 && <div className="px-3 py-2 text-[12px]" style={{ color: C.light }}>套餐加载中…</div>}
-                      {plans.map((p) => (
-                        <SelectItem key={p.planName} value={p.planName}>
-                          {p.name}（¥{(p.priceCents / 100).toFixed(0)}/月 · {p.monthCalls.toLocaleString()}次/月）
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {/* 所选套餐说明（从套餐库实时读取，非硬编码） */}
-              {(() => {
-                const sel = plans.find((p) => p.planName === form.plan);
-                if (!sel) return null;
-                return (
-                  <div className="rounded-lg p-3 text-[12px] leading-relaxed" style={{ background: C.soft, color: C.mid }}>
-                    <span className="font-medium" style={{ color: C.ink }}>{sel.name}：</span>
-                    {sel.desc || "—"}
-                    <div className="mt-1" style={{ color: C.light }}>订阅期 12 个月，到期后可在「计量计费」页续费或变更套餐。</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>场景类型（创建后不可变更）<span style={{ color: "#B03A2E" }}> *</span></Label>
+                    <Select value={form.scene} onValueChange={(v) => setForm({ ...form, scene: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="MED">医疗场景</SelectItem>
+                        <SelectItem value="HEALTH">大健康场景</SelectItem>
+                        <SelectItem value="EDU">培训学习场景</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                );
-              })()}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>联系人姓名<span style={{ color: "#B03A2E" }}> *</span></Label>
-                  <Input value={form.contactName} onChange={(e) => setForm({ ...form, contactName: e.target.value })} placeholder="商务对接人" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>联系电话<span style={{ color: "#B03A2E" }}> *</span></Label>
-                  <Input value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} placeholder="手机或座机" />
-                </div>
-              </div>
-              <div className="flex items-center justify-between rounded-lg p-3" style={{ background: "#FBF4E4" }}>
-                <div className="flex items-center gap-2">
-                  <Boxes className="w-4 h-4" style={{ color: C.gold }} />
-                  <div>
-                    <div className="font-medium" style={{ color: C.gold }}>岐黄三境 · 3D 增值模块</div>
-                    <div className="text-[11px]" style={{ color: C.mid }}>module_3d 开关 · 穴位范围/皮肤/文案可配置</div>
+                  <div className="space-y-1.5">
+                    <Label>套餐<span style={{ color: "#B03A2E" }}> *</span></Label>
+                    <Select value={form.plan} onValueChange={(v) => setForm({ ...form, plan: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {plans.length === 0 && <div className="px-3 py-2 text-[12px]" style={{ color: C.light }}>套餐加载中…</div>}
+                        {plans.map((p) => (
+                          <SelectItem key={p.planName} value={p.planName}>
+                            {p.name}（¥{(p.priceCents / 100).toFixed(0)}/月 · {p.monthCalls.toLocaleString()}次/月）
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-                <Switch checked={form.m3d} onCheckedChange={(v) => setForm({ ...form, m3d: v })} />
+                <div>
+                  <Label>机构地址</Label>
+                  <div className="grid grid-cols-2 gap-2 mt-1.5">
+                    <Input value={form.addressCountry} onChange={(e) => setForm({ ...form, addressCountry: e.target.value })} placeholder="国家（如：中国）" />
+                    <Input value={form.addressProvince} onChange={(e) => setForm({ ...form, addressProvince: e.target.value })} placeholder="省份（如：上海市）" />
+                    <Input value={form.addressCity} onChange={(e) => setForm({ ...form, addressCity: e.target.value })} placeholder="城市（如：上海市）" />
+                    <Input value={form.addressDistrict} onChange={(e) => setForm({ ...form, addressDistrict: e.target.value })} placeholder="区县（如：浦东新区）" />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>机构介绍</Label>
+                  <Textarea
+                    value={form.orgIntro}
+                    onChange={(e) => setForm({ ...form, orgIntro: e.target.value })}
+                    placeholder="机构简介、主营业务、服务范围等（医疗机构建议注明执业范围）"
+                    rows={3}
+                  />
+                </div>
               </div>
+
+              {/* ── ② 资质证照 ── */}
+              <div className="rounded-xl p-4 space-y-3" style={{ background: "#FBF4E4" }}>
+                <div className="text-[12px] font-semibold tracking-wider" style={{ color: C.gold }}>
+                  ② 资质证照
+                  {form.scene === "MED" && <span className="ml-2 text-[11px] font-normal" style={{ color: "#B03A2E" }}>医疗场景：两证必传</span>}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>营业执照{form.scene === "MED" ? <span style={{ color: "#B03A2E" }}> *</span> : <span className="text-[11px]" style={{ color: C.light }}>（选填）</span>}</Label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="file" id="lic-business" className="hidden" accept="image/*,.pdf"
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload("business", f); e.target.value = ""; }}
+                      />
+                      <label htmlFor="lic-business" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium cursor-pointer border"
+                        style={{ background: "#fff", color: C.primary, borderColor: C.border }}>
+                        <UploadCloud className="w-3.5 h-3.5" />
+                        {uploading === "business" ? "上传中…" : "选择文件"}
+                      </label>
+                      {form.licenseBusinessName && (
+                        <span className="inline-flex items-center gap-1 text-[12px] truncate max-w-[130px]" style={{ color: C.mid }} title={form.licenseBusinessName}>
+                          <FileText className="w-3.5 h-3.5 shrink-0" style={{ color: C.gold }} />
+                          <span className="truncate">{form.licenseBusinessName}</span>
+                          <button onClick={() => setForm({ ...form, licenseBusiness: "", licenseBusinessName: "" })} className="shrink-0" style={{ color: C.light }}><X className="w-3.5 h-3.5" /></button>
+                        </span>
+                      )}
+                      {!form.licenseBusinessName && <span className="text-[12px]" style={{ color: C.light }}>未上传</span>}
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>医疗机构执业许可证{form.scene === "MED" ? <span style={{ color: "#B03A2E" }}> *</span> : <span className="text-[11px]" style={{ color: C.light }}>（医疗专用）</span>}</Label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="file" id="lic-medical" className="hidden" accept="image/*,.pdf"
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload("medical", f); e.target.value = ""; }}
+                      />
+                      <label htmlFor="lic-medical" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium cursor-pointer border"
+                        style={{ background: "#fff", color: C.primary, borderColor: C.border }}>
+                        <UploadCloud className="w-3.5 h-3.5" />
+                        {uploading === "medical" ? "上传中…" : "选择文件"}
+                      </label>
+                      {form.licenseMedicalName && (
+                        <span className="inline-flex items-center gap-1 text-[12px] truncate max-w-[130px]" style={{ color: C.mid }} title={form.licenseMedicalName}>
+                          <FileText className="w-3.5 h-3.5 shrink-0" style={{ color: C.gold }} />
+                          <span className="truncate">{form.licenseMedicalName}</span>
+                          <button onClick={() => setForm({ ...form, licenseMedical: "", licenseMedicalName: "" })} className="shrink-0" style={{ color: C.light }}><X className="w-3.5 h-3.5" /></button>
+                        </span>
+                      )}
+                      {!form.licenseMedicalName && <span className="text-[12px]" style={{ color: C.light }}>未上传</span>}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-[11px] leading-relaxed" style={{ color: C.light }}>
+                  {form.scene === "MED"
+                    ? "医疗场景强制要求：营业执照 + 医疗机构执业许可证 两证齐全方可开户（上传后由平台人工复核）。"
+                    : "早期接入选填；医疗机构（医疗场景）强制要求营业执照 + 医疗机构执业许可证两证必传。"}
+                </div>
+              </div>
+
+              {/* ── ③ 套餐与增值 ── */}
+              <div className="rounded-xl p-4 space-y-3" style={{ background: C.bg }}>
+                <div className="text-[12px] font-semibold tracking-wider" style={{ color: C.primary }}>③ 套餐与增值服务</div>
+                {(() => {
+                  const sel = plans.find((p) => p.planName === form.plan);
+                  if (!sel) return null;
+                  return (
+                    <div className="rounded-lg p-3 text-[12px] leading-relaxed" style={{ background: "#fff", color: C.mid, border: `1px solid ${C.border}` }}>
+                      <span className="font-medium" style={{ color: C.ink }}>{sel.name}：</span>
+                      {sel.desc || "—"}
+                      <div className="mt-1" style={{ color: C.light }}>订阅期 12 个月，到期后可在「计量计费」页续费或变更套餐。</div>
+                    </div>
+                  );
+                })()}
+                <div className="flex items-center justify-between rounded-lg p-3" style={{ background: "#FBF4E4", border: "1px solid #EDD9A8" }}>
+                  <div className="flex items-center gap-2">
+                    <Boxes className="w-4 h-4" style={{ color: C.gold }} />
+                    <div>
+                      <div className="font-medium" style={{ color: C.gold }}>岐黄三境 · 3D 增值模块</div>
+                      <div className="text-[11px]" style={{ color: C.mid }}>module_3d 开关 · 穴位范围/皮肤/文案可配置</div>
+                    </div>
+                  </div>
+                  <Switch checked={form.m3d} onCheckedChange={(v) => setForm({ ...form, m3d: v })} />
+                </div>
+              </div>
+
+              {/* ── ④ 联系人 ── */}
+              <div className="rounded-xl p-4 space-y-3" style={{ background: C.soft }}>
+                <div className="text-[12px] font-semibold tracking-wider" style={{ color: C.primary }}>④ 联系人信息</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>联系人姓名<span style={{ color: "#B03A2E" }}> *</span></Label>
+                    <Input value={form.contactName} onChange={(e) => setForm({ ...form, contactName: e.target.value })} placeholder="商务对接人" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>联系电话<span style={{ color: "#B03A2E" }}> *</span></Label>
+                    <Input value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} placeholder="手机 11 位 / 座机须带区号" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>电子邮箱</Label>
+                    <Input value={form.contactEmail} onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} placeholder="用于接收账单与通知" />
+                  </div>
+                </div>
+                <div className="text-[11px]" style={{ color: C.light }}>座机示例：021-12345678（须带区号）· 国际：+86-021-12345678</div>
+              </div>
+
               <div className="text-[12px] rounded-lg p-3" style={{ background: C.bg, color: C.mid }}>
-                开户流程：创建租户 → 按所选套餐开通订阅（即时生效）→ 初始化根机构 → 记录联系人信息。全程将记录审计日志。
+                开户流程：创建租户 → 按所选套餐开通订阅（即时生效）→ 初始化根机构 → 记录机构资质与联系人 → 全程审计留痕。
               </div>
             </div>
             <DialogFooter>

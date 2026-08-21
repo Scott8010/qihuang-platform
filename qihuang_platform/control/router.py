@@ -12,8 +12,8 @@
 import os
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, Depends, Query, Body, Request, Header, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, Query, Body, Request, Header, HTTPException, UploadFile as FastAPIUploadFile, File, Form
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import func
 import logging
 
@@ -29,6 +29,7 @@ from qihuang_platform.db.models import (
     Org, ApiKey, AgentDef,
     MedCase, MedReport, HealthAssessment, HealthPlan,
     EduCoachSession, EduExamRecord, ConsultAttribution,
+    UploadFile,
 )
 import bcrypt
 from qihuang_platform.rbac.service import validate_password
@@ -1718,15 +1719,60 @@ async def toggle_user_status(
 # 10. 租户管理扩展 (P2-22~27)
 # ═══════════════════════════════════════════
 
+_ONBOARD_PHONE_RE = r"^(1[3-9]\d{9}|(\+?\d{1,4}-)?0\d{2,3}-?\d{7,8})$"
+_ONBOARD_EMAIL_RE = r"^[\w.+-]+@[\w-]+(\.[\w-]+)+$"
+
+
 class TenantOnboardRequest(BaseModel):
     name: str = Field(..., description="租户标识（英文/拼音）")
     display_name: Optional[str] = Field(None, description="显示名称")
     scene: str = Field("health", description="health/medical/edu")
     plan: str = Field("free", description="套餐plan_name")
     contact_name: Optional[str] = Field(None, description="联系人姓名")
-    contact_phone: Optional[str] = Field(None, description="联系人手机")
+    contact_phone: Optional[str] = Field(None, description="联系人手机/座机(座机须带区号)")
+    contact_email: Optional[str] = Field(None, description="联系邮箱")
     module_3d: bool = Field(False, description="是否启用3D模块")
     duration_months: int = Field(12, description="订阅月数")
+    # ── 机构资质信息（2026-08-22 开户表单升级：成败在细节）──
+    address_country: Optional[str] = Field(None, description="机构地址-国家")
+    address_province: Optional[str] = Field(None, description="机构地址-省份")
+    address_city: Optional[str] = Field(None, description="机构地址-城市")
+    address_district: Optional[str] = Field(None, description="机构地址-区县")
+    org_intro: Optional[str] = Field(None, description="机构介绍")
+    license_business: Optional[str] = Field(None, description="营业执照文件URL")
+    license_business_name: Optional[str] = Field(None, description="营业执照文件名")
+    license_medical: Optional[str] = Field(None, description="医疗机构执业许可证文件URL")
+    license_medical_name: Optional[str] = Field(None, description="医疗机构执业许可证文件名")
+
+    @field_validator("contact_phone")
+    @classmethod
+    def check_phone(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or not str(v).strip():
+            return v
+        import re
+        if not re.match(_ONBOARD_PHONE_RE, str(v).strip()):
+            raise ValueError("联系电话格式不正确：手机号须为11位（1开头），座机须带区号（如 021-12345678）")
+        return str(v).strip()
+
+    @field_validator("contact_email")
+    @classmethod
+    def check_email(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or not str(v).strip():
+            return v
+        import re
+        if not re.match(_ONBOARD_EMAIL_RE, str(v).strip()):
+            raise ValueError("电子邮箱格式不正确")
+        return str(v).strip()
+
+    @model_validator(mode="after")
+    def check_medical_licenses(self):
+        """医疗场景强制要求：营业执照 + 医疗机构执业许可证 两证必传"""
+        if (self.scene or "").lower() in ("medical", "med"):
+            if not (self.license_business or "").strip():
+                raise ValueError("医疗场景必须上传营业执照")
+            if not (self.license_medical or "").strip():
+                raise ValueError("医疗场景必须上传医疗机构执业许可证")
+        return self
 
 
 @router.post("/tenants/onboard", summary="创建租户(开户一条龙)")
@@ -1742,9 +1788,22 @@ async def onboard_tenant(req: TenantOnboardRequest, admin: dict = Depends(get_cu
             id=_uid(), name=req.name,
             display_name=req.display_name or req.name,
             scene=req.scene, status="active",
-            extra={"contact_name": req.contact_name,
-                   "contact_phone": req.contact_phone,
-                   "module_3d": req.module_3d},
+            extra={
+                "contact_name": req.contact_name,
+                "contact_phone": req.contact_phone,
+                "contact_email": req.contact_email,
+                "module_3d": req.module_3d,
+                # 2026-08-22 开户表单升级：机构资质信息全量落库
+                "address_country": req.address_country,
+                "address_province": req.address_province,
+                "address_city": req.address_city,
+                "address_district": req.address_district,
+                "org_intro": req.org_intro,
+                "license_business": req.license_business,
+                "license_business_name": req.license_business_name,
+                "license_medical": req.license_medical,
+                "license_medical_name": req.license_medical_name,
+            },
         )
         db.add(tenant)
         db.flush()
@@ -1778,7 +1837,10 @@ async def onboard_tenant(req: TenantOnboardRequest, admin: dict = Depends(get_cu
             id=_uid(), tenant_id=tenant.id, user_id=admin.get("sub", "system"),
             action="TENANT_ONBOARD", target_type="TENANT", target_id=tenant.id,
             detail={"name": req.name, "scene": req.scene, "plan": req.plan,
-                    "contact_name": req.contact_name, "module_3d": req.module_3d},
+                    "contact_name": req.contact_name, "contact_email": req.contact_email,
+                    "license_business": req.license_business,
+                    "license_medical": req.license_medical,
+                    "module_3d": req.module_3d},
             success=True,
         ))
         db.commit()
@@ -1793,10 +1855,88 @@ async def onboard_tenant(req: TenantOnboardRequest, admin: dict = Depends(get_cu
             "module_3d": req.module_3d,
             "contact_name": req.contact_name,
             "contact_phone": req.contact_phone,
+            "contact_email": req.contact_email,
+            "address_country": req.address_country,
+            "address_province": req.address_province,
+            "address_city": req.address_city,
+            "address_district": req.address_district,
+            "org_intro": req.org_intro,
+            "license_business": req.license_business,
+            "license_medical": req.license_medical,
         }, message="租户开户成功")
     except Exception as e:
         db.rollback()
         return error("INTERNAL_ERROR", message=str(e))
+    finally:
+        db.close()
+
+
+# ═══════════════════════════════════════════
+# 证照上传（开户表单：营业执照/医疗机构执业许可证）
+# ═══════════════════════════════════════════
+
+def _uploads_dir() -> str:
+    """uploads 目录 = 项目根/uploads（与 qihuang_platform 包同级，避免被 rsync 全量覆盖删除）"""
+    return os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "uploads",
+    )
+
+
+@router.post("/upload", summary="上传证照文件（营业执照/医疗机构执业许可证等）")
+async def upload_license_file(
+    file: FastAPIUploadFile = File(...),
+    purpose: str = Form("license"),
+    admin: dict = Depends(get_current_admin),
+):
+    """保存到本地 uploads/ 目录，写 upload_file 表，返回可访问 URL（/admin/v1/upload/{file_id}）"""
+    try:
+        import shutil as _shutil
+        upload_dir = _uploads_dir()
+        os.makedirs(upload_dir, exist_ok=True)
+        raw_name = file.filename or "upload.bin"
+        ext = os.path.splitext(raw_name)[1][:12]
+        fid = _uid()
+        fname = f"{fid}{ext}"
+        fpath = os.path.join(upload_dir, fname)
+        with open(fpath, "wb") as f:
+            _shutil.copyfileobj(file.file, f)
+        db = SessionLocal()
+        try:
+            rec = UploadFile(
+                id=fid, tenant_id=admin.get("tenant_id") or "platform",
+                user_id=admin.get("sub"),
+                file_name=raw_name, file_type=purpose,
+                file_size=os.path.getsize(fpath),
+                cos_key=fname, cos_url=f"/admin/v1/upload/{fid}",
+                status="active",
+            )
+            db.add(rec)
+            db.commit()
+        finally:
+            db.close()
+        return success(data={
+            "file_id": fid,
+            "url": f"/admin/v1/upload/{fid}",
+            "name": raw_name,
+            "size": os.path.getsize(fpath),
+        }, message="上传成功")
+    except Exception as e:
+        return error("INTERNAL_ERROR", message=f"上传失败: {e}")
+
+
+@router.get("/upload/{file_id}", summary="查看/下载已上传证照")
+async def get_upload_file(file_id: str, admin: dict = Depends(get_current_admin)):
+    db = SessionLocal()
+    try:
+        rec = db.query(UploadFile).filter_by(id=file_id).first()
+        if not rec:
+            return error("NOT_FOUND", message="文件不存在")
+        fpath = os.path.join(_uploads_dir(), rec.cos_key or rec.id)
+        if not os.path.exists(fpath):
+            return error("NOT_FOUND", message="文件已被清理")
+        from fastapi.responses import FileResponse
+        return FileResponse(fpath, filename=rec.file_name or "file")
     finally:
         db.close()
 

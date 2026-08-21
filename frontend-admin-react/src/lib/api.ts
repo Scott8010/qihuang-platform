@@ -237,6 +237,19 @@ export async function fetchTenants(): Promise<Tenant[]> {
         module3d: t.module_3d || t.module3d || false,
         pendingPlan: t.pending_plan || null,
         pendingEffectiveDate: t.pending_effective_date || null,
+        // 2026-08-22 开户表单升级：机构资质信息透传
+        contactName: t.contact_name || "",
+        contactPhone: t.contact_phone || "",
+        contactEmail: t.contact_email || "",
+        addressCountry: t.address_country || "",
+        addressProvince: t.address_province || "",
+        addressCity: t.address_city || "",
+        addressDistrict: t.address_district || "",
+        orgIntro: t.org_intro || "",
+        licenseBusiness: t.license_business || "",
+        licenseBusinessName: t.license_business_name || "",
+        licenseMedical: t.license_medical || "",
+        licenseMedicalName: t.license_medical_name || "",
       };
     });
   } catch (e) { console.error("fetchTenants error", e); return []; }
@@ -245,6 +258,11 @@ export async function fetchTenants(): Promise<Tenant[]> {
 export async function createTenant(body: {
   name: string; scene: string; plan: string;
   contactName: string; contactPhone: string; module3d: boolean;
+  contactEmail?: string;
+  addressCountry?: string; addressProvince?: string; addressCity?: string; addressDistrict?: string;
+  orgIntro?: string;
+  licenseBusiness?: string; licenseBusinessName?: string;
+  licenseMedical?: string; licenseMedicalName?: string;
 }) {
   // 走「开户一条龙」端点：创建租户 + 根机构 + 套餐订阅 + 联系人 + 3D 开关，一次落库。
   // 旧端点 POST /admin/v1/tenants 只建租户名（套餐/联系人/3D 全被丢弃）→ 详情页套餐服务全空。
@@ -256,9 +274,39 @@ export async function createTenant(body: {
     plan: body.plan,               // plan_name 英文标识（trial/standard/professional/enterprise）
     contact_name: body.contactName,
     contact_phone: body.contactPhone,
+    contact_email: body.contactEmail || null,
     module_3d: body.module3d,
     duration_months: 12,
+    // 2026-08-22 开户表单升级：机构资质信息
+    address_country: body.addressCountry || null,
+    address_province: body.addressProvince || null,
+    address_city: body.addressCity || null,
+    address_district: body.addressDistrict || null,
+    org_intro: body.orgIntro || null,
+    license_business: body.licenseBusiness || null,
+    license_business_name: body.licenseBusinessName || null,
+    license_medical: body.licenseMedical || null,
+    license_medical_name: body.licenseMedicalName || null,
   });
+}
+
+/** POST /admin/v1/upload — 上传证照文件（multipart），返回可访问 URL（2026-08-22 开户表单） */
+export async function uploadFile(file: File, purpose = "license"): Promise<MutateResult<{ file_id: string; url: string; name: string }>> {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("purpose", purpose);
+  try {
+    const headers: Record<string, string> = {};
+    if (_token) headers["Authorization"] = `Bearer ${_token}`;
+    const res = await fetch("/admin/v1/upload", { method: "POST", headers, body: fd });
+    let j: any = {};
+    try { j = await res.json(); } catch { /* 空响应体 */ }
+    if (res.ok && j?.code === 0) return { ok: true, msg: j?.msg || "上传成功", data: j.data };
+    const msg = j?.msg || j?.detail?.message || `上传失败（HTTP ${res.status}）`;
+    return { ok: false, msg };
+  } catch (e: any) {
+    return { ok: false, msg: e?.message || "上传异常" };
+  }
 }
 
 /** DELETE /admin/v1/tenants/{id} — 软删除租户（后端记录审计日志） */

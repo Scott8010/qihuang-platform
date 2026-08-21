@@ -148,7 +148,18 @@ async def list_tenants(
             # 联系人/3D模块：开户一条龙（/tenants/onboard）落在 Tenant.extra
             "contact_name": (t.extra or {}).get("contact_name", ""),
             "contact_phone": (t.extra or {}).get("contact_phone", ""),
+            "contact_email": (t.extra or {}).get("contact_email", ""),
             "module_3d": bool((t.extra or {}).get("module_3d")),
+            # 2026-08-22 开户表单升级：机构资质信息透传（详情页展示）
+            "address_country": (t.extra or {}).get("address_country", ""),
+            "address_province": (t.extra or {}).get("address_province", ""),
+            "address_city": (t.extra or {}).get("address_city", ""),
+            "address_district": (t.extra or {}).get("address_district", ""),
+            "org_intro": (t.extra or {}).get("org_intro", ""),
+            "license_business": (t.extra or {}).get("license_business", ""),
+            "license_business_name": (t.extra or {}).get("license_business_name", ""),
+            "license_medical": (t.extra or {}).get("license_medical", ""),
+            "license_medical_name": (t.extra or {}).get("license_medical_name", ""),
             "pending_plan": (pend_map.get(t.id) or {}).get("pending_plan") or None,
             "pending_effective_date": (pend_map.get(t.id) or {}).get("pending_effective_date") or None,
         })

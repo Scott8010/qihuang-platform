@@ -51,6 +51,12 @@ export interface Tenant {
   usedCalls: number; quotaCalls: number; status: string; expires: string; module3d: boolean;
   pendingPlan?: string | null;          // 待生效预约的目标套餐
   pendingEffectiveDate?: string | null; // 待生效日期（YYYY-MM-DD）
+  // 2026-08-22 开户表单升级：机构资质信息（开户一条龙落 tenant.extra，列表接口透传）
+  contactName?: string; contactPhone?: string; contactEmail?: string;
+  addressCountry?: string; addressProvince?: string; addressCity?: string; addressDistrict?: string;
+  orgIntro?: string;
+  licenseBusiness?: string; licenseBusinessName?: string;
+  licenseMedical?: string; licenseMedicalName?: string;
 }
 
 export interface RolePermission {

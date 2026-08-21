@@ -61,3 +61,104 @@ def test_subscription_visible(client, ensure_admin_in_db, admin_headers, onboard
     subs = [s for s in (items or []) if s.get("tenant_id") == onboard_resp["id"]]
     assert subs, "订阅列表应包含新租户的订阅"
     assert any(s.get("status") == "active" for s in subs), "订阅应为 active"
+
+
+# ═══════════════════════════════════════════════════════════
+# 2026-08-22 开户表单升级：机构资质字段 + 医疗两证必传 + 电话格式校验
+# ═══════════════════════════════════════════════════════════
+
+def test_medical_scene_requires_both_licenses(client, ensure_admin_in_db, admin_headers):
+    """医疗场景（medical）不传两证 → 422 校验失败"""
+    r = client.post("/admin/v1/tenants/onboard", json={
+        "name": f"t_med_{uuid.uuid4().hex[:8]}",
+        "display_name": "无证医疗测试",
+        "scene": "medical",
+        "plan": "standard",
+        "contact_name": "张三",
+        "contact_phone": "13800000001",
+    }, headers=admin_headers)
+    assert r.status_code == 422, f"医疗无两证应 422，实际 {r.status_code}: {r.text[:200]}"
+    body = r.json()
+    detail = body.get("detail") or {}
+    msgs = " ".join(str(d.get("msg", "")) for d in (detail if isinstance(detail, list) else [detail]))
+    assert "营业执照" in msgs or "执业许可证" in msgs, f"校验信息应提示两证缺失: {msgs}"
+
+
+def test_medical_scene_with_licenses_ok(client, ensure_admin_in_db, admin_headers):
+    """医疗场景带两证 + 完整资质字段 → 开户成功且字段落库"""
+    r = client.post("/admin/v1/tenants/onboard", json={
+        "name": f"t_medok_{uuid.uuid4().hex[:8]}",
+        "display_name": "持证医疗测试",
+        "scene": "medical",
+        "plan": "standard",
+        "contact_name": "李四",
+        "contact_phone": "021-12345678",
+        "contact_email": "lisi@example.com",
+        "address_country": "中国",
+        "address_province": "上海市",
+        "address_city": "上海市",
+        "address_district": "浦东新区",
+        "org_intro": "专业中医馆，持证经营",
+        "license_business": "/admin/v1/upload/abc123",
+        "license_business_name": "营业执照.jpg",
+        "license_medical": "/admin/v1/upload/def456",
+        "license_medical_name": "医疗机构执业许可证.jpg",
+        "module_3d": True,
+        "duration_months": 12,
+    }, headers=admin_headers)
+    assert r.status_code == 200, f"医疗带两证应成功: {r.text[:300]}"
+    data = r.json()["data"]
+    assert data["contact_email"] == "lisi@example.com"
+    assert data["license_business"] == "/admin/v1/upload/abc123"
+    assert data["license_medical"] == "/admin/v1/upload/def456"
+
+    # 列表接口应透传资质字段
+    rows = client.get("/admin/v1/tenants", headers=admin_headers).json()["data"]
+    me = next((t for t in rows if t["id"] == data["id"]), None)
+    assert me, "新建租户应出现在列表"
+    assert me["address_province"] == "上海市", f"省份应下发: {me.get('address_province')!r}"
+    assert me["address_district"] == "浦东新区"
+    assert me["contact_email"] == "lisi@example.com"
+    assert me["license_medical"] == "/admin/v1/upload/def456"
+
+
+def test_phone_landline_without_area_code_rejected(client, ensure_admin_in_db, admin_headers):
+    """座机不带区号 → 422；手机号合法 → 通过"""
+    bad = client.post("/admin/v1/tenants/onboard", json={
+        "name": f"t_phone_{uuid.uuid4().hex[:8]}",
+        "display_name": "电话校验测试",
+        "scene": "health",
+        "plan": "standard",
+        "contact_name": "王五",
+        "contact_phone": "12345678",  # 无区号座机
+    }, headers=admin_headers)
+    assert bad.status_code == 422, f"无区号座机应 422: {bad.text[:200]}"
+
+    good = client.post("/admin/v1/tenants/onboard", json={
+        "name": f"t_phoneok_{uuid.uuid4().hex[:8]}",
+        "display_name": "电话校验通过",
+        "scene": "health",
+        "plan": "standard",
+        "contact_name": "王五",
+        "contact_phone": "+86-021-12345678",  # 国际前缀座机
+    }, headers=admin_headers)
+    assert good.status_code == 200, f"国际前缀座机应通过: {good.text[:200]}"
+
+
+def test_upload_endpoint_stores_file(client, ensure_admin_in_db, admin_headers):
+    """POST /admin/v1/upload 应保存文件并返回可访问 URL"""
+    r = client.post(
+        "/admin/v1/upload",
+        files={"file": ("营业执照.jpg", b"\xff\xd8\xff\xe0fake-jpeg", "image/jpeg")},
+        data={"purpose": "license"},
+        headers=admin_headers,
+    )
+    assert r.status_code == 200, f"上传应成功: {r.text[:300]}"
+    data = r.json()["data"]
+    assert data["file_id"], "应返回 file_id"
+    assert data["url"].startswith("/admin/v1/upload/"), f"应返回可访问 URL: {data['url']}"
+
+    # 下载端点应能取回文件
+    dl = client.get(data["url"], headers=admin_headers)
+    assert dl.status_code == 200, f"下载应成功: {dl.status_code}"
+    assert dl.content == b"\xff\xd8\xff\xe0fake-jpeg", "文件内容应一致"
