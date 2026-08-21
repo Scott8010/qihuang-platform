@@ -20,6 +20,7 @@ from qihuang_platform.agent.clients.vision import (
     normalize_vision_json,
     vision_chat_json,
 )
+from qihuang_platform.agent.tongue.rules import derive_syndrome_hints
 
 # ───────────────── 舌象结构化分析 prompt ─────────────────
 # 契约口径（tongue_face_analysis.md §3.5，颐掌柜 2026-08-21 升级）：
@@ -63,15 +64,23 @@ FACE_VISION_PROMPT = (
 
 _ENGINE_NAME = "qwen-vl-plus"  # 生产实际模型，engine 字段如实回显
 
+# 视觉模型常输出的变体 → 契约枚举归一（2026-08-21 探针实测：qwen 会输出「厚苔」而枚举为「厚」）
+_ENUM_ALIASES = {
+    "厚苔": "厚", "薄苔": "薄", "黄苔": "黄", "白苔": "白",
+    "有腻苔": "腻", "腻苔": "腻", "有剥脱": "剥脱", "有腐苔": "腐苔",
+}
+
 
 def _norm_field(value, default="未识别") -> str:
-    """字段取值归一：去空白/引号，空值补占位。"""
+    """字段取值归一：去空白/引号，空值补占位，变体映射到契约枚举。"""
     if value is None:
         return default
     if isinstance(value, bool):
         return "有" if value else "无"
     s = str(value).strip().strip('"').strip("'")
-    return s or default
+    if not s:
+        return default
+    return _ENUM_ALIASES.get(s, s)
 
 
 def _normalize_tongue(content: str) -> dict:
@@ -175,9 +184,12 @@ def analyze_tongue(
             except Exception:
                 face = None  # 面色图为可选增强，失败不阻断舌象主结果
 
-        # combined_syndrome：以舌象证候提示为主，叠加 profile 提供的信息做保守融合
-        hints = list(tongue.get("syndrome_hints") or [])
-        combined = hints
+        # Layer2：标签 → 健康状态倾向（规则兜底 P1，协助单 T2）。
+        # 视觉模型自报 hints 实测为万能牌（探针 2026-08-21：全图输出脾虚湿盛/湿热内蕴），
+        # 不再采用；规则输出如实标 source=rule，健康舌 → 空（不硬编结论）。
+        rule_hints = derive_syndrome_hints(tongue)
+        tongue["syndrome_hints"] = rule_hints
+        combined = [h["name"] for h in rule_hints]
         return {
             "engine": model,
             "mode": "vision",
