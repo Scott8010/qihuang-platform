@@ -10,7 +10,7 @@ import {
 import { BookOpenCheck, ShieldAlert, Search, Check, X, Bell, Loader2, Eye, Sparkles } from "lucide-react";
 import { C } from "@/lib/types";
 import type { TodoReviewItem, SensitiveWordItem } from "@/lib/types";
-import { fetchReviews, fetchSensitiveWords, reviewAction, refineReview } from "@/lib/api";
+import { fetchReviews, fetchSensitiveWords, addSensitiveWord, deleteSensitiveWord, reviewAction, refineReview } from "@/lib/api";
 
 /* ═══════════════════════════════════════════
    内容管控 — 真实接口驱动
@@ -76,6 +76,36 @@ export default function Content() {
   const [busyId, setBusyId] = useState<string>("");
   const [refiningId, setRefiningId] = useState<string>("");
   const [detail, setDetail] = useState<TodoReviewItem | null>(null);
+  // 敏感词新增表单
+  const [showAdd, setShowAdd] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [nw, setNw] = useState({ word: "", scene: "GLOBAL", level: "warn", replacement: "" });
+
+  const loadWords = () => fetchSensitiveWords().then(setWords);
+
+  const handleAddWord = async () => {
+    const w = nw.word.trim();
+    if (!w) return;
+    setAdding(true);
+    try {
+      const ok = await addSensitiveWord(w, nw.scene, nw.level, nw.replacement.trim() || undefined);
+      if (ok) {
+        setShowAdd(false);
+        setNw({ word: "", scene: "GLOBAL", level: "warn", replacement: "" });
+        await loadWords();
+      } else {
+        alert("新增失败，请检查词条是否已存在或字段是否合法");
+      }
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleDeleteWord = async (w: SensitiveWordItem) => {
+    if (!window.confirm(`确认删除敏感词「${w.word}」？`)) return;
+    if (await deleteSensitiveWord(w.id)) await loadWords();
+    else alert("删除失败");
+  };
 
   const loadReviews = () => fetchReviews().then(setReviews);
 
@@ -285,12 +315,64 @@ export default function Content() {
                 <ShieldAlert className="w-4 h-4" style={{ color: "#B03A2E" }} />
                 <span className="text-[14px] font-medium" style={{ color: C.ink }}>敏感词与合规词库</span>
               </div>
-              <Button size="sm" style={{ background: C.primary }}>+ 新增词条</Button>
+              <Button size="sm" style={{ background: C.primary }} onClick={() => setShowAdd(!showAdd)}>
+                {showAdd ? "收起" : "+ 新增词条"}
+              </Button>
             </div>
+            {showAdd && (
+              <div className="mb-4 p-3 rounded border flex flex-wrap items-end gap-2" style={{ borderColor: C.border, background: "#F8FAF9" }}>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[11px]" style={{ color: C.mid }}>词条 *</span>
+                  <input
+                    value={nw.word}
+                    onChange={(e) => setNw({ ...nw, word: e.target.value })}
+                    placeholder="如：根治、包治百病"
+                    className="h-8 px-2 text-[13px] rounded border outline-none"
+                    style={{ borderColor: C.border, width: 180 }}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[11px]" style={{ color: C.mid }}>生效场景</span>
+                  <select
+                    value={nw.scene}
+                    onChange={(e) => setNw({ ...nw, scene: e.target.value })}
+                    className="h-8 px-2 text-[13px] rounded border outline-none bg-white"
+                    style={{ borderColor: C.border }}
+                  >
+                    {["GLOBAL", "HEALTH", "MED", "EDU"].map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[11px]" style={{ color: C.mid }}>等级</span>
+                  <select
+                    value={nw.level}
+                    onChange={(e) => setNw({ ...nw, level: e.target.value })}
+                    className="h-8 px-2 text-[13px] rounded border outline-none bg-white"
+                    style={{ borderColor: C.border }}
+                  >
+                    <option value="warn">warn</option>
+                    <option value="block">block</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[11px]" style={{ color: C.mid }}>替换为（可选）</span>
+                  <input
+                    value={nw.replacement}
+                    onChange={(e) => setNw({ ...nw, replacement: e.target.value })}
+                    placeholder="留空 = 拦截"
+                    className="h-8 px-2 text-[13px] rounded border outline-none"
+                    style={{ borderColor: C.border, width: 140 }}
+                  />
+                </div>
+                <Button size="sm" style={{ background: C.primary }} disabled={!nw.word.trim() || adding} onClick={handleAddWord}>
+                  {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}提交
+                </Button>
+              </div>
+            )}
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="text-left text-[11px]" style={{ color: C.light }}>
-                  {["词条", "生效场景", "等级", "命中策略", "替换为", "启用"].map((h) => (
+                  {["词条", "生效场景", "等级", "命中策略", "替换为", "启用", ""].map((h) => (
                     <th key={h} className="pb-2 font-normal">{h}</th>
                   ))}
                 </tr>
@@ -319,6 +401,15 @@ export default function Content() {
                             style={{ left: w.status ? 18 : 2 }}
                           />
                         </div>
+                      </td>
+                      <td className="py-2.5">
+                        <button
+                          className="text-[12px] hover:underline"
+                          style={{ color: "#B03A2E" }}
+                          onClick={() => handleDeleteWord(w)}
+                        >
+                          删除
+                        </button>
                       </td>
                     </tr>
                   );

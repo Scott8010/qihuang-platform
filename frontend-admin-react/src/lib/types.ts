@@ -240,6 +240,7 @@ export interface SensitiveWordItem {
 
 export interface ServiceItem {
   name: string; status: string; latency: string; uptime: string; ok: boolean;
+  is_demo?: boolean;
 }
 
 /** 对应 GET /admin/v1/monitor/llm-status → data.providers[]

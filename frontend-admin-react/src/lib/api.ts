@@ -654,6 +654,26 @@ export async function fetchSensitiveWords(): Promise<SensitiveWordItem[]> {
   } catch { return []; }
 }
 
+/** POST /admin/v1/content/words — 新增敏感词（scene: HEALTH/MED/EDU/GLOBAL；level: warn/block） */
+export async function addSensitiveWord(
+  word: string, scene: string, level: string, replacement?: string,
+): Promise<boolean> {
+  try {
+    await mutate("POST", "/admin/v1/content/words", {
+      word, scene, level, replacement: replacement || null,
+    });
+    return true;
+  } catch (e) { console.error("addSensitiveWord", e); return false; }
+}
+
+/** DELETE /admin/v1/content/words/{id} — 删除敏感词 */
+export async function deleteSensitiveWord(id: string): Promise<boolean> {
+  try {
+    await mutate("DELETE", `/admin/v1/content/words/${encodeURIComponent(id)}`);
+    return true;
+  } catch (e) { console.error("deleteSensitiveWord", e); return false; }
+}
+
 // ═══ 监控 ═══
 
 export async function fetchServices(): Promise<ServiceItem[]> {
@@ -666,6 +686,7 @@ export async function fetchServices(): Promise<ServiceItem[]> {
       latency: s.latency || "—",
       uptime: s.uptime || "—",
       ok: s.ok !== undefined ? s.ok : true,
+      is_demo: s.is_demo !== undefined ? !!s.is_demo : true,
     }));
   } catch { return []; }
 }

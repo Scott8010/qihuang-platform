@@ -49,6 +49,22 @@ export default function Billing() {
   const receivable = bills.reduce((a, b) => a + (b.amount || 0), 0);
   const sceneTotalCalls = scenes.reduce((a, s) => a + (s.calls || 0), 0);
 
+  /** 导出账单为本地 CSV（对账单） */
+  const exportBillsCsv = () => {
+    const head = ["账单号", "套餐 / 租户", "账期", "调用量", "Token", "金额(元)", "状态"];
+    const rows = bills.map((b) => [
+      b.id, `${b.tenant}`, b.period, b.calls, b.tokens, String(b.amount ?? 0), b.status || "",
+    ]);
+    const csv = "\uFEFF" + [head, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `对账单_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const kpiCards = [
     { label: "本月总调用", value: `${wan(stats.totalCalls)} 次`, sub: "来自网关计量埋点" },
     { label: "本月 Token 消耗", value: wan(stats.totalTokens), sub: "共识四模型合计" },
@@ -258,7 +274,7 @@ export default function Billing() {
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[14px] font-medium" style={{ color: C.ink }}>账单管理</span>
-            <Button variant="outline" size="sm" style={{ borderColor: C.border, color: C.primary }}>
+            <Button variant="outline" size="sm" style={{ borderColor: C.border, color: C.primary }} onClick={exportBillsCsv}>
               <Download className="w-3.5 h-3.5 mr-1" /> 导出对账单
             </Button>
           </div>

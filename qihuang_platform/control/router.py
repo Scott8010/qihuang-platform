@@ -1038,12 +1038,14 @@ async def llm_status(admin: dict = Depends(get_current_admin)):
 @router.get("/monitor/services", summary="服务健康列表")
 async def monitor_services(admin: dict = Depends(get_current_admin)):
     """返回所有微服务/依赖的健康状态"""
+    # 当前为演示态健康快照（is_demo=true 供前端诚实标注"演示"徽标）；
+    # 接入真实健康探针（进程存活/端口连通/心跳）后置 is_demo=false。
     services = [
-        {"name": "API 网关", "status": "运行正常", "latency": "42ms", "uptime": "99.98%", "ok": True},
-        {"name": "中台应用（FastAPI）", "status": "运行正常", "latency": "186ms", "uptime": "99.95%", "ok": True},
-        {"name": "Neo4j 图谱库", "status": "运行正常", "latency": "12ms", "uptime": "99.99%", "ok": True},
-        {"name": "PostgreSQL 业务库", "status": "运行正常", "latency": "8ms", "uptime": "99.99%", "ok": True},
-        {"name": "LLM 共识集群", "status": "DeepSeek 备用切换中", "latency": "1240ms", "uptime": "99.91%", "ok": False},
+        {"name": "API 网关", "status": "运行正常", "latency": "42ms", "uptime": "99.98%", "ok": True, "is_demo": True},
+        {"name": "中台应用（FastAPI）", "status": "运行正常", "latency": "186ms", "uptime": "99.95%", "ok": True, "is_demo": True},
+        {"name": "Neo4j 图谱库", "status": "运行正常", "latency": "12ms", "uptime": "99.99%", "ok": True, "is_demo": True},
+        {"name": "PostgreSQL 业务库", "status": "运行正常", "latency": "8ms", "uptime": "99.99%", "ok": True, "is_demo": True},
+        {"name": "LLM 共识集群", "status": "DeepSeek 备用切换中", "latency": "1240ms", "uptime": "99.91%", "ok": False, "is_demo": True},
     ]
     return success(data={"services": services})
 
