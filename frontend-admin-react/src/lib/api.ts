@@ -243,15 +243,21 @@ export async function fetchTenants(): Promise<Tenant[]> {
 }
 
 export async function createTenant(body: {
-  name: string; scene: string; plan: string; contact: string; module3d: boolean;
+  name: string; scene: string; plan: string;
+  contactName: string; contactPhone: string; module3d: boolean;
 }) {
-  return post("/admin/v1/tenants", {
-    name: body.name,
-    code: "T-" + Date.now().toString(36).toUpperCase(),
-    scene: body.scene,
-    plan: body.plan,
-    contact_name: body.contact,
+  // 走「开户一条龙」端点：创建租户 + 根机构 + 套餐订阅 + 联系人 + 3D 开关，一次落库。
+  // 旧端点 POST /admin/v1/tenants 只建租户名（套餐/联系人/3D 全被丢弃）→ 详情页套餐服务全空。
+  const sceneMap: Record<string, string> = { MED: "medical", HEALTH: "health", EDU: "edu" };
+  return post("/admin/v1/tenants/onboard", {
+    name: "T" + Date.now().toString(36).toUpperCase(), // 租户标识（唯一）
+    display_name: body.name,
+    scene: sceneMap[body.scene] || "health",
+    plan: body.plan,               // plan_name 英文标识（trial/standard/professional/enterprise）
+    contact_name: body.contactName,
+    contact_phone: body.contactPhone,
     module_3d: body.module3d,
+    duration_months: 12,
   });
 }
 
@@ -456,6 +462,10 @@ export async function fetchPlans(): Promise<PlanItem[]> {
         id: p.id || "",
         planName: p.plan_name || "",
         name: p.display_name || p.plan_name || "",
+        desc: p.description || "",
+        priceCents: p.price_cents ?? 0,
+        monthCalls: p.month_calls ?? 0,
+        status: p.status || "active",
         features: {
           module_3d: !!f.module_3d,
           module_agent: !!f.module_agent,

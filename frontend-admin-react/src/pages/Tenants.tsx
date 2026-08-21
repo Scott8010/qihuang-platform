@@ -14,9 +14,9 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Plus, Search, Boxes, Loader2, Clock } from "lucide-react";
 import { C, sceneMap, statusMap } from "@/lib/types";
-import { fetchTenants, createTenant, deleteTenant } from "@/lib/api";
+import { fetchTenants, fetchPlans, createTenant, deleteTenant } from "@/lib/api";
 import { toast } from "sonner";
-import type { Tenant } from "@/lib/types";
+import type { Tenant, PlanItem } from "@/lib/types";
 import TenantDetail from "./TenantDetail";
 
 const tabs = [
@@ -33,7 +33,25 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
   const [kw, setKw] = useState("");
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<Tenant | null>(null);
-  const [form, setForm] = useState({ name: "", scene: "HEALTH", plan: "标准版", contact: "", m3d: false });
+  const [plans, setPlans] = useState<PlanItem[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [form, setForm] = useState({
+    name: "", scene: "HEALTH", plan: "standard",
+    contactName: "", contactPhone: "", m3d: false,
+  });
+
+  // 打开弹窗时拉真实套餐库（价格/配额/说明一并展示，不硬编码）
+  useEffect(() => {
+    if (!open || plans.length) return;
+    fetchPlans().then((ps) => {
+      const active = ps.filter((p) => p.status !== "disabled");
+      setPlans(active);
+      if (active.length && !active.some((p) => p.planName === form.plan)) {
+        setForm((f) => ({ ...f, plan: active[0].planName }));
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // 删除
   const [delTenant, setDelTenant] = useState<Tenant | null>(null);
@@ -67,17 +85,27 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
   );
 
   const create = async () => {
-    if (!form.name.trim()) return;
-    await createTenant({
-      name: form.name,
+    if (!form.name.trim()) { toast.error("请填写租户名称"); return; }
+    if (!form.contactName.trim()) { toast.error("请填写联系人姓名"); return; }
+    if (!form.contactPhone.trim()) { toast.error("请填写联系电话"); return; }
+    setSubmitting(true);
+    const r: any = await createTenant({
+      name: form.name.trim(),
       scene: form.scene,
       plan: form.plan,
-      contact: form.contact,
+      contactName: form.contactName.trim(),
+      contactPhone: form.contactPhone.trim(),
       module3d: form.m3d,
     });
-    setOpen(false);
-    setForm({ name: "", scene: "HEALTH", plan: "标准版", contact: "", m3d: false });
-    await load();
+    setSubmitting(false);
+    if (r?.code === 0) {
+      toast.success(`租户 ${form.name} 开户成功：套餐已生效、根机构已创建`);
+      setOpen(false);
+      setForm({ name: "", scene: "HEALTH", plan: "standard", contactName: "", contactPhone: "", m3d: false });
+      await load();
+    } else {
+      toast.error(r?.message || r?.msg || "开户失败，请重试");
+    }
   };
 
   if (detail) return <TenantDetail tenant={detail} onBack={() => setDetail(null)} />;
@@ -118,13 +146,13 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
               <Plus className="w-4 h-4 mr-1" /> 新建租户开户
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[460px]">
+          <DialogContent className="sm:max-w-[520px]">
             <DialogHeader>
               <DialogTitle style={{ color: C.primary }}>新建租户开户</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-2 text-[13px]">
               <div className="space-y-1.5">
-                <Label>租户名称（合同主体）</Label>
+                <Label>租户名称（合同主体）<span style={{ color: "#B03A2E" }}> *</span></Label>
                 <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="如：某某中医馆连锁有限公司" />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -144,14 +172,37 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
                   <Select value={form.plan} onValueChange={(v) => setForm({ ...form, plan: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {["体验版", "标准版", "专业版", "企业版"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                      {plans.length === 0 && <div className="px-3 py-2 text-[12px]" style={{ color: C.light }}>套餐加载中…</div>}
+                      {plans.map((p) => (
+                        <SelectItem key={p.planName} value={p.planName}>
+                          {p.name}（¥{(p.priceCents / 100).toFixed(0)}/月 · {p.monthCalls.toLocaleString()}次/月）
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label>商务联系人</Label>
-                <Input value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} placeholder="姓名 / 电话" />
+              {/* 所选套餐说明（从套餐库实时读取，非硬编码） */}
+              {(() => {
+                const sel = plans.find((p) => p.planName === form.plan);
+                if (!sel) return null;
+                return (
+                  <div className="rounded-lg p-3 text-[12px] leading-relaxed" style={{ background: C.soft, color: C.mid }}>
+                    <span className="font-medium" style={{ color: C.ink }}>{sel.name}：</span>
+                    {sel.desc || "—"}
+                    <div className="mt-1" style={{ color: C.light }}>订阅期 12 个月，到期后可在「计量计费」页续费或变更套餐。</div>
+                  </div>
+                );
+              })()}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>联系人姓名<span style={{ color: "#B03A2E" }}> *</span></Label>
+                  <Input value={form.contactName} onChange={(e) => setForm({ ...form, contactName: e.target.value })} placeholder="商务对接人" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>联系电话<span style={{ color: "#B03A2E" }}> *</span></Label>
+                  <Input value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} placeholder="手机或座机" />
+                </div>
               </div>
               <div className="flex items-center justify-between rounded-lg p-3" style={{ background: "#FBF4E4" }}>
                 <div className="flex items-center gap-2">
@@ -164,12 +215,14 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
                 <Switch checked={form.m3d} onCheckedChange={(v) => setForm({ ...form, m3d: v })} />
               </div>
               <div className="text-[12px] rounded-lg p-3" style={{ background: C.bg, color: C.mid }}>
-                开户流程：创建租户 → 初始化机构与角色模板 → 签发租户管理员账号与 API Key → 启用。全程将记录审计日志。
+                开户流程：创建租户 → 按所选套餐开通订阅（即时生效）→ 初始化根机构 → 记录联系人信息。全程将记录审计日志。
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpen(false)}>取消</Button>
-              <Button style={{ background: C.primary }} onClick={create}>确认开户</Button>
+              <Button style={{ background: C.primary }} onClick={create} disabled={submitting}>
+                {submitting && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}确认开户
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

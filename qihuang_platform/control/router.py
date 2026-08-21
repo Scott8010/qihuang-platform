@@ -1723,6 +1723,7 @@ class TenantOnboardRequest(BaseModel):
     display_name: Optional[str] = Field(None, description="显示名称")
     scene: str = Field("health", description="health/medical/edu")
     plan: str = Field("free", description="套餐plan_name")
+    contact_name: Optional[str] = Field(None, description="联系人姓名")
     contact_phone: Optional[str] = Field(None, description="联系人手机")
     module_3d: bool = Field(False, description="是否启用3D模块")
     duration_months: int = Field(12, description="订阅月数")
@@ -1741,7 +1742,9 @@ async def onboard_tenant(req: TenantOnboardRequest, admin: dict = Depends(get_cu
             id=_uid(), name=req.name,
             display_name=req.display_name or req.name,
             scene=req.scene, status="active",
-            extra={"contact_phone": req.contact_phone, "module_3d": req.module_3d},
+            extra={"contact_name": req.contact_name,
+                   "contact_phone": req.contact_phone,
+                   "module_3d": req.module_3d},
         )
         db.add(tenant)
         db.flush()
@@ -1775,7 +1778,7 @@ async def onboard_tenant(req: TenantOnboardRequest, admin: dict = Depends(get_cu
             id=_uid(), tenant_id=tenant.id, user_id=admin.get("sub", "system"),
             action="TENANT_ONBOARD", target_type="TENANT", target_id=tenant.id,
             detail={"name": req.name, "scene": req.scene, "plan": req.plan,
-                    "module_3d": req.module_3d},
+                    "contact_name": req.contact_name, "module_3d": req.module_3d},
             success=True,
         ))
         db.commit()
@@ -1788,6 +1791,8 @@ async def onboard_tenant(req: TenantOnboardRequest, admin: dict = Depends(get_cu
             "subscription_id": sub.id,
             "end_date": end.isoformat(),
             "module_3d": req.module_3d,
+            "contact_name": req.contact_name,
+            "contact_phone": req.contact_phone,
         }, message="租户开户成功")
     except Exception as e:
         db.rollback()

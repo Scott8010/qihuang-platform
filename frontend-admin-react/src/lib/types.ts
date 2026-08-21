@@ -164,6 +164,10 @@ export interface PlanItem {
   planName: string;      // trial / standard / professional / enterprise
   name: string;          // 体验版 / 标准版 / ...
   features: PlanFeatures;
+  desc: string;          // 套餐说明（开户表单展示）
+  priceCents: number;    // 月价（分）
+  monthCalls: number;    // 月调用量配额
+  status: string;        // active / disabled
 }
 
 /** 对应 GET /admin/v1/tenants-extended → data.items[]（套餐升级页用） */

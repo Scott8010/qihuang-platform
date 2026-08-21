@@ -111,7 +111,8 @@ async def list_tenants(
     subs = db.query(Subscription).filter(Subscription.status == "active").all()
     plan_ids = {s.plan_id for s in subs}
     plans = {p.id: p for p in db.query(Plan).filter(Plan.id.in_(plan_ids)).all()} if plan_ids else {}
-    sub_map = {s.tenant_id: plans.get(s.plan_id) for s in subs}
+    # 保留订阅对象本身：end_date 用于列表「到期时间」列（此前不下发 → 永远显示 "—"）
+    sub_map = {s.tenant_id: {"plan": plans.get(s.plan_id), "sub": s} for s in subs}
 
     # 待生效的预约升级（status=scheduled 且 start_date 在未来），批量避免 N+1
     from datetime import datetime as _dt, timezone as _tz
@@ -131,15 +132,27 @@ async def list_tenants(
             "pending_effective_date": s.start_date.strftime("%Y-%m-%d") if s.start_date else None,
         }
 
-    return success([{
-        "id": t.id, "name": t.name, "display_name": t.display_name,
-        "scene": t.scene, "status": t.status, "created_at": t.created_at.isoformat() if t.created_at else None,
-        "plan_id": (sub_map.get(t.id).id if sub_map.get(t.id) else ""),
-        "plan_name": (sub_map.get(t.id).plan_name if sub_map.get(t.id) else ""),
-        "plan": ((sub_map.get(t.id).display_name or sub_map.get(t.id).plan_name) if sub_map.get(t.id) else ""),
-        "pending_plan": (pend_map.get(t.id) or {}).get("pending_plan") or None,
-        "pending_effective_date": (pend_map.get(t.id) or {}).get("pending_effective_date") or None,
-    } for t in tenants])
+    rows = []
+    for t in tenants:
+        entry = sub_map.get(t.id) or {}
+        plan = entry.get("plan")  # Plan ORM 对象或 None
+        sub = entry.get("sub")    # Subscription ORM 对象或 None
+        rows.append({
+            "id": t.id, "name": t.name, "display_name": t.display_name,
+            "scene": t.scene, "status": t.status, "created_at": t.created_at.isoformat() if t.created_at else None,
+            "plan_id": plan.id if plan else "",
+            "plan_name": plan.plan_name if plan else "",
+            "plan": (plan.display_name or plan.plan_name) if plan else "",
+            # 到期时间：active 订阅的 end_date（此前缺 → 列表到期列恒空）
+            "expires": sub.end_date.strftime("%Y-%m-%d") if (sub and sub.end_date) else "",
+            # 联系人/3D模块：开户一条龙（/tenants/onboard）落在 Tenant.extra
+            "contact_name": (t.extra or {}).get("contact_name", ""),
+            "contact_phone": (t.extra or {}).get("contact_phone", ""),
+            "module_3d": bool((t.extra or {}).get("module_3d")),
+            "pending_plan": (pend_map.get(t.id) or {}).get("pending_plan") or None,
+            "pending_effective_date": (pend_map.get(t.id) or {}).get("pending_effective_date") or None,
+        })
+    return success(rows)
 
 
 @rbac_router.get("/tenants/{tenant_id}")
