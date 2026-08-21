@@ -39,7 +39,8 @@ def test_onboard_returns_plan_and_subscription(onboard_resp):
     assert onboard_resp["subscription_id"], "开户必须创建订阅"
     assert onboard_resp["end_date"], "订阅必须有到期时间"
     assert onboard_resp["contact_name"] == "回归测试联系人"
-    assert onboard_resp["module_3d"] is True
+    # 2026-08-22 老黄拍板：3D 严格按套餐门槛——标准版不含，传 true 也强制 false
+    assert onboard_resp["module_3d"] is False
 
 
 def test_list_tenants_carries_plan_and_extras(client, ensure_admin_in_db, admin_headers, onboard_resp):
@@ -51,7 +52,8 @@ def test_list_tenants_carries_plan_and_extras(client, ensure_admin_in_db, admin_
     assert me["expires"], "到期时间应下发"
     assert me["contact_name"] == "回归测试联系人"
     assert me["contact_phone"] == "13800000000"
-    assert me["module_3d"] is True
+    # 2026-08-22 套餐门槛：标准版强制 module_3d=false
+    assert me["module_3d"] is False
 
 
 def test_subscription_visible(client, ensure_admin_in_db, admin_headers, onboard_resp):
@@ -211,3 +213,43 @@ def test_address_detail_supported(client, ensure_admin_in_db, admin_headers):
         "address_detail": "详" * 201,
     }, headers=admin_headers)
     assert over.status_code == 422, f"详细地址 201 字应 422: {over.text[:200]}"
+
+
+# ═══════════════════════════════════════════════════════════
+# 2026-08-22 老黄拍板：3D 岐黄三境严格套餐门槛（体验/标准=灰，专业/企业=亮）
+# ═══════════════════════════════════════════════════════════
+
+def test_module_3d_forced_by_plan(client, ensure_admin_in_db, admin_headers):
+    """套餐门槛强制：standard 传 module_3d=True → 落库 False；professional 传 False → 落库 True"""
+    # ① 标准版 + 传 true → 强制 false
+    r1 = client.post("/admin/v1/tenants/onboard", json={
+        "name": f"t_3dstd_{uuid.uuid4().hex[:8]}",
+        "display_name": "标准版3D门控测试",
+        "scene": "health", "plan": "standard",
+        "contact_name": "钱八", "contact_phone": "13800000006",
+        "module_3d": True, "duration_months": 12,
+    }, headers=admin_headers)
+    assert r1.status_code == 200, f"标准版开户应成功: {r1.text[:300]}"
+    d1 = r1.json()["data"]
+    assert d1["module_3d"] is False, f"标准版传入 true 也必须强制 false，实际: {d1['module_3d']!r}"
+
+    # 列表接口同样应为 false
+    rows = client.get("/admin/v1/tenants", headers=admin_headers).json()["data"]
+    me1 = next((t for t in rows if t["id"] == d1["id"]), None)
+    assert me1 and me1["module_3d"] is False, "标准版租户列表 module_3d 应为 False"
+
+    # ② 专业版 + 传 false → 强制 true
+    r2 = client.post("/admin/v1/tenants/onboard", json={
+        "name": f"t_3dpro_{uuid.uuid4().hex[:8]}",
+        "display_name": "专业版3D门控测试",
+        "scene": "health", "plan": "professional",
+        "contact_name": "钱九", "contact_phone": "13800000007",
+        "module_3d": False, "duration_months": 12,
+    }, headers=admin_headers)
+    assert r2.status_code == 200, f"专业版开户应成功: {r2.text[:300]}"
+    d2 = r2.json()["data"]
+    assert d2["module_3d"] is True, f"专业版传入 false 也必须强制 true（套餐已含自动开通），实际: {d2['module_3d']!r}"
+
+    rows2 = client.get("/admin/v1/tenants", headers=admin_headers).json()["data"]
+    me2 = next((t for t in rows2 if t["id"] == d2["id"]), None)
+    assert me2 and me2["module_3d"] is True, "专业版租户列表 module_3d 应为 True"

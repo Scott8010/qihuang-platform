@@ -1822,6 +1822,14 @@ async def onboard_tenant(req: TenantOnboardRequest, admin: dict = Depends(get_cu
         if not plan:
             return error("NOT_FOUND", message=f"套餐 {req.plan} 不存在且无默认免费套餐")
 
+        # 2026-08-22 老黄拍板：3D 岐黄三境不做单独加购，按套餐门槛——
+        # 体验版/标准版不含（传入 true 也强制 false），专业版/企业版自动含（传入 false 也强制 true）。
+        module_3d_effective = bool((plan.features_json or {}).get("module_3d", False))
+        if bool((tenant.extra or {}).get("module_3d")) != module_3d_effective:
+            tenant.extra = dict(tenant.extra or {})
+            tenant.extra["module_3d"] = module_3d_effective
+            db.flush()
+
         from datetime import datetime as dt, timezone as tz
         start = _now()
         month_total = start.month + req.duration_months
@@ -1842,7 +1850,7 @@ async def onboard_tenant(req: TenantOnboardRequest, admin: dict = Depends(get_cu
                     "contact_name": req.contact_name, "contact_email": req.contact_email,
                     "license_business": req.license_business,
                     "license_medical": req.license_medical,
-                    "module_3d": req.module_3d},
+                    "module_3d": module_3d_effective},
             success=True,
         ))
         db.commit()
@@ -1854,7 +1862,7 @@ async def onboard_tenant(req: TenantOnboardRequest, admin: dict = Depends(get_cu
             "plan": plan.plan_name, "plan_display": plan.display_name,
             "subscription_id": sub.id,
             "end_date": end.isoformat(),
-            "module_3d": req.module_3d,
+            "module_3d": module_3d_effective,
             "contact_name": req.contact_name,
             "contact_phone": req.contact_phone,
             "contact_email": req.contact_email,

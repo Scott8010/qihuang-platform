@@ -12,8 +12,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Plus, Search, Boxes, Loader2, Clock, UploadCloud, X, FileText } from "lucide-react";
+import { Plus, Search, Boxes, Loader2, Clock, UploadCloud, X, FileText, Lock, CheckCircle2 } from "lucide-react";
 import { C, sceneMap, statusMap } from "@/lib/types";
 import { fetchTenants, fetchPlans, createTenant, deleteTenant, uploadFile } from "@/lib/api";
 import { toast } from "sonner";
@@ -44,7 +43,6 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
     orgIntro: "",
     licenseBusiness: "", licenseBusinessName: "",
     licenseMedical: "", licenseMedicalName: "",
-    m3d: false,
   });
 
   // 电话：手机 11 位 / 座机带区号；邮箱常规校验（与后端 _ONBOARD_* 一致）
@@ -126,13 +124,13 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
       licenseBusinessName: form.licenseBusinessName || undefined,
       licenseMedical: form.licenseMedical || undefined,
       licenseMedicalName: form.licenseMedicalName || undefined,
-      module3d: form.m3d,
+      module3d: !!plans.find((p) => p.planName === form.plan)?.features?.module_3d,
     });
     setSubmitting(false);
     if (r?.code === 0) {
       toast.success(`租户 ${form.name} 开户成功：套餐已生效、根机构已创建`);
       setOpen(false);
-      setForm({ name: "", scene: "HEALTH", plan: "standard", contactName: "", contactPhone: "", contactEmail: "", addressCountry: "中国", addressProvince: "", addressCity: "", addressDistrict: "", addressDetail: "", orgIntro: "", licenseBusiness: "", licenseBusinessName: "", licenseMedical: "", licenseMedicalName: "", m3d: false });
+      setForm({ name: "", scene: "HEALTH", plan: "standard", contactName: "", contactPhone: "", contactEmail: "", addressCountry: "中国", addressProvince: "", addressCity: "", addressDistrict: "", addressDetail: "", orgIntro: "", licenseBusiness: "", licenseBusinessName: "", licenseMedical: "", licenseMedicalName: "" });
       await load();
     } else {
       // 后端校验失败（如医疗两证缺失/电话格式）提示原话，不假装成功
@@ -343,16 +341,45 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
                     </div>
                   );
                 })()}
-                <div className="flex items-center justify-between rounded-lg p-3" style={{ background: "#FBF4E4", border: "1px solid #EDD9A8" }}>
-                  <div className="flex items-center gap-2">
-                    <Boxes className="w-4 h-4" style={{ color: C.gold }} />
-                    <div>
-                      <div className="font-medium" style={{ color: C.gold }}>岐黄三境 · 3D 增值模块</div>
-                      <div className="text-[11px]" style={{ color: C.mid }}>module_3d 开关 · 穴位范围/皮肤/文案可配置</div>
+                {/* 2026-08-22 老黄拍板：3D 岐黄三境不做单独加购/开关，严格按套餐门槛——
+                    体验版/标准版标灰不可操作，专业版/企业版自动亮起（后端 onboard 同步强制，前端不设开关） */}
+                {(() => {
+                  const sel = plans.find((p) => p.planName === form.plan);
+                  const planHas3d = !!sel?.features?.module_3d;
+                  return (
+                    <div
+                      className="flex items-center justify-between rounded-lg p-3 transition-colors"
+                      style={
+                        planHas3d
+                          ? { background: "#FBF4E4", border: "1px solid #EDD9A8", opacity: 1 }
+                          : { background: "#F5F5F4", border: "1px solid #E7E5E4", opacity: 0.75 }
+                      }
+                    >
+                      <div className="flex items-center gap-2">
+                        <Boxes className="w-4 h-4" style={{ color: planHas3d ? C.gold : "#A8A29E" }} />
+                        <div>
+                          <div className="font-medium" style={{ color: planHas3d ? C.gold : "#78716C" }}>
+                            岐黄三境 · 3D 增值模块
+                          </div>
+                          <div className="text-[11px]" style={{ color: planHas3d ? C.mid : "#A8A29E" }}>
+                            {planHas3d
+                              ? `当前套餐（${sel?.name || form.plan}）已含 · 开户后自动开通，穴位范围/皮肤/文案可配置`
+                              : `当前套餐（${sel?.name || form.plan}）不含 3D 模块 · 升级专业版/企业版自动开通`}
+                          </div>
+                        </div>
+                      </div>
+                      {planHas3d ? (
+                        <Badge variant="outline" className="border-amber-300 text-[11px] font-medium whitespace-nowrap" style={{ color: C.gold, background: "#fff" }}>
+                          <CheckCircle2 className="w-3 h-3 mr-1" />已含 · 自动开通
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[11px] font-medium whitespace-nowrap" style={{ color: "#78716C", borderColor: "#E7E5E4", background: "#FAFAF9" }}>
+                          <Lock className="w-3 h-3 mr-1" />不含 · 不可操作
+                        </Badge>
+                      )}
                     </div>
-                  </div>
-                  <Switch checked={form.m3d} onCheckedChange={(v) => setForm({ ...form, m3d: v })} />
-                </div>
+                  );
+                })()}
               </div>
 
               {/* ── ④ 联系人 ── */}
