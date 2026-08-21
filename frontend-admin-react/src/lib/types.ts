@@ -266,7 +266,7 @@ export interface DashboardData {
   kg?: { pending: number };
   recent_ops?: { time: string; user: string; action: string; target: string }[];
   trend?: { dates: string[]; values: number[] };
-  services?: { name: string; key?: string; status: string; latency_ms?: number; uptime?: string }[];
+  services?: { name: string; key?: string; status: string; latency_ms?: number; uptime?: string; ok?: boolean }[];
   recent_calls?: { endpoint?: string; method?: string; status_code?: number; latency_ms?: number; timestamp?: string; path?: string }[];
   scene_distribution?: Record<string, number>;
 }

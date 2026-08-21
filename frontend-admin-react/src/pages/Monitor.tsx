@@ -42,11 +42,6 @@ export default function Monitor() {
                   ? <CheckCircle2 className="w-4 h-4" style={{ color: C.primary }} />
                   : <AlertTriangle className="w-4 h-4" style={{ color: "#8A6A1F" }} />}
                 <span className="text-[13px] font-medium">{s.name}</span>
-                {s.is_demo && (
-                  <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#F3F0E7", color: "#8A6A1F" }}>
-                    演示
-                  </span>
-                )}
               </div>
               <div className="mt-2 text-[12px]" style={{ color: s.ok ? C.mid : "#8A6A1F" }}>{s.status}</div>
               <div className="mt-2 flex justify-between text-[11px]" style={{ color: C.light }}>

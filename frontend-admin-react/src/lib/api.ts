@@ -194,10 +194,11 @@ export async function fetchDashboard(): Promise<{
       alerts,
       reviews: [],
       services: (d.services || []).map((s: any) => ({
-        name: s.name, status: s.status === "normal" ? "运行正常" : s.status === "warning" ? "DeepSeek 备用切换中" : s.status || "未知",
+        name: s.name,
+        status: s.ok ? (s.status === "warning" ? "DeepSeek 备用切换中" : "运行正常") : "服务不可用",
         latency: s.latency_ms ? `${s.latency_ms}ms` : "—",
         uptime: s.uptime || "—",
-        ok: s.status === "normal",
+        ok: s.ok !== undefined ? !!s.ok : s.status === "normal",
       })),
       recentOps: (d.recent_ops || []).slice(0, 8),
     };

@@ -34,6 +34,7 @@ import bcrypt
 from qihuang_platform.rbac.service import validate_password
 from qihuang_platform.gateway.monitor import monitor
 from qihuang_platform.gateway.llm_fallback import llm_fallback
+from qihuang_platform.gateway.health_probe import get_services_health
 from qihuang_platform.control.container_mgr import container_mgr
 from qihuang_platform.control.cost_mgr import router as cost_router
 from qihuang_platform.billing.billing import get_bill_detail
@@ -1037,15 +1038,18 @@ async def llm_status(admin: dict = Depends(get_current_admin)):
 
 @router.get("/monitor/services", summary="服务健康列表")
 async def monitor_services(admin: dict = Depends(get_current_admin)):
-    """返回所有微服务/依赖的健康状态"""
-    # 当前为演示态健康快照（is_demo=true 供前端诚实标注"演示"徽标）；
-    # 接入真实健康探针（进程存活/端口连通/心跳）后置 is_demo=false。
+    """返回所有微服务/依赖的真实健康状态（TCP/HTTP 探活 + LLM 状态真查）。"""
+    probe = await get_services_health()
     services = [
-        {"name": "API 网关", "status": "运行正常", "latency": "42ms", "uptime": "99.98%", "ok": True, "is_demo": True},
-        {"name": "中台应用（FastAPI）", "status": "运行正常", "latency": "186ms", "uptime": "99.95%", "ok": True, "is_demo": True},
-        {"name": "Neo4j 图谱库", "status": "运行正常", "latency": "12ms", "uptime": "99.99%", "ok": True, "is_demo": True},
-        {"name": "PostgreSQL 业务库", "status": "运行正常", "latency": "8ms", "uptime": "99.99%", "ok": True, "is_demo": True},
-        {"name": "LLM 共识集群", "status": "DeepSeek 备用切换中", "latency": "1240ms", "uptime": "99.91%", "ok": False, "is_demo": True},
+        {
+            "name": s["name"],
+            "status": s["status_text"],
+            "latency": f"{s['latency_ms']}ms" if s["latency_ms"] is not None else "—",
+            "uptime": s["uptime"],
+            "ok": s["ok"],
+            "is_demo": False,
+        }
+        for s in probe
     ]
     return success(data={"services": services})
 
@@ -1478,13 +1482,18 @@ async def admin_dashboard(admin: dict = Depends(get_current_admin)):
         # 场景分布（按租户 scene 字段真实聚合；func.lower 归一化大小写，避免 HEALTH/health 分裂）
         scene_rows = db.query(func.lower(Tenant.scene), func.count(Tenant.id)).group_by(func.lower(Tenant.scene)).all()
         scene_distribution = { (row[0] or "unknown"): row[1] for row in scene_rows }
-        # 系统服务状态
+        # 系统服务状态（真实探活；含 ok 字段供前端服务健康计数）
+        probe = await get_services_health()
         services = [
-            {"name": "API 网关", "key": "api_gateway", "status": "normal", "latency_ms": 42, "uptime": "99.98%"},
-            {"name": "中台应用 (FastAPI)", "key": "fastapi", "status": "normal", "latency_ms": 186, "uptime": "99.95%"},
-            {"name": "Neo4j 图谱库", "key": "neo4j", "status": "normal", "latency_ms": 12, "uptime": "99.99%"},
-            {"name": "PostgreSQL 业务库", "key": "postgres", "status": "normal", "latency_ms": 8, "uptime": "99.99%"},
-            {"name": "LLM 共识集群", "key": "llm", "status": "warning", "latency_ms": 1240, "uptime": "99.91%"},
+            {
+                "name": s["name"],
+                "key": s["key"],
+                "status": "normal" if s["ok"] else ("warning" if s["status"] == "warning" else "down"),
+                "latency_ms": s["latency_ms"] if s["latency_ms"] is not None else 0,
+                "uptime": s["uptime"],
+                "ok": s["ok"],
+            }
+            for s in probe
         ]
 
         return success(data={
