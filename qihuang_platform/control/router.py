@@ -1738,7 +1738,7 @@ class TenantOnboardRequest(BaseModel):
     address_province: Optional[str] = Field(None, description="机构地址-省份")
     address_city: Optional[str] = Field(None, description="机构地址-城市")
     address_district: Optional[str] = Field(None, description="机构地址-区县")
-    org_intro: Optional[str] = Field(None, description="机构介绍")
+    org_intro: Optional[str] = Field(None, max_length=150, description="机构介绍（150字以内）")
     license_business: Optional[str] = Field(None, description="营业执照文件URL")
     license_business_name: Optional[str] = Field(None, description="营业执照文件名")
     license_medical: Optional[str] = Field(None, description="医疗机构执业许可证文件URL")

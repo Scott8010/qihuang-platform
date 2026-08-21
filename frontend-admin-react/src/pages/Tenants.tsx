@@ -243,13 +243,17 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>机构介绍</Label>
+                  <Label>机构介绍（限 150 字）</Label>
                   <Textarea
                     value={form.orgIntro}
                     onChange={(e) => setForm({ ...form, orgIntro: e.target.value })}
                     placeholder="机构简介、主营业务、服务范围等（医疗机构建议注明执业范围）"
                     rows={3}
+                    maxLength={150}
                   />
+                  <div className="text-right text-[11px]" style={{ color: form.orgIntro.length >= 150 ? "#B03A2E" : C.light }}>
+                    {form.orgIntro.length}/150
+                  </div>
                 </div>
               </div>
 

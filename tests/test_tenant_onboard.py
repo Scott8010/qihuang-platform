@@ -162,3 +162,29 @@ def test_upload_endpoint_stores_file(client, ensure_admin_in_db, admin_headers):
     dl = client.get(data["url"], headers=admin_headers)
     assert dl.status_code == 200, f"下载应成功: {dl.status_code}"
     assert dl.content == b"\xff\xd8\xff\xe0fake-jpeg", "文件内容应一致"
+
+
+def test_org_intro_over_150_chars_rejected(client, ensure_admin_in_db, admin_headers):
+    """机构介绍超过 150 字 → 422（2026-08-22 老黄要求限 150 字）"""
+    r = client.post("/admin/v1/tenants/onboard", json={
+        "name": f"t_intro_{uuid.uuid4().hex[:8]}",
+        "display_name": "介绍超长测试",
+        "scene": "health",
+        "plan": "standard",
+        "contact_name": "赵六",
+        "contact_phone": "13800000002",
+        "org_intro": "介" * 151,
+    }, headers=admin_headers)
+    assert r.status_code == 422, f"超150字应 422，实际 {r.status_code}: {r.text[:200]}"
+
+    # 恰好 150 字应通过
+    ok = client.post("/admin/v1/tenants/onboard", json={
+        "name": f"t_introok_{uuid.uuid4().hex[:8]}",
+        "display_name": "介绍刚好150字",
+        "scene": "health",
+        "plan": "standard",
+        "contact_name": "赵六",
+        "contact_phone": "13800000003",
+        "org_intro": "介" * 150,
+    }, headers=admin_headers)
+    assert ok.status_code == 200, f"150字应通过: {ok.text[:200]}"
