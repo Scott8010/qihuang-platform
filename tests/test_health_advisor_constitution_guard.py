@@ -59,3 +59,32 @@ async def test_constitution_kept_when_tongue_pulse_provided():
     assert resp.constitution is not None and resp.constitution.type == "气虚质", \
         f"有舌脉时应正常返回体质，实际: {resp.constitution}"
     assert "气虚质" in (resp.reply or "")
+
+
+@pytest.mark.asyncio
+async def test_free_chat_endpoint_mocked():
+    """自由问答端点：mock 引擎返回 → 响应含 reply + model（2026-08-22 新端点）"""
+    from qihuang_platform.agent.health_advisor.router import free_chat
+    from qihuang_platform.agent.health_advisor.schema import ConsultRequest
+    from fastapi import Request as FastAPIRequest
+
+    # 构造 fake request（带 tenant_id）
+    class FakeScope(dict):
+        pass
+    scope = FakeScope({"type": "http", "method": "POST", "path": "/api/v1/agent/health-advisor/chat"})
+    fake_req = FastAPIRequest(scope)
+    fake_req.state.tenant_id = "t1"
+    fake_user = {"tenant_id": "t1", "user_id": "u1"}
+
+    with patch("qihuang_platform.agent.refine_llm._chat_once", new=AsyncMock(return_value="失眠多是心神不宁，建议睡前少看手机、泡泡脚。")), \
+         patch("qihuang_platform.agent.health_advisor.metering.check_quota", return_value=True):
+        # 直接调用端点函数（跳过 Depends 鉴权层）
+        resp = await free_chat(
+            req=type("R", (), {"question": "失眠怎么办", "history": [], "max_tokens": 800})(),
+            request=fake_req, user=fake_user, _=None,
+        )
+    # free_chat 返回 success() 字典（code=0）
+    assert resp.get("code") == 0, f"应成功: {resp}"
+    data = resp.get("data", {})
+    assert data.get("reply") and "失眠" in data["reply"], f"应返回回复: {data}"
+    assert data.get("model") == "deepseek"
