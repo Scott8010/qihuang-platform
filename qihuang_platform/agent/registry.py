@@ -10,10 +10,10 @@ Agent 能力注册表 — Agent 中台的资源池（控制面的「能力清单
   - 控制端启停/编辑走 register_agent / set_agent_status，写 DB + 缓存双写。
 新增能力：register_agent(key, spec) 并在 agent/__init__.py 挂载其 router。
 """
-from typing import Any, Dict, Optional
+from typing import Any
 
 # 内置样板能力（部署期注册；运营态可在控制端编辑/启停）
-BUILTIN_AGENTS: Dict[str, Dict[str, Any]] = {
+BUILTIN_AGENTS: dict[str, dict[str, Any]] = {
     "compliance": {
         "name": "内容合规审核",
         "kind": "business_embedded",          # 融入业务流的能力模块，非对话窗口型
@@ -60,6 +60,18 @@ BUILTIN_AGENTS: Dict[str, Dict[str, Any]] = {
         "desc": "中医健康顾问：固定专业辨证链（体质辨识→辨证→方剂→调理），"
                 "基于 8601 四诊合参引擎，partial 降级 + 免责必带，"
                 "回写钉业务实体（material_key→HA-XXXX 幂等），仅作辅助参考。",
+    },
+    "tongue": {
+        "name": "舌象健康特征分析",
+        "kind": "business_embedded",          # 融入业务流的能力模块（MindSen 路 A，非对话窗口型）
+        "engine": "qihuang-vision-tongue",     # 共享视觉网关（GEO_VISION_*=qwen-vl-plus）+ 15 类标签结构化 prompt
+        "router_prefix": "/api/v1/agent/tongue",
+        "capabilities": ["analyze"],
+        "status": "active",
+        "category": "health",
+        "desc": "舌象健康特征分析（MindSen 舌面诊线）：舌面照片 → 视觉网关 + 15 类标签结构化 prompt "
+                "→ 舌色/舌形/苔色/苔质/瘀斑瘀点等 TongueAnalysis 字段（对齐 tongue_face_analysis.md §3.5），"
+                "fail-closed 不造假，去医疗化仅供健康评估参考。",
     },
     "coach": {
         "name": "中医辨证教练",
@@ -116,10 +128,10 @@ BUILTIN_AGENTS: Dict[str, Dict[str, Any]] = {
 }
 
 # 运行时缓存（与 agent_def 表最终一致）
-AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {}
+AGENT_REGISTRY: dict[str, dict[str, Any]] = {}
 
 
-def _row_to_spec(row) -> Dict[str, Any]:
+def _row_to_spec(row) -> dict[str, Any]:
     return {
         "agent_key": row.agent_key,
         "name": row.name,
@@ -217,7 +229,7 @@ def sync_from_db() -> int:
         db.close()
 
 
-def register_agent(key: str, spec: Dict[str, Any]) -> None:
+def register_agent(key: str, spec: dict[str, Any]) -> None:
     """注册/更新一个 Agent 能力（写 DB + 缓存双写）。"""
     spec = dict(spec)
     spec["agent_key"] = key
@@ -293,11 +305,11 @@ def set_agent_status(key: str, status: str) -> bool:
     return True
 
 
-def get_agent(key: str) -> Optional[Dict[str, Any]]:
+def get_agent(key: str) -> dict[str, Any] | None:
     return AGENT_REGISTRY.get(key)
 
 
-def list_agents() -> Dict[str, Dict[str, Any]]:
+def list_agents() -> dict[str, dict[str, Any]]:
     return AGENT_REGISTRY
 
 
