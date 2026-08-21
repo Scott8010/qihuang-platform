@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from qihuang_platform.agent import registry
 from qihuang_platform.agent.deps import require_agent_in_plan
 from qihuang_platform.agent.tongue import engine
-from qihuang_platform.gateway.deps import get_current_user
+from qihuang_platform.gateway.deps import get_current_principal
 
 _SAMPLE_TONGUE_JSON = json.dumps({
     "tongue_body": {
@@ -135,16 +135,13 @@ def _make_app():
     from qihuang_platform.agent.tongue.router import router as tongue_router
     app = FastAPI()
     app.include_router(tongue_router, prefix="/api/v1/agent")
-    app.dependency_overrides[get_current_user] = lambda: {"sub": "u-test"}
+    app.dependency_overrides[get_current_principal] = lambda: {"sub": "u-test"}
     return app
 
 
 def test_tongue_route_403_without_plan():
     """不覆盖 require_agent_in_plan → 真实鉴权无租户上下文 → 403 AGENT_FORBIDDEN。"""
-    from qihuang_platform.gateway.deps import get_current_principal
     app = _make_app()
-    # 放行身份，但 request.state.tenant_id 为空 → 门禁 403「无法解析租户上下文」
-    app.dependency_overrides[get_current_principal] = lambda: {"sub": "u-test"}
     with TestClient(app) as c:
         r = c.post("/api/v1/agent/tongue/analyze",
                    json={"image": "data:image/jpeg;base64,AAAA"})
@@ -158,7 +155,7 @@ def test_tongue_route_200_with_authorized(monkeypatch):
     from qihuang_platform.agent.tongue.router import router as tongue_router
     app = FastAPI()
     app.include_router(tongue_router, prefix="/api/v1/agent")
-    app.dependency_overrides[get_current_user] = lambda: {"sub": "u-test"}
+    app.dependency_overrides[get_current_principal] = lambda: {"sub": "u-test"}
     app.dependency_overrides[require_agent_in_plan("tongue")] = lambda: {"sub": "u-test"}
 
     def fake_analyze(image_ref, face_image=None, profile=None):

@@ -1,10 +1,10 @@
 """舌象健康特征分析 Agent 路由（MindSen 路 A）。
 
-端点（需 JWT + 租户套餐授权，tenant_id 由网关注入 request.state）：
+端点（需鉴权 + 租户套餐授权，tenant_id 由鉴权层注入 request.state）：
   POST /api/v1/agent/tongue/analyze  舌面照片 → 15 类标签 + TongueAnalysis 结构化 JSON
 
-鉴权：require_agent_in_plan("tongue") —— 租户订阅套餐 agents 或 tenant.extra.agent_addons
-      含 "tongue" 才放行（与 fortune/compliance/health-advisor 同款门禁）。
+鉴权：API Key 签名 / JWT 双鉴权（get_current_principal，与 health-advisor A2 同款通道）
+      + require_agent_in_plan("tongue") 套餐/叠加授权。
 数据：stateless 返回，不落库（计量由网关 CallLog 自动聚合）。
 """
 from __future__ import annotations
@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 from qihuang_platform.agent.deps import require_agent_in_plan
 from qihuang_platform.agent.tongue import engine
-from qihuang_platform.gateway.deps import get_current_user
+from qihuang_platform.gateway.deps import get_current_principal
 from qihuang_platform.gateway.response import success
 
 router = APIRouter()
@@ -30,7 +30,7 @@ class TongueRequest(BaseModel):
 async def tongue_analyze(
     req: TongueRequest,
     request: Request,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(get_current_principal),
     _agent=Depends(require_agent_in_plan("tongue")),
 ):
     """舌面照片 → 舌色/舌形/苔色/苔质/瘀斑瘀点等 15 类标签 + TongueAnalysis 字段。
