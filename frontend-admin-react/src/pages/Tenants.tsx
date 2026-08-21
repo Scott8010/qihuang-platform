@@ -40,7 +40,7 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
   const [form, setForm] = useState({
     name: "", scene: "HEALTH", plan: "standard",
     contactName: "", contactPhone: "", contactEmail: "",
-    addressCountry: "中国", addressProvince: "", addressCity: "", addressDistrict: "",
+    addressCountry: "中国", addressProvince: "", addressCity: "", addressDistrict: "", addressDetail: "",
     orgIntro: "",
     licenseBusiness: "", licenseBusinessName: "",
     licenseMedical: "", licenseMedicalName: "",
@@ -120,6 +120,7 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
       addressProvince: form.addressProvince.trim() || undefined,
       addressCity: form.addressCity.trim() || undefined,
       addressDistrict: form.addressDistrict.trim() || undefined,
+      addressDetail: form.addressDetail.trim() || undefined,
       orgIntro: form.orgIntro.trim() || undefined,
       licenseBusiness: form.licenseBusiness || undefined,
       licenseBusinessName: form.licenseBusinessName || undefined,
@@ -131,7 +132,7 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
     if (r?.code === 0) {
       toast.success(`租户 ${form.name} 开户成功：套餐已生效、根机构已创建`);
       setOpen(false);
-      setForm({ name: "", scene: "HEALTH", plan: "standard", contactName: "", contactPhone: "", contactEmail: "", addressCountry: "中国", addressProvince: "", addressCity: "", addressDistrict: "", orgIntro: "", licenseBusiness: "", licenseBusinessName: "", licenseMedical: "", licenseMedicalName: "", m3d: false });
+      setForm({ name: "", scene: "HEALTH", plan: "standard", contactName: "", contactPhone: "", contactEmail: "", addressCountry: "中国", addressProvince: "", addressCity: "", addressDistrict: "", addressDetail: "", orgIntro: "", licenseBusiness: "", licenseBusinessName: "", licenseMedical: "", licenseMedicalName: "", m3d: false });
       await load();
     } else {
       // 后端校验失败（如医疗两证缺失/电话格式）提示原话，不假装成功
@@ -234,13 +235,25 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
                   </div>
                 </div>
                 <div>
-                  <Label>机构地址</Label>
+                  <Label>机构地址<span className="text-[11px]" style={{ color: C.light }}> · 前 4 项为行政区划，详细地址单独填</span></Label>
                   <div className="grid grid-cols-2 gap-2 mt-1.5">
                     <Input value={form.addressCountry} onChange={(e) => setForm({ ...form, addressCountry: e.target.value })} placeholder="国家（如：中国）" />
                     <Input value={form.addressProvince} onChange={(e) => setForm({ ...form, addressProvince: e.target.value })} placeholder="省份（如：上海市）" />
                     <Input value={form.addressCity} onChange={(e) => setForm({ ...form, addressCity: e.target.value })} placeholder="城市（如：上海市）" />
                     <Input value={form.addressDistrict} onChange={(e) => setForm({ ...form, addressDistrict: e.target.value })} placeholder="区县（如：浦东新区）" />
                   </div>
+                  <Input
+                    className="mt-2"
+                    value={form.addressDetail}
+                    onChange={(e) => setForm({ ...form, addressDetail: e.target.value })}
+                    placeholder="📍 详细地址（街道/门牌/楼栋/楼层/房间号，200 字内）"
+                    maxLength={200}
+                  />
+                  {form.addressDetail && (
+                    <div className="text-right text-[11px] mt-0.5" style={{ color: form.addressDetail.length >= 200 ? "#B03A2E" : C.light }}>
+                      {form.addressDetail.length} / 200
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label>机构介绍（限 150 字）</Label>

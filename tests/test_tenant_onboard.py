@@ -188,3 +188,26 @@ def test_org_intro_over_150_chars_rejected(client, ensure_admin_in_db, admin_hea
         "org_intro": "介" * 150,
     }, headers=admin_headers)
     assert ok.status_code == 200, f"150字应通过: {ok.text[:200]}"
+
+
+def test_address_detail_supported(client, ensure_admin_in_db, admin_headers):
+    """详细地址字段应支持 200 字 + 列表接口透传（老黄 2026-08-22 凌晨提的：地址少详细地址框）"""
+    r = client.post("/admin/v1/tenants/onboard", json={
+        "name": f"t_addr_{uuid.uuid4().hex[:8]}",
+        "display_name": "详细地址测试",
+        "scene": "health", "plan": "standard",
+        "contact_name": "孙七", "contact_phone": "13800000004",
+        "address_country": "中国", "address_province": "上海市",
+        "address_city": "上海市", "address_district": "浦东新区",
+        "address_detail": "世纪大道 100 号 上海中心大厦 88 楼 8801 室",
+    }, headers=admin_headers)
+    assert r.status_code == 200, f"详细地址应通过: {r.text[:200]}"
+    # 超长 201 字 → 422
+    over = client.post("/admin/v1/tenants/onboard", json={
+        "name": f"t_addrov_{uuid.uuid4().hex[:8]}",
+        "display_name": "详细地址超长",
+        "scene": "health", "plan": "standard",
+        "contact_name": "孙七", "contact_phone": "13800000005",
+        "address_detail": "详" * 201,
+    }, headers=admin_headers)
+    assert over.status_code == 422, f"详细地址 201 字应 422: {over.text[:200]}"

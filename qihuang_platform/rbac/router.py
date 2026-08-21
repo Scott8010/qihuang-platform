@@ -155,6 +155,7 @@ async def list_tenants(
             "address_province": (t.extra or {}).get("address_province", ""),
             "address_city": (t.extra or {}).get("address_city", ""),
             "address_district": (t.extra or {}).get("address_district", ""),
+            "address_detail": (t.extra or {}).get("address_detail", ""),
             "org_intro": (t.extra or {}).get("org_intro", ""),
             "license_business": (t.extra or {}).get("license_business", ""),
             "license_business_name": (t.extra or {}).get("license_business_name", ""),

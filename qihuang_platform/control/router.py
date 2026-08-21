@@ -1738,6 +1738,7 @@ class TenantOnboardRequest(BaseModel):
     address_province: Optional[str] = Field(None, description="机构地址-省份")
     address_city: Optional[str] = Field(None, description="机构地址-城市")
     address_district: Optional[str] = Field(None, description="机构地址-区县")
+    address_detail: Optional[str] = Field(None, max_length=200, description="机构地址-详细地址（街道/门牌/楼栋等，200字内）")
     org_intro: Optional[str] = Field(None, max_length=150, description="机构介绍（150字以内）")
     license_business: Optional[str] = Field(None, description="营业执照文件URL")
     license_business_name: Optional[str] = Field(None, description="营业执照文件名")
@@ -1798,6 +1799,7 @@ async def onboard_tenant(req: TenantOnboardRequest, admin: dict = Depends(get_cu
                 "address_province": req.address_province,
                 "address_city": req.address_city,
                 "address_district": req.address_district,
+                "address_detail": req.address_detail,
                 "org_intro": req.org_intro,
                 "license_business": req.license_business,
                 "license_business_name": req.license_business_name,
@@ -1860,6 +1862,7 @@ async def onboard_tenant(req: TenantOnboardRequest, admin: dict = Depends(get_cu
             "address_province": req.address_province,
             "address_city": req.address_city,
             "address_district": req.address_district,
+            "address_detail": req.address_detail,
             "org_intro": req.org_intro,
             "license_business": req.license_business,
             "license_medical": req.license_medical,

@@ -260,6 +260,7 @@ export async function createTenant(body: {
   contactName: string; contactPhone: string; module3d: boolean;
   contactEmail?: string;
   addressCountry?: string; addressProvince?: string; addressCity?: string; addressDistrict?: string;
+  addressDetail?: string;
   orgIntro?: string;
   licenseBusiness?: string; licenseBusinessName?: string;
   licenseMedical?: string; licenseMedicalName?: string;
@@ -282,6 +283,7 @@ export async function createTenant(body: {
     address_province: body.addressProvince || null,
     address_city: body.addressCity || null,
     address_district: body.addressDistrict || null,
+    address_detail: body.addressDetail || null,
     org_intro: body.orgIntro || null,
     license_business: body.licenseBusiness || null,
     license_business_name: body.licenseBusinessName || null,
