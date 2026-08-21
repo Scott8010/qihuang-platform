@@ -986,6 +986,14 @@ export async function createCapabilityTemplate(body: {
   return mutate("POST", "/admin/v1/template-center/templates", { ...body, visibility: "private" });
 }
 
+/** PUT /admin/v1/template-center/templates/{id} — 编辑模板（后端自动快照旧版本 + 版本自增） */
+export async function updateCapabilityTemplate(
+  templateId: string,
+  body: { name?: string; content_json?: Record<string, unknown> },
+): Promise<MutateResult> {
+  return mutate("PUT", `/admin/v1/template-center/templates/${encodeURIComponent(templateId)}`, body);
+}
+
 /** POST /admin/v1/template-center/templates/{id}/clone — 克隆到指定机构 */
 export async function cloneCapabilityTemplate(
   templateId: string, targetOrgId: string,

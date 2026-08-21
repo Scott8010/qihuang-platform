@@ -10,15 +10,16 @@ import {
   Boxes, Globe, Lock, FilePlus2, Send, CheckCircle2, XCircle, Loader2,
   ShieldCheck, Eye, Copy, Check, ChevronDown, ChevronUp, Info, FlaskConical,
   ListOrdered, MapPin, ClipboardList, BookOpen, Sparkles,
-  History, Undo2, BarChart3,
+  History, Undo2, BarChart3, Pencil,
 } from "lucide-react";
 import { C } from "@/lib/types";
 import {
   fetchCapabilityTemplates, fetchCapabilitySubmissions, createCapabilityTemplate,
-  submitCapabilityTemplate, approveCapabilitySubmission, rejectCapabilitySubmission,
+  updateCapabilityTemplate, submitCapabilityTemplate, approveCapabilitySubmission, rejectCapabilitySubmission,
   fetchCapabilityTemplateVersions, rollbackCapabilityTemplate, fetchCapabilityStats,
   type CapabilityTemplate, type CapabilitySubmission, type CapabilityVersion, type CapabilityStats,
 } from "@/lib/api";
+import TemplateEditor, { TextImporter, defaultContentFor } from "@/components/capability/TemplateEditor";
 import { toast } from "sonner";
 
 /* ═══════════════════════════════════════════
@@ -593,15 +594,18 @@ export default function CapabilityCenter() {
   // 运营统计
   const [stats, setStats] = useState<CapabilityStats | null>(null);
 
-  // 新建模板
+  // 新建模板（可视化编辑，不再让运营写 JSON）
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newKind, setNewKind] = useState("script");
-  const [newContent, setNewContent] = useState("");
+  const [newContent, setNewContent] = useState<Record<string, unknown>>(() => defaultContentFor("script"));
   const [creating, setCreating] = useState(false);
 
-  // 详情
+  // 详情（查看 / 编辑 双 Tab）
   const [viewTpl, setViewTpl] = useState<CapabilityTemplate | null>(null);
+  const [viewTab, setViewTab] = useState<"view" | "edit">("view");
+  const [editContent, setEditContent] = useState<Record<string, unknown>>({});
+  const [savingEdit, setSavingEdit] = useState(false);
   const [versions, setVersions] = useState<CapabilityVersion[]>([]);
   const [rollbackBusy, setRollbackBusy] = useState(false);
 
@@ -625,14 +629,33 @@ export default function CapabilityCenter() {
 
   useEffect(() => { load(); }, []);
 
-  // 详情打开时拉取该模板的版本快照列表
+  // 详情打开时拉取该模板的版本快照列表；切换/回滚后同步编辑区内容
   useEffect(() => {
     if (viewTpl) {
       fetchCapabilityTemplateVersions(viewTpl.id).then((r) => setVersions(r.items));
+      setEditContent((viewTpl.content_json as Record<string, unknown>) || {});
     } else {
       setVersions([]);
+      setViewTab("view");
     }
   }, [viewTpl]);
+
+  const doSaveEdit = async () => {
+    if (!viewTpl) return;
+    setSavingEdit(true);
+    const r = await updateCapabilityTemplate(viewTpl.id, { content_json: editContent });
+    setSavingEdit(false);
+    if (r.ok) {
+      toast.success("已保存，旧版本已自动存档，可在版本历史回滚");
+      setViewTpl((prev) => (prev ? { ...prev, content_json: editContent } : prev));
+      const vr = await fetchCapabilityTemplateVersions(viewTpl.id);
+      setVersions(vr.items);
+      setViewTab("view");
+      await load();
+    } else {
+      toast.error(r.msg || "保存失败");
+    }
+  };
 
   const doRollback = async (tag: string) => {
     if (!viewTpl) return;
@@ -657,20 +680,13 @@ export default function CapabilityCenter() {
 
   const doCreate = async () => {
     if (!newName.trim()) { toast.error("请填写模板名称"); return; }
-    let contentJson: Record<string, unknown> = {};
-    try {
-      contentJson = newContent.trim() ? JSON.parse(newContent) : { note: "空模板" };
-    } catch {
-      toast.error("content JSON 格式不正确");
-      return;
-    }
     setCreating(true);
-    const r = await createCapabilityTemplate({ name: newName.trim(), kind: newKind, content_json: contentJson });
+    const r = await createCapabilityTemplate({ name: newName.trim(), kind: newKind, content_json: newContent });
     setCreating(false);
     if (r.ok) {
       toast.success("模板已创建");
       setCreateOpen(false);
-      setNewName(""); setNewKind("script"); setNewContent("");
+      setNewName(""); setNewKind("script"); setNewContent(defaultContentFor("script"));
       await load();
     } else {
       toast.error(r.msg || "创建失败");
@@ -704,6 +720,11 @@ export default function CapabilityCenter() {
     }
   };
 
+  const openDetail = (t: CapabilityTemplate) => {
+    setViewTab("view");
+    setViewTpl(t);
+  };
+
   const pendingCount = submissions.filter((s) => s.status === "PENDING").length;
 
   return (
@@ -715,7 +736,7 @@ export default function CapabilityCenter() {
           <span className="text-[15px] font-semibold" style={{ color: C.primary }}>能力中心</span>
           <span className="text-[12px]" style={{ color: C.light }}>多租户能力模板 · 平台↔机构归属全模型</span>
         </div>
-        <Button size="sm" style={{ background: C.primary }} onClick={() => setCreateOpen(true)}>
+        <Button size="sm" style={{ background: C.primary }} onClick={() => { setNewContent(defaultContentFor(newKind)); setCreateOpen(true); }}>
           <FilePlus2 className="w-4 h-4 mr-1" /> 新建模板
         </Button>
       </div>
@@ -801,7 +822,7 @@ export default function CapabilityCenter() {
               </thead>
               <tbody>
                 {templates.map((t) => (
-                  <TemplateRow key={t.id} t={t} onView={setViewTpl} onSubmit={doSubmit} />
+                  <TemplateRow key={t.id} t={t} onView={openDetail} onSubmit={doSubmit} />
                 ))}
                 {templates.length === 0 && (
                   <tr><td colSpan={6} className="py-10 text-center text-[12px]" style={{ color: C.light }}>暂无模板</td></tr>
@@ -873,31 +894,44 @@ export default function CapabilityCenter() {
         归属模型：平台模板（source=platform）全网可见；机构自建（private）仅本机构；提交平台审核通过后提升为共享池（public），驳回则强收回私有。
       </div>
 
-      {/* 新建模板 */}
+      {/* 新建模板（可视化编辑） */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-3xl max-h-[88vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>新建能力模板</DialogTitle>
-            <DialogDescription>创建平台级或机构级模板，提交审核通过后进入共享池。</DialogDescription>
+            <DialogDescription>像填表一样填写内容；也可以先从 Word / 文本文件导入，再修改。提交审核通过后进入共享池。</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div>
-              <Label className="text-[12px]">名称</Label>
-              <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="如：门店接单话术模板" className="mt-1 h-8" />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-[12px]">名称</Label>
+                <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="如：门店接单话术模板" className="mt-1 h-8" />
+              </div>
+              <div>
+                <Label className="text-[12px]">类型</Label>
+                <select value={newKind}
+                  onChange={(e) => { setNewKind(e.target.value); setNewContent(defaultContentFor(e.target.value)); }}
+                  className="w-full text-[13px] rounded-lg border px-3 py-2 bg-white outline-none mt-1" style={{ borderColor: C.border }}>
+                  <option value="script">话术脚本</option>
+                  <option value="knowledge">知识课件</option>
+                  <option value="project">项目培训</option>
+                  <option value="product">产品培训</option>
+                  <option value="questionnaire">问卷草稿</option>
+                  <option value="herb">中药</option>
+                  <option value="formula">方剂</option>
+                  <option value="syndrome">证候</option>
+                  <option value="disease">疾病</option>
+                  <option value="other">其他</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <Label className="text-[12px]">类型</Label>
-              <select value={newKind} onChange={(e) => setNewKind(e.target.value)}
-                className="w-full text-[13px] rounded-lg border px-3 py-2 bg-white outline-none mt-1" style={{ borderColor: C.border }}>
-                {Object.entries(KIND_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-            </div>
-            <div>
-              <Label className="text-[12px]">内容（JSON）</Label>
-              <textarea value={newContent} onChange={(e) => setNewContent(e.target.value)}
-                placeholder='{"steps": ["欢迎语", "需求挖掘", "价值塑造"]}'
-                className="w-full text-[12px] font-mono rounded-lg border p-2 outline-none mt-1 h-24"
-                style={{ borderColor: C.border }} />
+            <TextImporter kind={newKind} onImport={(parsed) => setNewContent(parsed)} />
+            <div className="rounded-md border p-3" style={{ borderColor: C.border, background: "#fff" }}>
+              <div className="text-[12px] font-medium mb-2 flex items-center gap-1" style={{ color: C.mid }}>
+                <Sparkles className="w-3.5 h-3.5" style={{ color: C.accent }} />
+                内容编辑
+              </div>
+              <TemplateEditor kind={newKind} value={newContent} onChange={setNewContent} />
             </div>
           </div>
           <DialogFooter>
@@ -909,9 +943,9 @@ export default function CapabilityCenter() {
         </DialogContent>
       </Dialog>
 
-      {/* 模板详情 */}
+      {/* 模板详情（查看 / 编辑） */}
       <Dialog open={!!viewTpl} onOpenChange={(o) => { if (!o) setViewTpl(null); }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl max-h-[88vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Eye className="w-4 h-4" style={{ color: C.primary }} />
@@ -923,7 +957,7 @@ export default function CapabilityCenter() {
                   {KIND_LABEL[viewTpl.kind] || viewTpl.kind}
                 </span>
               )}
-              <span>此模板归属与归属流转见「归属模型」说明</span>
+              <span>查看效果或直接编辑内容；编辑保存后旧版本自动存档，可回滚</span>
             </DialogDescription>
           </DialogHeader>
           {viewTpl && (
@@ -931,6 +965,28 @@ export default function CapabilityCenter() {
               <div className="rounded-md p-2.5" style={{ background: "#F8FAF9", border: `1px solid ${C.border}` }}>
                 <TemplateMeta tpl={viewTpl} />
               </div>
+
+              {/* 查看 / 编辑 Tab */}
+              <div className="flex gap-1.5">
+                <button type="button"
+                  onClick={() => setViewTab("view")}
+                  className="inline-flex items-center gap-1 text-[12px] px-3 py-1.5 rounded-full border transition-colors"
+                  style={viewTab === "view"
+                    ? { background: C.primary, color: "#fff", borderColor: C.primary }
+                    : { background: "#fff", color: C.mid, borderColor: C.border }}>
+                  <Eye className="w-3.5 h-3.5" />查看
+                </button>
+                <button type="button"
+                  onClick={() => { setEditContent((viewTpl.content_json as Record<string, unknown>) || {}); setViewTab("edit"); }}
+                  className="inline-flex items-center gap-1 text-[12px] px-3 py-1.5 rounded-full border transition-colors"
+                  style={viewTab === "edit"
+                    ? { background: C.primary, color: "#fff", borderColor: C.primary }
+                    : { background: "#fff", color: C.mid, borderColor: C.border }}>
+                  <Pencil className="w-3.5 h-3.5" />编辑
+                </button>
+              </div>
+
+              {viewTab === "view" && (
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="text-[12px] font-medium flex items-center gap-1" style={{ color: C.mid }}>
@@ -948,6 +1004,23 @@ export default function CapabilityCenter() {
                   <TemplatePreview content={(viewTpl.content_json as Record<string, unknown>) || {}} />
                 </div>
               </div>
+              )}
+
+              {viewTab === "edit" && (
+              <div className="space-y-2.5">
+                <TextImporter kind={viewTpl.kind} onImport={(parsed) => setEditContent(parsed)} />
+                <div className="rounded-md border p-3" style={{ borderColor: C.border, background: "#fff" }}>
+                  <TemplateEditor kind={viewTpl.kind} value={editContent} onChange={setEditContent} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" style={{ background: C.primary }} disabled={savingEdit} onClick={doSaveEdit}>
+                    {savingEdit && <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />}保存修改
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setViewTab("view")}>取消编辑</Button>
+                  <span className="text-[11px]" style={{ color: C.light }}>保存会生成新版本，旧内容可在「版本历史」回滚</span>
+                </div>
+              </div>
+              )}
 
               {/* 版本历史 */}
               <div>
