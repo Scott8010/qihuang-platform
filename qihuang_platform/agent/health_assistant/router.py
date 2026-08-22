@@ -245,6 +245,51 @@ async def _vision_reply(
         )
 
 
+# ── 核心应答链路（chat 端点与 OpenAI 兼容层共用，避免逻辑重复）──
+async def handle_chat(
+    tenant_id: Optional[str],
+    user_msg: str,
+    history: List[Dict[str, str]],
+    store_id: Optional[str] = None,
+    end_user_id: Optional[str] = None,
+    image: Optional[str] = None,
+    max_tokens: int = 1200,
+    session_id: Optional[str] = None,
+) -> tuple[str, str, bool]:
+    """健康助手核心链路：语料注入 → 文本/视觉链路 → 会话记忆 → 配额计数 → 埋点。
+
+    配额检查由调用方负责（chat 端点双层配额；OpenAI 兼容层机构级配额）。
+    返回 (reply, model, multimodal)。
+    """
+    system = _build_system(_load_marketing_prompt(tenant_id, store_id))
+    t0 = time.time()
+    trace_id = uuid.uuid4().hex
+
+    if image:
+        reply, model = await _vision_reply(image, user_msg, system)
+    else:
+        reply, model = await _text_reply(user_msg, history, system, max_tokens)
+
+    # 会话内记忆落盘（文本轮与多模态轮都记文本侧）
+    if session_id and user_msg:
+        convo = list(history)
+        convo.append({"role": "user", "content": user_msg})
+        convo.append({"role": "assistant", "content": reply})
+        _persist_session(session_id, convo)
+
+    # 配额计数 + 业务埋点
+    record_user_call(tenant_id, end_user_id)
+    await record_call(
+        tenant_id=tenant_id,
+        end_user_id=end_user_id,
+        code=0,
+        partial=False,
+        latency_ms=(time.time() - t0) * 1000,
+        trace_id=trace_id,
+    )
+    return reply, model, bool(image)
+
+
 # ── 端点 ──
 @router.post(
     "/health-assistant/chat",
@@ -279,36 +324,18 @@ async def chat(
     if not user_msg and not req.image:
         return error("INVALID_PARAM", "question 不能为空（或提供 image）")
 
-    system = _build_system(_load_marketing_prompt(tenant_id, req.store_id))
-
     try:
-        t0 = time.time()
-        trace_id = uuid.uuid4().hex
-
-        if req.image:
-            reply, model = await _vision_reply(req.image, user_msg, system)
-        else:
-            reply, model = await _text_reply(
-                user_msg, _resolve_session_messages(req), system, req.max_tokens)
-
-        # 会话内记忆落盘（文本轮与多模态轮都记文本侧）
-        if req.session_id and user_msg:
-            convo = _resolve_session_messages(req)
-            convo.append({"role": "user", "content": user_msg})
-            convo.append({"role": "assistant", "content": reply})
-            _persist_session(req.session_id, convo)
-
-        # 双层配额计数 + 业务埋点
-        record_user_call(tenant_id, req.end_user_id)
-        await record_call(
+        reply, model, multimodal = await handle_chat(
             tenant_id=tenant_id,
+            user_msg=user_msg,
+            history=_resolve_session_messages(req),
+            store_id=req.store_id,
             end_user_id=req.end_user_id,
-            code=0,
-            partial=False,
-            latency_ms=(time.time() - t0) * 1000,
-            trace_id=trace_id,
+            image=req.image,
+            max_tokens=req.max_tokens,
+            session_id=req.session_id,
         )
-        return success({"reply": reply, "model": model, "multimodal": bool(req.image)})
+        return success({"reply": reply, "model": model, "multimodal": multimodal})
     except Exception as e:  # noqa: BLE001
         logger.exception("[ha] chat 失败")
         return error("INTERNAL_ERROR", str(e))

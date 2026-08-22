@@ -306,6 +306,14 @@ try:
 except ImportError as e:
     print(f"[Platform] Agent 中台模块未就绪: {e}")
 
+# ── OpenAI 兼容层（Open WebUI 接入健康助手：/v1/models + /v1/chat/completions）──
+try:
+    from qihuang_platform.agent.openai_compat import router as openai_compat_router
+    app.include_router(openai_compat_router)  # /v1/*
+    print("[Platform] OpenAI 兼容层已挂载 → /v1/models, /v1/chat/completions")
+except ImportError as e:
+    print(f"[Platform] OpenAI 兼容层模块未就绪: {e}")
+
 
 # ═══════════════════════════════════════════════════════════════
 # Phase 1: RBAC 路由挂载（数据库租户/用户/角色/权限管理）
