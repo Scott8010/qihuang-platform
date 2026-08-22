@@ -282,14 +282,22 @@ class TestMetering3D:
         metering_store.clear()
         print(f"  [PASS] 模块维度查询: 总量{len(all_logs)}, 3D={len(d3_logs)}")
 
-    def test_3d_addon_price(self):
-        """7.3 3D加购价格信息"""
-        from qihuang_platform.billing.plans import get_3d_addon_price
-        price = get_3d_addon_price()
-        assert price["module"] == "module_3d"
-        assert price["pricing"]["monthly_cny"] == 99.00
-        assert len(price["metering_dimensions"]) == 4
-        print(f"  [PASS] 3D加购: {price['pricing']}")
+    def test_3d_plan_gating(self):
+        """3D 套餐门槛制（2026-08-22 老黄拍板方案 A）：module_3d 由套餐 features 强制，
+        trial/standard→false，professional/enterprise→true；无单独加购价格（死代码已删）。"""
+        from qihuang_platform.billing.plans import DEFAULT_PLANS, VALID_SCENES
+        for plan_def in DEFAULT_PLANS:
+            plan_key = plan_def["plan_name"]
+            feat = plan_def.get("features_json") or {}
+            module_3d = feat.get("module_3d", False)
+            # 门槛断言：低档不含，高档含
+            if plan_key in ("trial", "standard"):
+                assert module_3d is False, f"{plan_key} 不应含 3D: {module_3d}"
+            else:
+                assert module_3d is True, f"{plan_key} 应含 3D: {module_3d}"
+        # 场景合法集存在（场景预配见 SCENE_PLAN_AGENTS）
+        assert "MED" in VALID_SCENES and "HQ" in VALID_SCENES
+        print(f"  [PASS] 3D 套餐门槛: trial/standard 不含, professional/enterprise 含（{len(DEFAULT_PLANS)} 档）")
 
 
 # ================================================================
