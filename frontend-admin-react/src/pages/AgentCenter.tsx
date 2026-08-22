@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   Bot, Boxes, RefreshCw, Check, Loader2, Network, Gauge, Plug,
   CircleDot, AlertTriangle, Stethoscope, X, BarChart3, Activity, Users,
-  Coins, HeartPulse, Zap, Server,
+  Coins, HeartPulse, Zap, Server, PenLine, Copy,
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -15,6 +15,8 @@ import {
   fetchAgentCenter, toggleAgent, fetchAgentDashboard, fetchPlanAgentMatrix, setPlanAgents,
   getIdentity, consultHealthAdvisor, consultStoreCoach,
   fetchDashboard, fetchSceneUsage, fetchAgentUsage, fetchAgentBusinessSignals,
+  fetchHealthAssistantPrompt, saveHealthAssistantPrompt,
+  fetchTenantOrgs, fetchOrgHealthAssistantPrompt, saveOrgHealthAssistantPrompt,
   type AgentDef, type PlanAgentRow, type HealthAdvisorConsultResult, type AgentBusinessSignals,
 } from "@/lib/api";
 
@@ -112,6 +114,10 @@ export default function AgentCenter() {
   // 在线试用：当前展开试用的 agent_key（null=收起）
   const [trialFor, setTrialFor] = useState<string | null>(null);
 
+  // 喂料口：健康助手营销语料弹窗（当前打开的 agent_key，null=关闭）
+  const [promptFor, setPromptFor] = useState<string | null>(null);
+  const [promptRefreshKey, setPromptRefreshKey] = useState(0);
+
   const loadAgents = () => fetchAgentCenter().then((d) => setAgents(d.agents));
   const loadMatrix = () => fetchPlanAgentMatrix().then(setMatrix);
 
@@ -126,6 +132,12 @@ export default function AgentCenter() {
     const r = await toggleAgent(a.agent_key, next);
     if (r.ok) { await loadAgents(); }
     else { alert(r.msg || "启停失败"); }
+  };
+
+  // 喂料口：打开营销语料弹窗（当前登录管理员所在租户为语料归属）
+  const openPrompt = (agentKey: string) => {
+    setPromptFor(agentKey);
+    setPromptRefreshKey((k) => k + 1);
   };
 
   const openDash = async (key: string) => {
@@ -243,6 +255,13 @@ export default function AgentCenter() {
                         <Stethoscope className="w-3.5 h-3.5 mr-1" />
                         {trialFor === a.agent_key ? "收起" : "在线试用"}
                       </Button>
+                      {a.agent_key === "health-assistant" && (
+                        <Button size="sm" variant="outline" className="h-7 text-[12px]"
+                          style={promptFor ? { borderColor: C.primary, color: C.primary } : undefined}
+                          onClick={() => openPrompt(a.agent_key)}>
+                          <PenLine className="w-3.5 h-3.5 mr-1" /> 营销语料
+                        </Button>
+                      )}
                     </div>
 
                     {/* 在线试用展开区（内嵌在能力卡片上） */}
@@ -439,7 +458,16 @@ export default function AgentCenter() {
           </Card>
         ) : null}
       </section>
-    </div>
+
+      {/* 喂料口：健康助手营销语料弹窗（B 端后台可视化编辑） */}
+      {promptFor && (
+        <HealthAssistantPromptModal
+          key={promptRefreshKey}
+          tenantId={getIdentity()?.tenant_id || ""}
+          onClose={() => setPromptFor(null)}
+        />
+      )}
+      </div>
   );
 }
 
@@ -695,6 +723,174 @@ function AgentOverview() {
         </div>
       )}
     </section>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   喂料口 · 健康助手营销语料弹窗（2026-08-22 老黄拍板 + #482 门店级语料槽）
+   B 端后台可视化：白话一段话描述门店项目/卖点/引导话术；
+   支持「平台默认（全部门店兜底）」+ 按门店（Org）分别编辑专属语料；
+   保存自动过 compliance（违规拦截）；提供默认样例一键填充。
+   ═══════════════════════════════════════════ */
+function HealthAssistantPromptModal({
+  tenantId, onClose,
+}: { tenantId: string; onClose: () => void }) {
+  const [prompt, setPrompt] = useState("");
+  const [sample, setSample] = useState("");
+  const [platformDefault, setPlatformDefault] = useState("");
+  const [orgs, setOrgs] = useState<{ id: string; name: string }[]>([]);
+  const [scope, setScope] = useState(""); // "" = 平台默认；否则 orgId
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  // 门店列表（喂料口门店选择器，仅一次；复用已有 fetchTenantOrgs → OrgItem[]）
+  useEffect(() => {
+    if (!tenantId) return;
+    fetchTenantOrgs(tenantId).then((list) => {
+      setOrgs(list || []);
+    });
+  }, [tenantId]);
+
+  // 按当前归属加载语料（平台默认 or 门店专属；门店未配置时后端返回平台默认兜底展示）
+  useEffect(() => {
+    if (!tenantId) { setLoading(false); return; }
+    let alive = true;
+    setLoading(true); setError(null); setSaved(false);
+    if (!scope) {
+      fetchHealthAssistantPrompt(tenantId).then((r) => {
+        if (!alive) return;
+        if (r.ok && r.data) {
+          setPrompt(r.data.health_assistant_prompt || "");
+          setSample(r.data.sample || "");
+        } else setError(r.msg || "加载语料失败");
+        setLoading(false);
+      });
+    } else {
+      fetchOrgHealthAssistantPrompt(tenantId, scope).then((r) => {
+        if (!alive) return;
+        if (r.ok && r.data) {
+          setPrompt(r.data.health_assistant_prompt || "");
+          setPlatformDefault(r.data.platform_default || "");
+          setSample(r.data.sample || "");
+        } else setError(r.msg || "加载语料失败");
+        setLoading(false);
+      });
+    }
+    return () => { alive = false; };
+  }, [tenantId, scope]);
+
+  const doSave = async () => {
+    if (!prompt.trim()) { setError("语料不能为空"); return; }
+    setSaving(true); setError(null); setSaved(false);
+    const r = scope
+      ? await saveOrgHealthAssistantPrompt(tenantId, scope, prompt.trim())
+      : await saveHealthAssistantPrompt(tenantId, prompt.trim());
+    setSaving(false);
+    if (r.ok) { setSaved(true); setTimeout(() => onClose(), 900); }
+    else { setError(r.msg || "保存失败"); }
+  };
+
+  const scopeLabel = scope
+    ? (orgs.find((o) => o.id === scope)?.name || "该门店")
+    : "平台默认（全部门店兜底）";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-2xl rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <PenLine className="w-4 h-4" style={{ color: C.primary }} />
+            <span className="text-[15px] font-semibold" style={{ color: C.ink }}>健康助手 · 营销语料喂料口</span>
+          </div>
+          <button onClick={onClose} className="p-1 rounded hover:bg-black/5"><X className="w-4 h-4" style={{ color: C.mid }} /></button>
+        </div>
+        <div className="text-[11px] mb-3" style={{ color: C.light }}>
+          租户 {tenantId || "（未识别）"} · 每次 C 端对话动态生效，改完即用、无需发版
+        </div>
+
+        {loading ? (
+          <div className="h-40 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin" style={{ color: C.primary }} /></div>
+        ) : (
+          <>
+            {/* 归属选择器：#482 平台默认 ↔ 门店专属 */}
+            <div className="mb-3 flex items-center gap-2">
+              <span className="text-[12px] font-medium shrink-0" style={{ color: C.ink }}>语料归属</span>
+              <select
+                value={scope}
+                onChange={(e) => setScope(e.target.value)}
+                className="flex-1 rounded-lg border px-2 py-1.5 text-[12px] outline-none focus:border-[#2E5A4C]"
+                style={{ borderColor: C.border, color: C.ink, background: "#FBFAF7" }}
+              >
+                <option value="">平台默认（全部门店兜底）</option>
+                {orgs.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+              </select>
+            </div>
+            {scope && (
+              <div className="mb-2 text-[11px]" style={{ color: C.light }}>
+                门店专属语料；未配置时 C 端自动回落平台默认
+                {platformDefault ? `：${platformDefault}` : ""}
+              </div>
+            )}
+
+            <div className="mb-2 flex items-center gap-2">
+              <span className="text-[12px] font-medium" style={{ color: C.ink }}>语料内容（≤500 字，白话一段话）</span>
+              {sample && (
+                <button
+                  className="text-[11px] px-2 py-0.5 rounded flex items-center gap-1"
+                  style={{ background: "#F3F6F4", color: C.primary }}
+                  onClick={() => { setPrompt(sample); setError(null); }}
+                >
+                  <Copy className="w-3 h-3" /> 填入样例
+                </button>
+              )}
+            </div>
+            <textarea
+              value={prompt}
+              onChange={(e) => { setPrompt(e.target.value); setSaved(false); setError(null); }}
+              maxLength={500}
+              rows={8}
+              placeholder={"例如：本店位于XX路，主营小儿推拿+成人艾灸。主打温阳灸（怕冷/宫寒）、脾胃推拿（积食）。引导话术：提到怕冷→介绍温阳灸并邀约到店；提到积食→推荐小儿推拿。禁忌：不承诺疗效、不硬广。"}
+              className="w-full rounded-lg border p-3 text-[13px] leading-relaxed outline-none focus:border-[#2E5A4C]"
+              style={{ borderColor: C.border, color: C.ink, background: "#FBFAF7" }}
+            />
+            <div className="flex justify-between items-center mt-1">
+              <span className="text-[11px]" style={{ color: C.light }}>{prompt.length}/500</span>
+              <span className="text-[11px]" style={{ color: C.light }}>硬规则：保存自动过合规审核 · 提示词已内建「不硬广、不编造、不承诺疗效」</span>
+            </div>
+
+            {sample && (
+              <div className="mt-3 p-3 rounded-lg text-[11px] leading-relaxed" style={{ background: "#F3F6F4", color: C.mid }}>
+                <span className="font-medium" style={{ color: C.primary }}>推荐写法（样例）</span>
+                <div className="mt-1">{sample}</div>
+              </div>
+            )}
+
+            {error && (
+              <div className="mt-3 p-2.5 rounded-lg text-[12px] flex items-start gap-2" style={{ background: "#FDF0EC", color: "#B03A2E" }}>
+                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" /> {error}
+              </div>
+            )}
+            {saved && (
+              <div className="mt-3 p-2.5 rounded-lg text-[12px] flex items-center gap-2" style={{ background: "#EAF3EF", color: "#2E5A4C" }}>
+                <Check className="w-3.5 h-3.5" /> 已保存（{scopeLabel}），C 端对话即刻生效
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 mt-4">
+              <Button size="sm" variant="outline" className="h-8" onClick={onClose}>取消</Button>
+              <Button size="sm" className="h-8" style={{ background: C.primary }} disabled={saving || !prompt.trim()} onClick={doSave}>
+                {saving ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Check className="w-3.5 h-3.5 mr-1" />}
+                {saving ? "保存中…" : "保存（自动过合规）"}
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 

@@ -59,7 +59,20 @@ BUILTIN_AGENTS: dict[str, dict[str, Any]] = {
         "category": "health",
         "desc": "中医健康顾问：固定专业辨证链（体质辨识→辨证→方剂→调理），"
                 "基于 8601 四诊合参引擎，partial 降级 + 免责必带，"
-                "回写钉业务实体（material_key→HA-XXXX 幂等），仅作辅助参考。",
+                "回写钉业务实体（material_key→HA-XXXX 幂等），仅作辅助参考。"
+                "（打磨中·暂不对外：自由问答已拆为独立能力 health-assistant）",
+    },
+    "health-assistant": {
+        "name": "健康助手",
+        "kind": "business_embedded",          # 融入业务流的能力模块（C 端主钩子）
+        "engine": "qihuang-health-assistant",  # 文本走 refine_llm deepseek / 多模态走视觉网关 qwen-vl-plus
+        "router_prefix": "/api/v1/agent/health-assistant",
+        "capabilities": ["chat", "dashboard"],
+        "status": "active",
+        "category": "health",
+        "desc": "健康助手（C 端健康服务主钩子）：ChatGPT 式自由问答 + 可配置营销引导 + 多模态自动切换"
+                "（有图走视觉模型）+ 会话内记忆，从 health-advisor 拆出的独立能力；"
+                "双层配额（机构级 + 每 C 端用户限次，体验版每用户 10 次/月）。",
     },
     "tongue": {
         "name": "舌象健康特征分析",

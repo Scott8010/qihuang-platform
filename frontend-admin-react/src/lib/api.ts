@@ -841,6 +841,50 @@ export async function toggleAgent(agentKey: string, status: "active" | "inactive
   return mutate("POST", `/admin/v1/agents/${encodeURIComponent(agentKey)}/toggle`, { status });
 }
 
+/** 健康助手喂料口（2026-08-22 老黄拍板：B 端后台可视化编辑营销语料） */
+export interface HealthAssistantPromptData {
+  tenant_id: string;
+  health_assistant_prompt: string;
+  sample?: string;
+}
+/** GET /admin/v1/tenants/{tenant_id}/health-assistant-prompt — 查语料（含空态样例） */
+export async function fetchHealthAssistantPrompt(tenantId: string): Promise<MutateResult<HealthAssistantPromptData>> {
+  return get<{ code: number; msg?: string; data?: HealthAssistantPromptData; detail?: any }>(
+    `/admin/v1/tenants/${encodeURIComponent(tenantId)}/health-assistant-prompt`,
+  ).then((r) => {
+    if (r?.code === 0 && r.data) return { ok: true, msg: r.msg || "成功", data: r.data };
+    const msg = r?.detail?.msg || r?.detail?.message || r?.msg || "查询失败";
+    return { ok: false, msg };
+  }).catch((e: any) => ({ ok: false, msg: e?.message || "网络异常" }));
+}
+/** PUT /admin/v1/tenants/{tenant_id}/health-assistant-prompt — 保存语料（自动过合规，违规拦截） */
+export async function saveHealthAssistantPrompt(tenantId: string, prompt: string): Promise<MutateResult> {
+  return mutate("PUT", `/admin/v1/tenants/${encodeURIComponent(tenantId)}/health-assistant-prompt`, { prompt });
+}
+
+/* ── #482 门店级语料槽（Org 维度，门店列表复用已有 fetchTenantOrgs）── */
+export interface OrgPromptData {
+  tenant_id: string;
+  org_id: string;
+  health_assistant_prompt: string;
+  platform_default: string;
+  sample?: string;
+}
+/** GET /admin/v1/tenants/{tenant_id}/orgs/{org_id}/health-assistant-prompt — 门店语料（含平台默认兜底展示） */
+export async function fetchOrgHealthAssistantPrompt(tenantId: string, orgId: string): Promise<MutateResult<OrgPromptData>> {
+  return get<{ code: number; msg?: string; data?: OrgPromptData; detail?: any }>(
+    `/admin/v1/tenants/${encodeURIComponent(tenantId)}/orgs/${encodeURIComponent(orgId)}/health-assistant-prompt`,
+  ).then((r) => {
+    if (r?.code === 0 && r.data) return { ok: true, msg: r.msg || "成功", data: r.data };
+    const msg = r?.detail?.msg || r?.detail?.message || r?.msg || "查询失败";
+    return { ok: false, msg };
+  }).catch((e: any) => ({ ok: false, msg: e?.message || "网络异常" }));
+}
+/** PUT /admin/v1/tenants/{tenant_id}/orgs/{org_id}/health-assistant-prompt — 保存门店语料（自动过合规） */
+export async function saveOrgHealthAssistantPrompt(tenantId: string, orgId: string, prompt: string): Promise<MutateResult> {
+  return mutate("PUT", `/admin/v1/tenants/${encodeURIComponent(tenantId)}/orgs/${encodeURIComponent(orgId)}/health-assistant-prompt`, { prompt });
+}
+
 /** GET /admin/v1/agents/{agent_key}/dashboard — 各 Agent 运营看板（中台派发，内核在底层） */
 export async function fetchAgentDashboard(
   agentKey: string, opts?: { storeId?: string; port?: string },

@@ -339,6 +339,19 @@ class TenantAgentAddonsRequest(BaseModel):
     remove: List[str] = Field(default_factory=list, description="要从租户叠加项中移除的 Agent key 列表")
 
 
+class HealthAssistantPromptRequest(BaseModel):
+    prompt: str = Field(..., description="健康助手营销引导语料（白话一段话，≤500 字）")
+
+
+# 喂料口默认样例（前端空态展示 + 门店运营参考，老黄 2026-08-22 拍板「给样例」）
+_HEALTH_ASSISTANT_PROMPT_SAMPLE = (
+    "本店位于XX路XX号，主营小儿推拿+成人艾灸调理。主打项目：温阳灸（针对怕冷/宫寒）、"
+    "脾胃推拿（积食/胃口差）。门店优势：十年老师傅、纯手工、可医保。"
+    "引导话术：用户提到怕冷/手脚凉→自然介绍温阳灸并邀约到店体验；提到孩子积食→推荐小儿推拿。"
+    "禁忌：不承诺疗效、不硬广，先帮用户聊清楚症状再说项目。"
+)
+
+
 @router.get("/tenants/{tenant_id}/agent-addons", summary="查询租户叠加的额外 Agent（套餐之外）")
 async def get_tenant_agent_addons(tenant_id: str, admin: dict = Depends(get_current_admin)):
     """返回该租户在套餐 agents 基础上额外叠加的 Agent 列表（存于 tenant.extra.agent_addons）。"""
@@ -397,6 +410,170 @@ async def set_tenant_agent_addons(
             "tenant_id": tenant_id,
             "agent_addons": new_set,
         }, message="租户级 Agent 叠加已更新（在套餐 agents 基础上生效）")
+    except Exception as e:
+        db.rollback()
+        return error("INTERNAL_ERROR", message=str(e))
+    finally:
+        db.close()
+
+
+@router.get("/tenants/{tenant_id}/health-assistant-prompt", summary="查询租户健康助手营销语料（喂料口）")
+async def get_tenant_health_assistant_prompt(
+    tenant_id: str,
+    admin: dict = Depends(get_current_admin),
+):
+    """读取租户健康助手专属营销引导语料（存于 tenant.extra.health_assistant_prompt）。
+
+    喂料口（2026-08-22 老黄拍板）：B 端后台可视化编辑——门店运营用白话写一段
+    「本店项目/卖点/引导话术」，健康助手每次对话动态拼入 system prompt。
+    未配置返回空串 + 默认样例（前端展示用）。
+    """
+    db = SessionLocal()
+    try:
+        t = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not t:
+            return error("NOT_FOUND", message="租户不存在")
+        extra = t.extra or {}
+        return success(data={
+            "tenant_id": tenant_id,
+            "health_assistant_prompt": extra.get("health_assistant_prompt", ""),
+            "sample": _HEALTH_ASSISTANT_PROMPT_SAMPLE,
+        })
+    finally:
+        db.close()
+
+
+@router.put("/tenants/{tenant_id}/health-assistant-prompt", summary="保存租户健康助手营销语料（自动过合规）")
+async def set_tenant_health_assistant_prompt(
+    tenant_id: str,
+    req: HealthAssistantPromptRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    """保存健康助手营销语料，硬规则（老黄 2026-08-22 定）：
+
+    ① 必填：一段白话（≤500 字），不写术语；
+    ② 合规门禁：保存前自动过 compliance 审核链路，违规（医疗夸大/承诺疗效/广告法红线）→ 拒绝保存；
+    ③ 串联 content-writer：前端可先调用文案生成 agent 打草稿，再走本端点保存（人工确认后）。
+    """
+    db = SessionLocal()
+    try:
+        t = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not t:
+            return error("NOT_FOUND", message="租户不存在")
+
+        prompt = (req.prompt or "").strip()
+        if not prompt:
+            return error("INVALID_PARAM", message="语料不能为空")
+        if len(prompt) > 500:
+            return error("INVALID_PARAM", message=f"语料过长（{len(prompt)}/500 字），请精简为白话一段话")
+
+        # 合规门禁：自动过 compliance 审核（违规拦截，绝不把"包治百病"喂给 C 端）
+        from qihuang_platform.agent.compliance.engine_l2 import compliance_engine
+        check = await compliance_engine.analyze(
+            text=prompt,
+            material_type="health_assistant_prompt",
+            port="admin",
+            institution_id=tenant_id,
+            persist=False,  # 语料审核只判不落库（不污染合规物料库）
+        )
+        if check.get("state") == "违规拦截":
+            hits = [h.get("rule_id") or h.get("rule") for h in (check.get("hits") or [])]
+            return error("COMPLIANCE_BLOCKED", message=f"语料违规被拦截（{hits}），请改写后再保存", data={"hits": hits})
+
+        extra = dict(t.extra or {})
+        extra["health_assistant_prompt"] = prompt
+        t.extra = extra
+        db.commit()
+        return success(data={"tenant_id": tenant_id, "health_assistant_prompt": prompt},
+                       message="健康助手语料已保存（合规通过）")
+    except Exception as e:
+        db.rollback()
+        return error("INTERNAL_ERROR", message=str(e))
+    finally:
+        db.close()
+
+
+@router.get("/tenants/{tenant_id}/orgs/{org_id}/health-assistant-prompt",
+            summary="查询门店健康助手营销语料（门店级语料槽）")
+async def get_org_health_assistant_prompt(
+    tenant_id: str,
+    org_id: str,
+    admin: dict = Depends(get_current_admin),
+):
+    """读取门店专属营销语料（Org.extra.health_assistant_prompt）+ 平台默认兜底 + 样例。
+
+    #482 门店级语料槽：语料按门店（Org）维度分槽，未配置门店专属时回落平台默认
+    （Tenant.extra.health_assistant_prompt）。B 端喂料口按门店编辑。
+    """
+    db = SessionLocal()
+    try:
+        t = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not t:
+            return error("NOT_FOUND", message="租户不存在")
+        org = db.query(Org).filter_by(id=org_id, tenant_id=tenant_id).first()
+        if not org:
+            return error("NOT_FOUND", message="门店不存在或不属于该租户")
+        org_extra = org.extra or {}
+        tenant_extra = t.extra or {}
+        return success(data={
+            "tenant_id": tenant_id,
+            "org_id": org_id,
+            "health_assistant_prompt": org_extra.get("health_assistant_prompt", ""),
+            "platform_default": tenant_extra.get("health_assistant_prompt", ""),
+            "sample": _HEALTH_ASSISTANT_PROMPT_SAMPLE,
+        })
+    finally:
+        db.close()
+
+
+@router.put("/tenants/{tenant_id}/orgs/{org_id}/health-assistant-prompt",
+            summary="保存门店健康助手营销语料（自动过合规）")
+async def set_org_health_assistant_prompt(
+    tenant_id: str,
+    org_id: str,
+    req: HealthAssistantPromptRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    """保存门店专属营销语料，硬规则同租户级（#482）：
+
+    ① 必填白话（≤500 字）；② 合规门禁（违规拦截）；③ 落 Org.extra.health_assistant_prompt。
+    门店无专属语料时，chat 自动回落平台默认，互不覆盖。
+    """
+    db = SessionLocal()
+    try:
+        t = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not t:
+            return error("NOT_FOUND", message="租户不存在")
+        org = db.query(Org).filter_by(id=org_id, tenant_id=tenant_id).first()
+        if not org:
+            return error("NOT_FOUND", message="门店不存在或不属于该租户")
+
+        prompt = (req.prompt or "").strip()
+        if not prompt:
+            return error("INVALID_PARAM", message="语料不能为空")
+        if len(prompt) > 500:
+            return error("INVALID_PARAM", message=f"语料过长（{len(prompt)}/500 字），请精简为白话一段话")
+
+        # 合规门禁：同租户级，违规拦截绝不喂 C 端
+        from qihuang_platform.agent.compliance.engine_l2 import compliance_engine
+        check = await compliance_engine.analyze(
+            text=prompt,
+            material_type="health_assistant_prompt",
+            port="admin",
+            institution_id=tenant_id,
+            persist=False,
+        )
+        if check.get("state") == "违规拦截":
+            hits = [h.get("rule_id") or h.get("rule") for h in (check.get("hits") or [])]
+            return error("COMPLIANCE_BLOCKED", message=f"语料违规被拦截（{hits}），请改写后再保存", data={"hits": hits})
+
+        org_extra = dict(org.extra or {})
+        org_extra["health_assistant_prompt"] = prompt
+        org.extra = org_extra
+        db.commit()
+        return success(data={"tenant_id": tenant_id, "org_id": org_id,
+                             "health_assistant_prompt": prompt},
+                       message="门店健康助手语料已保存（合规通过）")
     except Exception as e:
         db.rollback()
         return error("INTERNAL_ERROR", message=str(e))

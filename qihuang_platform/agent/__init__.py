@@ -17,6 +17,9 @@ from qihuang_platform.agent.content_writer.router import router as content_write
 from qihuang_platform.agent.fortune.router import router as fortune_router
 from qihuang_platform.agent.geo.router import router as geo_router
 from qihuang_platform.agent.health_advisor.router import router as health_advisor_router
+from qihuang_platform.agent.health_assistant.router import (
+    router as health_assistant_router,
+)
 from qihuang_platform.agent.insight.router import router as insight_router
 from qihuang_platform.agent.store_coach.router import router as store_coach_router
 from qihuang_platform.agent.tongue.router import router as tongue_router
@@ -33,6 +36,9 @@ agent_router.include_router(
 )
 agent_router.include_router(
     health_advisor_router, prefix="/api/v1/agent", tags=["Agent-中台"]
+)
+agent_router.include_router(
+    health_assistant_router, prefix="/api/v1/agent", tags=["Agent-中台"]
 )
 agent_router.include_router(
     tongue_router, prefix="/api/v1/agent", tags=["Agent-中台"]
