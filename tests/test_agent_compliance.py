@@ -225,7 +225,7 @@ def test_neo4j_backend_lazy():
 def test_router_scan_and_feedback(tmp_env):
     from qihuang_platform.agent.compliance import engine_l2
     from qihuang_platform.agent.compliance.router import router as compliance_router
-    from qihuang_platform.gateway.deps import get_current_user, get_current_admin
+    from qihuang_platform.gateway.deps import get_current_principal
 
     # 让单例用临时存储，避免污染种子目录
     engine_l2.compliance_engine.store = ComplianceStore(tmp_env["store"])
@@ -237,8 +237,7 @@ def test_router_scan_and_feedback(tmp_env):
 
     def fake_user():
         return {"sub": "u1"}
-    app.dependency_overrides[get_current_user] = fake_user
-    app.dependency_overrides[get_current_admin] = fake_user  # 测试环境模拟管理员
+    app.dependency_overrides[get_current_principal] = fake_user
     from qihuang_platform.agent.deps import require_agent_in_plan
     app.dependency_overrides[require_agent_in_plan("compliance")] = lambda: {"sub": "u1"}
 
@@ -263,11 +262,10 @@ def test_router_scan_and_feedback(tmp_env):
 
 
 def test_router_feedback_requires_admin(tmp_env):
-    """非管理员调 feedback 应返回 403（RBAC 权限分级验证）。"""
+    """feedback 走双鉴权 get_current_principal（042951d）：无有效鉴权应 401。"""
     from qihuang_platform.agent.compliance import engine_l2
     from qihuang_platform.agent.compliance.router import router as compliance_router
-    from qihuang_platform.gateway.deps import get_current_user, get_current_admin
-    from qihuang_platform.gateway.deps import get_current_admin as real_admin
+    from qihuang_platform.gateway.deps import get_current_principal
 
     engine_l2.compliance_engine.store = ComplianceStore(tmp_env["store"])
     os.environ["COMPLIANCE_RULES_PATH"] = _RULES_DIR
@@ -276,25 +274,15 @@ def test_router_feedback_requires_admin(tmp_env):
     app.middleware("http")(_set_tenant)
     app.include_router(compliance_router, prefix="/api/v1/agent")
 
-    # 只 override get_current_user（模拟普通用户），不 override get_current_admin
-    # → get_current_admin 走真实逻辑，但 request.state.roles 未设 → 403
-    app.dependency_overrides[get_current_user] = lambda: {"sub": "u1"}
+    # 不 override get_current_principal → 走真实逻辑，无 Token/API Key → 401
     from qihuang_platform.agent.deps import require_agent_in_plan
     app.dependency_overrides[require_agent_in_plan("compliance")] = lambda: {"sub": "u1"}
-    # get_current_admin 不 override，走真实逻辑
-    # 但因为 get_current_user 被 override，不会设 request.state.roles
-    # 需要在中间件里模拟设 roles 为空
-    async def _set_tenant_no_admin(request, call_next):
-        request.state.tenant_id = "t1"
-        request.state.roles = []  # 普通用户无 admin 角色
-        return await call_next(request)
-    app.middleware("http")(_set_tenant_no_admin)
 
     client = TestClient(app)
     r = client.post("/api/v1/agent/compliance/feedback", json={
         "material_id": "MAT-FAKE", "decision": "keep", "action_taken": "released",
     })
-    assert r.status_code == 403
+    assert r.status_code == 401
 
 
 async def _set_tenant(request, call_next):
@@ -309,7 +297,7 @@ def test_audit_scan_and_feedback(tmp_env):
     from qihuang_platform.agent.compliance import engine_l2
     from qihuang_platform.agent.compliance.router import router as compliance_router
     from qihuang_platform.agent.compliance.audit import AuditStore
-    from qihuang_platform.gateway.deps import get_current_user, get_current_admin
+    from qihuang_platform.gateway.deps import get_current_principal
 
     engine_l2.compliance_engine.store = ComplianceStore(tmp_env["store"])
     os.environ["COMPLIANCE_RULES_PATH"] = _RULES_DIR
@@ -321,8 +309,7 @@ def test_audit_scan_and_feedback(tmp_env):
     app = FastAPI()
     app.middleware("http")(_set_tenant)
     app.include_router(compliance_router, prefix="/api/v1/agent")
-    app.dependency_overrides[get_current_user] = lambda: {"sub": "auditor1"}
-    app.dependency_overrides[get_current_admin] = lambda: {"sub": "auditor1"}
+    app.dependency_overrides[get_current_principal] = lambda: {"sub": "auditor1"}
     from qihuang_platform.agent.deps import require_agent_in_plan
     app.dependency_overrides[require_agent_in_plan("compliance")] = lambda: {"sub": "auditor1"}
 
@@ -367,7 +354,7 @@ def test_audit_filter_by_material_id(tmp_env):
     from qihuang_platform.agent.compliance import engine_l2
     from qihuang_platform.agent.compliance.router import router as compliance_router
     from qihuang_platform.agent.compliance.audit import AuditStore
-    from qihuang_platform.gateway.deps import get_current_user, get_current_admin
+    from qihuang_platform.gateway.deps import get_current_principal
 
     engine_l2.compliance_engine.store = ComplianceStore(tmp_env["store"])
     os.environ["COMPLIANCE_RULES_PATH"] = _RULES_DIR
@@ -378,8 +365,7 @@ def test_audit_filter_by_material_id(tmp_env):
     app = FastAPI()
     app.middleware("http")(_set_tenant)
     app.include_router(compliance_router, prefix="/api/v1/agent")
-    app.dependency_overrides[get_current_user] = lambda: {"sub": "u1"}
-    app.dependency_overrides[get_current_admin] = lambda: {"sub": "u1"}
+    app.dependency_overrides[get_current_principal] = lambda: {"sub": "u1"}
     from qihuang_platform.agent.deps import require_agent_in_plan
     app.dependency_overrides[require_agent_in_plan("compliance")] = lambda: {"sub": "u1"}
 

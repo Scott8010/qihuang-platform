@@ -1,7 +1,7 @@
 """
 风水堪舆 Agent（business_embedded，与 fortune 平级，看空间）
 
-端点（全部需 JWT，tenant_id 由网关注入 request.state）：
+端点（双鉴权：API Key 签名优先，否则回退 JWT，tenant_id 由网关注入 request.state）：
   POST /api/v1/agent/geo         风水堪舆：坐向(罗盘/24山)+GPS+户型 → 宅卦/八宅吉凶方/九宫/峦头
   GET  /api/v1/agent/geo/dashboard 运营看板（按 user 聚合）
 
@@ -15,7 +15,7 @@ import os
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
-from qihuang_platform.gateway.deps import get_current_user, get_current_admin
+from qihuang_platform.gateway.deps import get_current_principal
 from qihuang_platform.gateway.response import success, error
 from qihuang_platform.agent.deps import require_agent_in_plan
 from qihuang_platform.db.config import get_db
@@ -54,7 +54,7 @@ def geo_analysis(req: GeoRequest, request: Request, operator: str) -> dict:
 async def geo_create(
     req: GeoRequest,
     request: Request,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(get_current_principal),
     _agent=Depends(require_agent_in_plan("geo")),
 ):
     """风水堪舆（看空间）：坐向(罗盘/24山) + GPS → 宅卦/八宅吉凶方/九宫/峦头。"""
@@ -65,7 +65,7 @@ async def geo_create(
 async def geo_dashboard(
     user_id: str = None,
     request: Request = None,
-    user: dict = Depends(get_current_admin),
+    user: dict = Depends(get_current_principal),
     _agent=Depends(require_agent_in_plan("geo")),
 ):
     """运营看板：按 user 聚合调用量与类型分布。"""

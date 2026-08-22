@@ -1,7 +1,7 @@
 """
 命理运程 Agent（business_embedded，功能业务型，与 compliance 同构）
 
-端点（全部需 JWT，tenant_id 由网关注入 request.state）：
+端点（双鉴权：API Key 签名优先，否则回退 JWT；tenant_id 由网关注入 request.state）：
   POST /api/v1/agent/fortune/archive  四柱建档 → 八字排盘 + 喜用神（钉 user_id）
   POST /api/v1/agent/fortune/cast     六爻起卦（铜钱/时间）→ 本卦/变卦/动爻/解析
   GET  /api/v1/agent/fortune/daily    每日运程日签（五行穿衣/茶/宜忌/吉时方位…）
@@ -19,7 +19,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
-from qihuang_platform.gateway.deps import get_current_user, get_current_admin
+from qihuang_platform.gateway.deps import get_current_principal
 from qihuang_platform.gateway.response import success, error
 from qihuang_platform.agent.deps import require_agent_in_plan
 from qihuang_platform.db.config import get_db
@@ -44,7 +44,7 @@ async def fortune_archive(
     req: ArchiveRequest,
     request: Request,
     db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(get_current_principal),
     _agent=Depends(require_agent_in_plan("fortune")),
 ):
     """四柱建档：排盘 + 喜用神，钉在 user_id 上（幂等覆盖）。四柱或公历生日二选一。"""
@@ -79,7 +79,7 @@ async def fortune_archive(
 async def fortune_cast(
     req: CastRequest,
     request: Request,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(get_current_principal),
     _agent=Depends(require_agent_in_plan("fortune")),
 ):
     """六爻起卦：铜钱/时间，返回本卦/变卦/动爻/趣味解析（ai=true 时附 LLM 象义层详批）。"""
@@ -100,7 +100,7 @@ async def fortune_daily(
     pillars: str = None,
     ai: bool = False,
     request: Request = None,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(get_current_principal),
     _agent=Depends(require_agent_in_plan("fortune")),
 ):
     """每日运程日签：默认通用；带 user_id/四柱则做个性化喜用；ai=true 附 AI 散文详批。"""
@@ -129,7 +129,7 @@ async def fortune_daily(
 async def fortune_report(
     req: ReportRequest,
     request: Request,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(get_current_principal),
     _agent=Depends(require_agent_in_plan("fortune")),
 ):
     """年运报告：优先用已建档 user_id，否则四柱直输；ai=true 附 AI 散文详批。"""
@@ -158,7 +158,7 @@ async def fortune_report(
 async def fortune_geo(
     req: GeoRequest,
     request: Request,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(get_current_principal),
     _agent=Depends(require_agent_in_plan("fortune")),
 ):
     """向后兼容端点：委托 geo Agent 处理，数据统一落独立 geo 库（隔离红线）。"""
@@ -170,7 +170,7 @@ async def fortune_geo(
 async def fortune_dashboard(
     user_id: str = None,
     request: Request = None,
-    user: dict = Depends(get_current_admin),
+    user: dict = Depends(get_current_principal),
     _agent=Depends(require_agent_in_plan("fortune")),
 ):
     """运营看板：按 user 聚合调用量与类型分布。"""

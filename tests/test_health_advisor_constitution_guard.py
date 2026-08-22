@@ -3,12 +3,15 @@
 护栏规则：舌象/脉象任一缺失 → L1 兜底体质（如平和质，score=None）降级为「暂不判定」，
 不把"编的"当"辨证结果"透传给用户。有舌脉时正常返回。
 """
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
 
 from qihuang_platform.agent.health_advisor.orchestrator import HealthAdvisor
 from qihuang_platform.agent.health_advisor.schema import (
-    ConsultRequest, Profile, Syndrome,
+    ConsultRequest,
+    Profile,
+    Syndrome,
 )
 
 
@@ -62,28 +65,29 @@ async def test_constitution_kept_when_tongue_pulse_provided():
 
 
 @pytest.mark.asyncio
-async def test_free_chat_endpoint_mocked():
-    """自由问答端点：mock 引擎返回 → 响应含 reply + model（2026-08-22 新端点）"""
-    from qihuang_platform.agent.health_advisor.router import free_chat
-    from qihuang_platform.agent.health_advisor.schema import ConsultRequest
+async def test_health_assistant_chat_endpoint_mocked():
+    """健康助手自由问答端点：mock 引擎返回 → 响应含 reply + model（从 health-advisor 拆出 #478）"""
     from fastapi import Request as FastAPIRequest
+
+    from qihuang_platform.agent.health_assistant.router import ChatRequest, chat
 
     # 构造 fake request（带 tenant_id）
     class FakeScope(dict):
         pass
-    scope = FakeScope({"type": "http", "method": "POST", "path": "/api/v1/agent/health-advisor/chat"})
+    scope = FakeScope({"type": "http", "method": "POST", "path": "/api/v1/agent/health-assistant/chat"})
     fake_req = FastAPIRequest(scope)
     fake_req.state.tenant_id = "t1"
     fake_user = {"tenant_id": "t1", "user_id": "u1"}
 
     with patch("qihuang_platform.agent.refine_llm._chat_once", new=AsyncMock(return_value="失眠多是心神不宁，建议睡前少看手机、泡泡脚。")), \
-         patch("qihuang_platform.agent.health_advisor.metering.check_quota", return_value=True):
+         patch("qihuang_platform.agent.health_assistant.metering.check_quota", return_value=True), \
+         patch("qihuang_platform.agent.health_assistant.router._plan_per_user_limit", return_value=None):
         # 直接调用端点函数（跳过 Depends 鉴权层）
-        resp = await free_chat(
-            req=type("R", (), {"question": "失眠怎么办", "history": [], "max_tokens": 800})(),
+        resp = await chat(
+            req=ChatRequest(question="失眠怎么办", history=[], max_tokens=800),
             request=fake_req, user=fake_user, _=None,
         )
-    # free_chat 返回 success() 字典（code=0）
+    # chat 返回 success() 字典（code=0）
     assert resp.get("code") == 0, f"应成功: {resp}"
     data = resp.get("data", {})
     assert data.get("reply") and "失眠" in data["reply"], f"应返回回复: {data}"
