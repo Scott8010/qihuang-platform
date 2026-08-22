@@ -1,7 +1,7 @@
 """
 第一个 Agent 能力：内容合规审核（business_embedded，融入业务流，非对话窗口）。
 
-端点（全部需 JWT，tenant_id 由网关注入 request.state）：
+端点（双鉴权：API Key 签名优先，否则回退 JWT；tenant_id 由网关注入 request.state）：
   POST /api/v1/agent/compliance/scan      门店送审文案/图片 -> L0+L1+L2 三轨融合判定（图片走视觉模型辅助，未配置自动降级）
   POST /api/v1/agent/compliance/feedback  人工结论回写（钉 material_id，客观真实）
   GET  /api/v1/agent/compliance/dashboard 四态看板（按门店行级隔离）
@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 
-from qihuang_platform.gateway.deps import get_current_user, get_current_admin
+from qihuang_platform.gateway.deps import get_current_principal
 from qihuang_platform.gateway.response import success, error
 from qihuang_platform.agent.deps import require_agent_in_plan
 from qihuang_platform.agent.compliance.engine_l2 import compliance_engine
@@ -89,7 +89,7 @@ async def compliance_scan(
     req: ComplianceScanRequest,
     request: Request,
     db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(get_current_principal),
     _agent=Depends(require_agent_in_plan("compliance")),
 ):
     """门店送审：L0 硬红线 + L1 检索 + L2 推理三轨融合；可选图片走视觉模型辅助审核，回写钉业务实体。"""
@@ -139,7 +139,7 @@ async def compliance_feedback(
     req: ComplianceFeedbackRequest,
     request: Request,
     db: Session = Depends(get_db),
-    user: dict = Depends(get_current_admin),
+    user: dict = Depends(get_current_principal),
     _agent=Depends(require_agent_in_plan("compliance")),
 ):
     """人工结论回写：钉在 scan 返回的 material_id 上，客观真实，不替门店改文案。"""
@@ -192,7 +192,7 @@ async def compliance_dashboard(
     store_id: Optional[str] = None,
     port: Optional[str] = None,
     request: Request = None,
-    user: dict = Depends(get_current_admin),
+    user: dict = Depends(get_current_principal),
     _agent=Depends(require_agent_in_plan("compliance")),
 ):
     """四态看板：按门店 institution_id 行级隔离；附 tenant 视角标注。"""
@@ -210,7 +210,7 @@ async def compliance_audit(
     limit: int = 100,
     offset: int = 0,
     request: Request = None,
-    user: dict = Depends(get_current_admin),
+    user: dict = Depends(get_current_principal),
     _agent=Depends(require_agent_in_plan("compliance")),
 ):
     """审计日志查询（仅管理员）：合规操作留痕，支持按操作类型/物料/操作人过滤。"""
