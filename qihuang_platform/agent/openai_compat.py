@@ -80,23 +80,35 @@ def _chat_id() -> str:
     return "chatcmpl-" + uuid.uuid4().hex[:20]
 
 
-def _extract_question(messages: List[OpenAIMessage]) -> tuple[Optional[str], List[Dict[str, str]]]:
-    """取最后一条 user 消息为问题，其余作历史。content 支持字符串或 OpenAI 多模态数组。"""
+def _extract_question(messages: List[OpenAIMessage]) -> tuple[Optional[str], List[Dict[str, str]], Optional[str]]:
+    """取最后一条 user 消息为问题，其余作历史；支持 OpenAI 多模态数组（提取 text + 首个 image_url）。
+
+    返回 (question, history, image_url)。image_url 为 data URI / http(s) URL，供 handle_chat(image=...) 走视觉链路。
+    """
     msgs = [m for m in messages if m.role in ("user", "assistant")]
     user_idx = [i for i, m in enumerate(msgs) if m.role == "user"]
     if not user_idx:
-        return None, []
+        return None, [], None
     last = user_idx[-1]
     content = msgs[last].content
-    if isinstance(content, list):  # 多模态数组 → 只取 text 部分
-        text_parts = [p.get("text", "") for p in content
-                      if isinstance(p, dict) and p.get("type") == "text"]
+    image_url = None
+    if isinstance(content, list):  # 多模态数组：取 text 部分 + 首个 image_url
+        text_parts = []
+        for p in content:
+            if not isinstance(p, dict):
+                continue
+            if p.get("type") == "text":
+                text_parts.append(p.get("text", ""))
+            elif p.get("type") == "image_url":
+                url = (p.get("image_url") or {}).get("url")
+                if url and not image_url:
+                    image_url = url
         question = " ".join(text_parts) or ""
     else:
         question = str(content or "")
     question = question.strip()
     history = [{"role": m.role, "content": str(m.content or "")} for m in msgs[:last]]
-    return question, history
+    return question, history, image_url
 
 
 @router.get("/models", summary="OpenAI 兼容：模型列表")
@@ -123,17 +135,18 @@ async def openai_chat_completions(
     if not check_quota(tenant_id):
         return _openai_error(429, "机构本月健康助手配额已用完，请升级套餐或次月恢复。", "quota_exceeded")
 
-    question, history = _extract_question(req.messages)
-    if not question:
-        return _openai_error(400, "messages 至少需要一条非空 user 消息", "invalid_request")
+    question, history, image_url = _extract_question(req.messages)
+    if not question and not image_url:
+        return _openai_error(400, "messages 至少需要一条非空 user 消息或图片", "invalid_request")
 
     end_user_id = req.user or app_key  # OpenAI user 字段优先，缺省按 key 维度计
     try:
         reply, model, _ = await handle_chat(
             tenant_id=tenant_id,
-            user_msg=question,
+            user_msg=question or "请结合图片回答。",
             history=history,
             end_user_id=end_user_id,
+            image=image_url,
             max_tokens=req.max_tokens or 1200,
         )
     except Exception as e:  # noqa: BLE001
