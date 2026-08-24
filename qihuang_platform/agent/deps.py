@@ -19,6 +19,21 @@ from qihuang_platform.agent.registry import is_active
 _DEP_CACHE: Dict[str, object] = {}
 
 
+def _emit_perm_event(tenant_id, agent_key, result, reason, addons=None):
+    """旁路记录 agent 调用权限判定（P0 append-only 事件日志；绝不阻断业务）。"""
+    try:
+        from qihuang_platform.event_log import emit_event
+        payload = {"action": "agent_invoke", "result": result, "reason": reason}
+        if addons is not None:
+            payload["addons"] = addons
+        emit_event(
+            tenant_id=tenant_id, agent_key=agent_key,
+            event_type="PERMISSION", payload=payload,
+        )
+    except Exception:
+        pass
+
+
 def require_agent_in_plan(agent_key: str):
     """返回校验「当前租户套餐是否包含 agent_key」的依赖内函数（稳定可覆盖）。"""
     if agent_key in _DEP_CACHE:
@@ -27,6 +42,7 @@ def require_agent_in_plan(agent_key: str):
     async def _dep(request: Request, user: dict = Depends(get_current_principal)):
         tenant_id = getattr(request.state, "tenant_id", None)
         if not tenant_id:
+            _emit_perm_event(tenant_id, agent_key, "denied", "no_tenant_context")
             raise HTTPException(
                 status_code=403,
                 detail=error("AGENT_FORBIDDEN", "无法解析租户上下文，拒绝调用 Agent 能力"),
@@ -34,6 +50,7 @@ def require_agent_in_plan(agent_key: str):
 
         # 能力须处于启用态（控制端可热插拔）
         if not is_active(agent_key):
+            _emit_perm_event(tenant_id, agent_key, "denied", "agent_inactive")
             raise HTTPException(
                 status_code=403,
                 detail=error("AGENT_FORBIDDEN", f"Agent 能力「{agent_key}」已停用"),
@@ -57,6 +74,7 @@ def require_agent_in_plan(agent_key: str):
                 .first()
             )
             if not sub:
+                _emit_perm_event(tenant_id, agent_key, "denied", "no_active_subscription")
                 raise HTTPException(
                     status_code=403,
                     detail=error("AGENT_FORBIDDEN", "租户无有效订阅，无法使用 Agent 能力"),
@@ -73,6 +91,7 @@ def require_agent_in_plan(agent_key: str):
                 if k not in merged:
                     merged.append(k)
             if agent_key not in merged:
+                _emit_perm_event(tenant_id, agent_key, "denied", "not_in_plan", addons=addons)
                 raise HTTPException(
                     status_code=403,
                     detail=error(
@@ -83,6 +102,7 @@ def require_agent_in_plan(agent_key: str):
                 )
         finally:
             db.close()
+        _emit_perm_event(tenant_id, agent_key, "allowed", "plan_includes_agent", addons=addons)
         return user
 
     _DEP_CACHE[agent_key] = _dep

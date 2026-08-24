@@ -44,6 +44,12 @@ def get_db():
 
 def init_db():
     """初始化数据库表（开发/首次部署时调用）"""
+    # 注册 append-only 事件日志表（延迟 import 避免循环依赖；P0 落地点）
+    # 仅触发 SchedulerEventLog 注册到 Base.metadata，create_all 即会建表
+    try:
+        import qihuang_platform.event_log  # noqa: F401
+    except Exception as e:
+        print("WARN: event_log 模块注册跳过:", e)
     Base.metadata.create_all(bind=engine)
     _migrate_living_columns()
     _migrate_template_center_columns()

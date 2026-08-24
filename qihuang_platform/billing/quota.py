@@ -190,6 +190,23 @@ def check_quota(tenant_id: str) -> dict:
             used_tokens >= month_tokens_limit and month_tokens_limit > 0
         )
 
+        # P0 append-only 事件日志：旁路记录计费/配额决策（绝不阻断业务）
+        try:
+            from qihuang_platform.event_log import emit_event
+            emit_event(
+                tenant_id=tenant_id, agent_key=None, event_type="DECISION",
+                payload={
+                    "action": "quota_check",
+                    "plan_name": plan.plan_name,
+                    "remaining_calls": remaining_calls,
+                    "remaining_tokens": remaining_tokens,
+                    "quota_percentage": quota_percentage,
+                    "is_exceeded": is_exceeded,
+                },
+            )
+        except Exception:
+            pass
+
         data = {
             "tenant_id": tenant_id,
             "plan_name": plan.plan_name,

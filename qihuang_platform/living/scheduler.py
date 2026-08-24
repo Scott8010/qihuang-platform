@@ -20,6 +20,13 @@ _DEFAULT_INTERVAL = 24 * 3600  # 默认 24 小时
 
 
 async def _run_once():
+    # P0 append-only 事件日志：周期聚合闭环旁路留痕（绝不阻断业务）
+    try:
+        from qihuang_platform.event_log import emit_event
+        emit_event(event_type="INVOCATION",
+                   payload={"action": "living_cycle_start"})
+    except Exception:
+        pass
     db = SessionLocal()
     try:
         agg = await aggregate_feedback(db)
@@ -31,8 +38,23 @@ async def _run_once():
             corr.get("corrections_processed"),
             gaps.get("gaps_processed"),
         )
+        try:
+            from qihuang_platform.event_log import emit_event
+            emit_event(event_type="DECISION",
+                       payload={"action": "living_aggregate",
+                                "items_written": agg.get("items_written"),
+                                "corrections_processed": corr.get("corrections_processed"),
+                                "gaps_processed": gaps.get("gaps_processed")})
+        except Exception:
+            pass
     except Exception as e:
         logger.exception(f"[living] 周期聚合异常: {e}")
+        try:
+            from qihuang_platform.event_log import emit_event
+            emit_event(event_type="ERROR",
+                       payload={"action": "living_aggregate", "error": str(e)})
+        except Exception:
+            pass
     finally:
         db.close()
 
@@ -41,16 +63,40 @@ async def _run_once():
         from qihuang_platform.living.trend import collect_living_snapshot
         res = await collect_living_snapshot()
         logger.info("[living] 趋势采集完成: %s", res)
+        try:
+            from qihuang_platform.event_log import emit_event
+            emit_event(event_type="DECISION",
+                       payload={"action": "living_trend", "result": str(res)})
+        except Exception:
+            pass
     except Exception as e:
         logger.exception(f"[living] 趋势采集异常: {e}")
+        try:
+            from qihuang_platform.event_log import emit_event
+            emit_event(event_type="ERROR",
+                       payload={"action": "living_trend", "error": str(e)})
+        except Exception:
+            pass
 
     # 回路三（业务实证加权）采集：默认开关关闭，不影响仿真期闭环
     try:
         from qihuang_platform.living.business_signal import collect_business_signals
         bres = await collect_business_signals()
         logger.info("[living] 回路三采集: %s", bres)
+        try:
+            from qihuang_platform.event_log import emit_event
+            emit_event(event_type="DECISION",
+                       payload={"action": "living_business_signal", "result": str(bres)})
+        except Exception:
+            pass
     except Exception as e:
         logger.exception(f"[living] 回路三采集异常: {e}")
+        try:
+            from qihuang_platform.event_log import emit_event
+            emit_event(event_type="ERROR",
+                       payload={"action": "living_business_signal", "error": str(e)})
+        except Exception:
+            pass
 
 
 async def _loop(interval: int):
