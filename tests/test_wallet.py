@@ -5,7 +5,7 @@
 import pytest
 
 from qihuang_platform.db.config import SessionLocal
-from qihuang_platform.db.models import Wallet
+from qihuang_platform.db.models import Wallet, Tenant
 from qihuang_platform.billing.wallet import recharge, get_balance, consume_credits
 from qihuang_platform.billing.pricing_config import compute_credits, FLAT_CREDITS_PER_CALL
 
@@ -13,8 +13,13 @@ from qihuang_platform.billing.pricing_config import compute_credits, FLAT_CREDIT
 def _wipe():
     from qihuang_platform.db.models import Base
     db = SessionLocal()
-    Base.metadata.create_all(db.bind)  # 确保新表 wallet 存在（幂等）
+    Base.metadata.create_all(db.bind)  # 确保 wallet/tenant 等新表存在（幂等）
     db.query(Wallet).delete()
+    # 预置测试租户：wallet.tenant_id 有外键指向 tenant，CI 用 PostgreSQL 强制校验，
+    # 本地 SQLite 默认不校验易漏。不造租户会导致所有充值/扣费测试外键报错。
+    for tid in ["t_wallet_1", "t_wallet_2", "t_wallet_3", "t_wallet_4",
+                "other_tenant", "admin_t", "my_t", "other_t"]:
+        db.merge(Tenant(id=tid, name=tid, display_name=tid, scene="health", status="active", extra={}))
     db.commit()
     db.close()
 
