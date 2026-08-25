@@ -152,7 +152,7 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
     }
   };
 
-  if (detail) return <TenantDetail tenant={detail} onBack={() => setDetail(null)} />;
+  if (detail) return <TenantDetail tenant={detail} onBack={() => setDetail(null)} go={go} />;
 
   return (
     <div className="space-y-4">

@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowLeft, KeyRound, Sparkles, Loader2, Check, Minus } from "lucide-react";
+import { ArrowLeft, KeyRound, Sparkles, Loader2, Check, Minus, RefreshCw } from "lucide-react";
 import { C, sceneMap, statusMap, billStatus, planFeatureLabels } from "@/lib/types";
 import type {
   Tenant, OrgItem, TenantUserItem, BillItem, SubscriptionItem, PlanItem, PlanFeatures,
@@ -20,7 +20,7 @@ import {
  *  套餐特性 → GET /admin/v1/plans
  *  后端未提供的维度（分日趋势 / 端点级用量 / 单租户特性覆写）一律显示空态，不造假数据
  */
-export default function TenantDetail({ tenant, onBack }: { tenant: Tenant; onBack: () => void }) {
+export default function TenantDetail({ tenant, onBack, go }: { tenant: Tenant; onBack: () => void; go?: (p: string) => void }) {
   const t = tenant;
   const hasQuota = t.quotaCalls > 0;
   const pct = hasQuota ? Math.min(100, Math.round((t.usedCalls / t.quotaCalls) * 100)) : 0;
@@ -85,6 +85,11 @@ export default function TenantDetail({ tenant, onBack }: { tenant: Tenant; onBac
           </Badge>
         )}
         <div className="flex-1" />
+        {go && (
+          <Button variant="outline" size="sm" onClick={() => go("billing")} style={{ borderColor: C.border, color: C.primary }}>
+            <RefreshCw className="w-4 h-4 mr-1" /> 续费 / 变更套餐
+          </Button>
+        )}
         {loading && <Loader2 className="w-4 h-4 animate-spin" style={{ color: C.light }} />}
       </div>
 
