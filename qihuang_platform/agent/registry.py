@@ -18,6 +18,7 @@ BUILTIN_AGENTS: dict[str, dict[str, Any]] = {
         "name": "内容合规审核",
         "kind": "business_embedded",          # 融入业务流的能力模块，非对话窗口型
         "engine": "hb-compliance-guard",       # 纯规则引擎（32 条 A~F 类规则，四态判定）
+        "uses_llm": False,                      # 纯规则引擎，不调大模型（#474 固定积分/次计价）
         "router_prefix": "/api/v1/agent/compliance",
         "capabilities": ["scan", "feedback", "dashboard"],
         "status": "active",
@@ -29,6 +30,7 @@ BUILTIN_AGENTS: dict[str, dict[str, Any]] = {
         "name": "命理运程",
         "kind": "business_embedded",          # 功能业务型，非对话窗口型
         "engine": "hb-fortune-rules",          # 纯规则引擎（八字/六爻/日签/年运）
+        "uses_llm": False,                      # 纯规则引擎，不调大模型（#474 固定积分/次计价）
         "router_prefix": "/api/v1/agent/fortune",
         "capabilities": ["archive", "cast", "daily", "report", "dashboard"],
         "status": "active",
@@ -41,6 +43,7 @@ BUILTIN_AGENTS: dict[str, dict[str, Any]] = {
         "name": "风水堪舆",
         "kind": "business_embedded",          # 功能业务型，非对话窗口型（与 fortune 平级，看空间）
         "engine": "hb-geo-fengshui",           # 纯规则引擎（坐向/八宅/九宫/峦头）
+        "uses_llm": False,                      # 纯规则引擎，不调大模型（#474 固定积分/次计价）
         "router_prefix": "/api/v1/agent/geo",
         "capabilities": ["analysis", "dashboard"],
         "status": "active",
@@ -156,6 +159,7 @@ def _row_to_spec(row) -> dict[str, Any]:
         "status": row.status,
         "desc": row.desc,
         "features_json": row.features_json or {},
+        "uses_llm": row.uses_llm,
     }
 
 
@@ -196,6 +200,7 @@ def sync_from_db() -> int:
                 status=spec.get("status", "active"),
                 desc=spec.get("desc"),
                 features_json=spec.get("features_json", {}),
+                uses_llm=spec.get("uses_llm", True),
             ))
             backfilled.append(key)
         if backfilled:
@@ -213,7 +218,7 @@ def sync_from_db() -> int:
             if not spec:
                 continue
             changed = False
-            for f in ("name", "kind", "engine", "category", "router_prefix", "capabilities", "desc", "features_json"):
+            for f in ("name", "kind", "engine", "category", "router_prefix", "capabilities", "desc", "features_json", "uses_llm"):
                 new_val = spec.get(f) if f != "features_json" else spec.get("features_json") or {}
                 if f == "name" and not new_val:
                     new_val = row.agent_key
@@ -265,6 +270,7 @@ def register_agent(key: str, spec: dict[str, Any]) -> None:
                     status=spec.get("status", "active"),
                     desc=spec.get("desc"),
                     features_json=spec.get("features_json", {}),
+                    uses_llm=spec.get("uses_llm", True),
                 ))
             else:
                 row.name = spec.get("name", row.name)
@@ -276,6 +282,7 @@ def register_agent(key: str, spec: dict[str, Any]) -> None:
                 row.status = spec.get("status", row.status)
                 row.desc = spec.get("desc", row.desc)
                 row.features_json = spec.get("features_json", row.features_json)
+                row.uses_llm = spec.get("uses_llm", row.uses_llm)
             db.commit()
         finally:
             db.close()

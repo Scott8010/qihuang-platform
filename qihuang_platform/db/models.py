@@ -465,6 +465,26 @@ class AgentDef(Base):
     status = Column(String(20), default="active")  # active / inactive
     desc = Column(Text)
     features_json = Column(JSON, default=dict)  # 扩展元数据
+    uses_llm = Column(Boolean, default=True)    # 是否调用大模型（False=纯规则引擎，按固定积分/次计价，#474）
+    created_at = Column(DateTime, default=_now)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+
+class Wallet(Base):
+    """计费中台积分钱包（#474）— 通用余额池（tenant 单桶，不绑 agent）。
+
+    两层清零：
+      - base_credits：基本包赠送积分（套餐档位），按自然月清零（period_month 锚）
+      - addon_credits：叠加包充值积分，永久有效
+    调用扣费顺序：先 base_credits，不足再扣 addon_credits。
+    """
+    __tablename__ = "wallet"
+    id = Column(String(36), primary_key=True, default=_uid)
+    tenant_id = Column(String(36), ForeignKey("tenant.id"), unique=True, nullable=False, index=True)
+    base_credits = Column(Integer, default=0)
+    addon_credits = Column(Integer, default=0)
+    period_month = Column(String(7), default=lambda: datetime.now(timezone.utc).strftime("%Y-%m"))
+    total_bought = Column(Integer, default=0)   # 累计充值（展示用）
     created_at = Column(DateTime, default=_now)
     updated_at = Column(DateTime, default=_now, onupdate=_now)
 

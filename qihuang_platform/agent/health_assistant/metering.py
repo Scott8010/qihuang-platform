@@ -103,6 +103,8 @@ async def record_call(
     trace_id: str,
     endpoint: str = "/api/v1/agent/health-assistant/chat",
     status_code: int = 200,
+    token_used: int = 0,
+    is_multimodal: bool = False,
 ) -> None:
     """记录一次健康助手调用（业务级计量埋点）。
 
@@ -119,7 +121,7 @@ async def record_call(
             user_id=end_user_id,
             status_code=status_code,
             latency_ms=round(latency_ms, 1),
-            tokens_used=0,    # 真实 token 由上游 LLM 链路产生，计费中台接入后补齐
+            tokens_used=token_used,    # #474 接入后由上游 LLM 链路传真实 token
             cost_cents=0,     # 单价待 #474 定价，计费成功才计
             module=MODULE,
             extra={
@@ -130,3 +132,16 @@ async def record_call(
         ))
     except Exception as e:  # noqa: BLE001
         logger.warning("[ha-metering] record_call 失败: %s", e)
+
+    # ── #474 计费中台：成功调用后扣积分（旁路非阻断）──
+    try:
+        from qihuang_platform.billing.wallet import consume_credits
+        consume_credits(
+            tenant_id=tenant_id,
+            agent_key=AGENT_KEY,
+            token_used=token_used,
+            is_multimodal=is_multimodal,
+            uses_llm=True,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[ha-metering] 积分扣减失败(旁路): %s", e)

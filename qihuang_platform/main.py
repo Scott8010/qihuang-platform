@@ -335,6 +335,14 @@ try:
         app.include_router(control_router)
         print("[Platform] 管理端全功能路由已挂载 → /admin/v1/billing, /admin/v1/kg, /admin/v1/monitor, /admin/v1/audit-logs, /admin/v1/content")
 
+    # 计费中台钱包端点（#474）
+    try:
+        from qihuang_platform.billing.wallet_router import wallet_router
+        app.include_router(wallet_router)
+        print("[Platform] 计费中台钱包端点已挂载 → /billing/v1/wallet")
+    except ImportError as e:
+        print(f"[Platform] 计费中台钱包模块未就绪: {e}")
+
     # 客户管理路由
     try:
         from qihuang_platform.control.customer_mgr import router as customer_router
