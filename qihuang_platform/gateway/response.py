@@ -41,6 +41,7 @@ ERROR_CODES = {
     "NOT_FOUND":              {"code": 6001, "message": "资源不存在"},
     "DUPLICATE":              {"code": 6002, "message": "资源已存在"},
     "SCENE_DISABLED":         {"code": 6003, "message": "该场景未开通"},
+    "COMPLIANCE_BLOCKED":    {"code": 6004, "message": "内容合规拦截（违规语料未落库）"},
 }
 
 

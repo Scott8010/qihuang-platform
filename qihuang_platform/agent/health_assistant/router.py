@@ -34,6 +34,9 @@ from qihuang_platform.agent.health_assistant.metering import (
 )
 from qihuang_platform.gateway.deps import get_current_principal
 from qihuang_platform.gateway.response import error, success
+from qihuang_platform.agent.compliance.engine_l2 import compliance_engine
+from qihuang_platform.db.config import SessionLocal
+from qihuang_platform.db.models import Org, Tenant
 
 logger = logging.getLogger("health_assistant.router")
 
@@ -339,3 +342,123 @@ async def chat(
     except Exception as e:  # noqa: BLE001
         logger.exception("[ha] chat 失败")
         return error("INTERNAL_ERROR", str(e))
+
+
+# ── 租户级门店语料写入（门店自助注入口，2026-08-25 新增）──
+class StorePromptRequest(BaseModel):
+    """门店自助注入语料请求（HB 门店端携带租户 API Key 调用）"""
+    prompt: str = Field(..., description="门店营销引导语料（白话，≤500 字）")
+
+
+@router.put(
+    "/health-assistant/orgs/{org_id}/prompt",
+    summary="门店自助注入健康助手营销语料（租户级鉴权 + 自动过合规）",
+)
+async def set_org_prompt_by_tenant(
+    org_id: str,
+    req: StorePromptRequest,
+    request: Request,
+    user: dict = Depends(get_current_principal),
+    _: Any = Depends(require_agent_in_plan("health-assistant")),
+):
+    """门店端（以租户身份，API Key 签名）自助注入门店专属营销语料。
+
+    硬规则同平台管理端（#482 / 老黄 2026-08-22 定）：
+    ① 必填白话（≤500 字）；② 合规门禁（违规拦截，绝不喂 C 端）；③ 落 Org.extra.health_assistant_prompt。
+    支撑理想流：门店后台注入 → 8602 compliance_engine 自动审核 → 合规直写、违规 COMPLIANCE_BLOCKED
+    （HB 端据此把该条语料丢进 HB 运营中台待审队列，运营审核后退回门店改写）。
+    """
+    tenant_id = getattr(request.state, "tenant_id", None)
+    if not tenant_id:
+        return error("UNAUTHORIZED", message="无法解析租户身份")
+
+    prompt = (req.prompt or "").strip()
+    if not prompt:
+        return error("INVALID_PARAM", message="语料不能为空")
+    if len(prompt) > 500:
+        return error("INVALID_PARAM", message=f"语料过长（{len(prompt)}/500 字），请精简为白话一段话")
+
+    db = SessionLocal()
+    try:
+        org = db.query(Org).filter_by(id=org_id, tenant_id=tenant_id).first()
+        if not org:
+            # upsert：门店首次自助注入时，按确定性映射 org_id=hb_store_{store_id} 自动建槽，
+            # 免去「8602 先预建 Org 行 + 给 HB 映射清单」的人工阻塞（HB 门店端自行算 org_id）
+            org = Org(
+                id=org_id,
+                tenant_id=tenant_id,
+                name=org_id,
+                org_type="branch",
+                status="active",
+                extra={},
+            )
+            db.add(org)
+            db.flush()
+
+        # 合规门禁：同管理端，违规拦截绝不喂 C 端
+        check = await compliance_engine.analyze(
+            text=prompt,
+            material_type="health_assistant_prompt",
+            port="store",
+            institution_id=tenant_id,
+            persist=False,
+        )
+        if check.get("state") == "违规拦截":
+            hits = [h.get("rule_id") or h.get("rule") for h in (check.get("hits") or [])]
+            return error("COMPLIANCE_BLOCKED",
+                         message=f"语料违规被拦截（{hits}），请改写后再提交",
+                         data={"hits": hits})
+
+        org_extra = dict(org.extra or {})
+        org_extra["health_assistant_prompt"] = prompt
+        org.extra = org_extra
+        db.commit()
+        return success(
+            data={"tenant_id": tenant_id, "org_id": org_id, "health_assistant_prompt": prompt},
+            message="门店健康助手语料已保存（合规通过）",
+        )
+    except Exception as e:
+        db.rollback()
+        return error("INTERNAL_ERROR", message=str(e))
+    finally:
+        db.close()
+
+
+@router.get(
+    "/health-assistant/orgs/{org_id}/prompt",
+    summary="查询门店健康助手营销语料（租户级，门店自助读）",
+)
+async def get_org_prompt_by_tenant(
+    org_id: str,
+    request: Request,
+    user: dict = Depends(get_current_principal),
+    _: Any = Depends(require_agent_in_plan("health-assistant")),
+):
+    """门店端（租户身份）读取自己门店专属语料 + 平台默认兜底，支撑自助注入 UI 展示。"""
+    tenant_id = getattr(request.state, "tenant_id", None)
+    if not tenant_id:
+        return error("UNAUTHORIZED", message="无法解析租户身份")
+    db = SessionLocal()
+    try:
+        org = db.query(Org).filter_by(id=org_id, tenant_id=tenant_id).first()
+        if not org:
+            # 门店尚未注入过语料：返回空（不报错），UI 正常展示「暂无门店语料，下方可注入」
+            tenant = db.query(Tenant).filter_by(id=tenant_id).first()
+            tenant_extra = tenant.extra or {} if tenant else {}
+            return success(data={
+                "tenant_id": tenant_id,
+                "org_id": org_id,
+                "health_assistant_prompt": "",
+                "platform_default": tenant_extra.get("health_assistant_prompt", ""),
+            })
+        tenant = db.query(Tenant).filter_by(id=tenant_id).first()
+        org_extra = org.extra or {}
+        tenant_extra = tenant.extra or {} if tenant else {}
+        return success(data={
+            "tenant_id": tenant_id,
+            "org_id": org_id,
+            "health_assistant_prompt": org_extra.get("health_assistant_prompt", ""),
+            "platform_default": tenant_extra.get("health_assistant_prompt", ""),
+        })
+    finally:
+        db.close()
