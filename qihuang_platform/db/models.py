@@ -35,7 +35,7 @@ class Tenant(Base):
     id = Column(String(36), primary_key=True, default=_uid)
     name = Column(String(100), unique=True, nullable=False)
     display_name = Column(String(200))
-    scene = Column(String(50), default="health")  # health/medical/edu
+    scene = Column(String(50), default="MED")  # MED/EDU/RETAIL/HQ（业务场景，默认 MED）
     status = Column(String(20), default="active")  # active/suspended/closed
     extra = Column(JSON)
     created_at = Column(DateTime, default=_now)
@@ -645,7 +645,7 @@ def seed_preset_data(session):
 
     # 创建默认租户
     if not session.query(Tenant).filter_by(name="default").first():
-        t = Tenant(id="tenant_default", name="default", display_name="默认租户", scene="health")
+        t = Tenant(id="tenant_default", name="default", display_name="默认租户", scene="MED")
         session.add(t)
         session.flush()
 

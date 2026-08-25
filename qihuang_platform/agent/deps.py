@@ -80,10 +80,14 @@ def require_agent_in_plan(agent_key: str):
                     detail=error("AGENT_FORBIDDEN", "租户无有效订阅，无法使用 Agent 能力"),
                 )
             plan = db.query(Plan).filter_by(id=sub.plan_id).first()
-            agents = (plan.features_json or {}).get("agents", []) if plan else []
-            # 租户级精准叠加：在套餐 agents 基础上，叠加该租户额外授权的能力
-            # （Tenant.extra["agent_addons"]，去重保序，仅计启用态能力，防注入/停用项生效）
             tenant = db.query(Tenant).filter_by(id=tenant_id).first()
+            # 场景化动态取 agent：按租户 scene 从 SCENE_PLAN_AGENTS 取该场景该档编排，
+            # 取代套餐 features_json.agents 的静态兜底（#472）。scene 非法/缺省 fallback 到 MED。
+            from qihuang_platform.billing.plans import get_effective_agents
+            scene = getattr(tenant, "scene", None)
+            agents = get_effective_agents(plan, scene) if plan else []
+            # 租户级精准叠加：在场景编排基础上，叠加该租户额外授权的能力
+            # （Tenant.extra["agent_addons"]，去重保序，仅计启用态能力，防注入/停用项生效）
             addons = (tenant.extra or {}).get("agent_addons", []) if tenant else []
             addons = [k for k in addons if is_active(k)]
             merged = list(agents)

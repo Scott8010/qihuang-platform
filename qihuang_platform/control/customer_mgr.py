@@ -32,7 +32,7 @@ def get_db():
 class TenantCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="租户英文唯一标识")
     display_name: Optional[str] = Field(None, max_length=200, description="对外显示名称")
-    scene: Optional[str] = Field("health", max_length=50, description="业务场景: health/medical/edu")
+    scene: Optional[str] = Field("MED", max_length=50, description="业务场景: MED/EDU/RETAIL/HQ")
     status: Optional[str] = Field("active", max_length=20, description="active/suspended/closed")
     plan_id: Optional[str] = Field(None, description="初始套餐 ID（可选，默认不创建订阅）")
     contact_name: Optional[str] = Field(None, max_length=100, description="商务联系人姓名")
@@ -91,7 +91,7 @@ async def customer_stats(user=Depends(admin_required), db: Session = Depends(get
 async def customer_list(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    scenario: str = Query(None, description="场景筛选: HEALTH/MED/EDU"),
+    scenario: str = Query(None, description="场景筛选: MED/EDU/RETAIL/HQ"),
     sort_by: str = Query("created_at", description="排序字段"),
     user=Depends(admin_required),
     db: Session = Depends(get_db),
@@ -330,7 +330,7 @@ async def create_tenant(
         id=_uid(),
         name=req.name,
         display_name=display_name,
-        scene=req.scene or "health",
+        scene=req.scene or "MED",
         status=req.status or "active",
         extra=_build_extra(req),
         created_at=_now(),

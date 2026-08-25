@@ -1903,7 +1903,7 @@ _ONBOARD_EMAIL_RE = r"^[\w.+-]+@[\w-]+(\.[\w-]+)+$"
 class TenantOnboardRequest(BaseModel):
     name: str = Field(..., description="租户标识（英文/拼音）")
     display_name: Optional[str] = Field(None, description="显示名称")
-    scene: str = Field("health", description="health/medical/edu")
+    scene: str = Field("MED", description="业务场景: MED/EDU/RETAIL/HQ")
     plan: str = Field("free", description="套餐plan_name")
     contact_name: Optional[str] = Field(None, description="联系人姓名")
     contact_phone: Optional[str] = Field(None, description="联系人手机/座机(座机须带区号)")
