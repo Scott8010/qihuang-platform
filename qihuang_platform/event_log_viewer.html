@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>调度事件黑匣子查看器 · SchedulerEventLog</title>
+<style>
+  :root{
+    --bg:#f5f7fa; --panel:#ffffff; --ink:#1f2933; --sub:#647084;
+    --line:#e3e8ef; --accent:#2f6df0; --shadow:0 1px 3px rgba(16,24,40,.08);
+    --inv:#6366f1; --tool:#0ea5e9; --perm:#f59e0b; --dec:#10b981; --err:#ef4444;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5}
+  header{padding:18px 22px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{margin:0;font-size:18px;font-weight:700}
+  header p{margin:4px 0 0;color:var(--sub);font-size:12.5px}
+  .wrap{max-width:1080px;margin:0 auto;padding:18px 22px 60px}
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+  .drop{border:1.5px dashed var(--line);border-radius:10px;padding:14px 18px;background:var(--panel);
+    flex:1;min-width:260px;cursor:pointer;transition:.15s;text-align:center;color:var(--sub)}
+  .drop:hover{border-color:var(--accent);color:var(--accent)}
+  .drop.over{border-color:var(--accent);background:#eef4ff}
+  .btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;
+    padding:8px 14px;cursor:pointer;font-size:13px;transition:.15s}
+  .btn:hover{border-color:var(--accent);color:var(--accent)}
+  .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+  .chip{border:1px solid var(--line);border-radius:20px;padding:4px 12px;cursor:pointer;font-size:12.5px;
+    background:var(--panel);color:var(--sub);user-select:none;transition:.15s}
+  .chip.on{color:#fff;border-color:transparent}
+  .chip[data-t="INVOCATION"].on{background:var(--inv)}
+  .chip[data-t="TOOL_CALL"].on{background:var(--tool)}
+  .chip[data-t="PERMISSION"].on{background:var(--perm)}
+  .chip[data-t="DECISION"].on{background:var(--dec)}
+  .chip[data-t="ERROR"].on{background:var(--err)}
+  .search{display:flex;gap:8px;flex:1;min-width:240px}
+  .search input{flex:1;border:1px solid var(--line);border-radius:8px;padding:7px 11px;font-size:13px;outline:none}
+  .search input:focus{border-color:var(--accent)}
+  .stats{font-size:12.5px;color:var(--sub);margin:6px 0 16px}
+  .stats b{color:var(--ink)}
+  .timeline{position:relative;padding-left:18px}
+  .timeline::before{content:"";position:absolute;left:5px;top:0;bottom:0;width:2px;background:var(--line)}
+  .ev{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:12px 14px;margin-bottom:12px;box-shadow:var(--shadow)}
+  .ev::before{content:"";position:absolute;left:-15px;top:16px;width:10px;height:10px;border-radius:50%;
+    background:var(--dec);border:2px solid #fff;box-shadow:0 0 0 1px var(--line)}
+  .ev[data-t="INVOCATION"]::before{background:var(--inv)}
+  .ev[data-t="TOOL_CALL"]::before{background:var(--tool)}
+  .ev[data-t="PERMISSION"]::before{background:var(--perm)}
+  .ev[data-t="DECISION"]::before{background:var(--dec)}
+  .ev[data-t="ERROR"]::before{background:var(--err)}
+  .ev-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;color:#fff}
+  .tag.INVOCATION{background:var(--inv)} .tag.TOOL_CALL{background:var(--tool)}
+  .tag.PERMISSION{background:var(--perm)} .tag.DECISION{background:var(--dec)} .tag.ERROR{background:var(--err)}
+  .meta{font-size:12px;color:var(--sub)}
+  .meta b{color:var(--ink);font-weight:600}
+  .time{margin-left:auto;font-size:11.5px;color:var(--sub);font-variant-numeric:tabular-nums}
+  .pl-sum{margin-top:8px;font-size:12px;color:var(--sub);cursor:pointer}
+  .pl-sum:hover{color:var(--accent)}
+  .pl-full{display:none;margin-top:8px}
+  .pl-full.show{display:block}
+  pre{background:#0f172a;color:#e2e8f0;border-radius:8px;padding:10px 12px;font-size:12px;
+    overflow:auto;max-height:260px;margin:0;white-space:pre-wrap;word-break:break-word}
+  .empty{text-align:center;color:var(--sub);padding:50px 20px}
+  .empty .big{font-size:15px;color:var(--ink);margin-bottom:8px}
+  .foot{margin-top:24px;font-size:11.5px;color:var(--sub);text-align:center}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <h1>🛰️ 调度事件黑匣子查看器</h1>
+  <p>数据源：<code>event_logs/scheduler_events.jsonl</code>（append-only，来自 Apache Maka「Log is the Runtime」借鉴）· 拖入文件或点「加载示例」</p>
+</header>
+<div class="wrap">
+  <div class="toolbar">
+    <label class="drop" id="drop">📂 把 <b>scheduler_events.jsonl</b> 拖到这里，或点击选择文件
+      <input type="file" id="file" accept=".jsonl,.json,.log,.txt" style="display:none" />
+    </label>
+    <button class="btn primary" id="sample">加载示例数据</button>
+    <button class="btn" id="clear">清空</button>
+  </div>
+
+  <div class="filters">
+    <span class="chip on" data-t="INVOCATION">INVOCATION</span>
+    <span class="chip on" data-t="TOOL_CALL">TOOL_CALL</span>
+    <span class="chip on" data-t="PERMISSION">PERMISSION</span>
+    <span class="chip on" data-t="DECISION">DECISION</span>
+    <span class="chip on" data-t="ERROR">ERROR</span>
+    <div class="search">
+      <input id="qTenant" placeholder="过滤 tenant_id…" />
+      <input id="qPayload" placeholder="搜索 payload 关键词…" />
+    </div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+  <div class="timeline" id="timeline"></div>
+  <div class="empty" id="empty">
+    <div class="big">还没有数据</div>
+    <div>拖入 JSONL 文件，或点上方「加载示例数据」先看看效果。</div>
+  </div>
+  <div class="foot">本地单文件工具 · 不上传任何数据 · 数据只在本机浏览器解析</div>
+</div>
+
+<script>
+const EVENT_TYPES = ["INVOCATION","TOOL_CALL","PERMISSION","DECISION","ERROR"];
+let ALL = []; // 全部事件
+const activeTypes = new Set(EVENT_TYPES);
+
+const SAMPLE = [
+  {id:"s-1",tenant_id:"hb_tenant_01",trace_id:"t-aaa",agent_key:"health-assistant",event_type:"INVOCATION",payload:{endpoint:"/api/v1/agent/health-assistant/consult",model:"deepseek",input_chars:286},created_at:"2026-08-25T07:12:03.441Z"},
+  {id:"s-2",tenant_id:"hb_tenant_01",trace_id:"t-aaa",agent_key:"health-assistant",event_type:"PERMISSION",payload:{check:"require_agent_in_plan",plan:"professional",result:"pass"},created_at:"2026-08-25T07:12:03.502Z"},
+  {id:"s-3",tenant_id:"hb_tenant_01",trace_id:"t-aaa",agent_key:"health-assistant",event_type:"DECISION",payload:{route:"scheduler",chosen_model:"deepseek",reason:"qwen quota exhausted (3/3)",fallback:true},created_at:"2026-08-25T07:12:03.660Z"},
+  {id:"s-4",tenant_id:"hb_tenant_01",trace_id:"t-aaa",agent_key:"health-assistant",event_type:"TOOL_CALL",payload:{tool:"tongue_recognize",latency_ms:912,status:"ok"},created_at:"2026-08-25T07:12:04.572Z"},
+  {id:"s-5",tenant_id:"hb_tenant_02",trace_id:"t-bbb",agent_key:"store-coach",event_type:"INVOCATION",payload:{endpoint:"/api/v1/agent/store-coach/evaluate",model:"glm",input_chars:1203},created_at:"2026-08-25T08:01:21.118Z"},
+  {id:"s-6",tenant_id:"hb_tenant_02",trace_id:"t-bbb",agent_key:"store-coach",event_type:"DECISION",payload:{route:"scheduler",chosen_model:"glm",reason:"default",fallback:false},created_at:"2026-08-25T08:01:21.290Z"},
+  {id:"s-7",tenant_id:"hb_tenant_01",trace_id:"t-ccc",agent_key:"health-assistant",event_type:"ERROR",payload:{stage:"compliance_engine",code:"COMPLIANCE_BLOCKED",message:"语料违规被拦截",hits:["MED_CLAIM"]},created_at:"2026-08-25T09:33:47.005Z"},
+  {id:"s-8",tenant_id:"hb_tenant_03",trace_id:"t-ddd",agent_key:"insight",event_type:"PERMISSION",payload:{check:"require_agent_in_plan",plan:"trial",result:"block",reason:"agent not in plan"},created_at:"2026-08-25T10:15:02.771Z"},
+];
+
+function fmtTime(iso){
+  try{ const d=new Date(iso); return d.toLocaleString("zh-CN",{hour12:false}); }
+  catch(e){ return iso||""; }
+}
+function parseJSONL(text){
+  const out=[];
+  text.split(/\r?\n/).forEach(line=>{
+    const s=line.trim(); if(!s) return;
+    try{ out.push(JSON.parse(s)); }catch(e){ /* 跳过坏行 */ }
+  });
+  return out;
+}
+function applyFilter(){
+  const qt=(document.getElementById("qTenant").value||"").trim().toLowerCase();
+  const qp=(document.getElementById("qPayload").value||"").trim().toLowerCase();
+  return ALL.filter(e=>{
+    if(!activeTypes.has(e.event_type)) return false;
+    if(qt && !(e.tenant_id||"").toLowerCase().includes(qt)) return false;
+    if(qp){
+      const hay=JSON.stringify(e.payload||"")+ " " + (e.agent_key||"") + " " + (e.trace_id||"");
+      if(!hay.toLowerCase().includes(qp)) return false;
+    }
+    return true;
+  }).sort((a,b)=> (b.created_at||"").localeCompare(a.created_at||""));
+}
+function plSummary(p){
+  const s=JSON.stringify(p||{});
+  return s.length>120 ? s.slice(0,120)+"…" : s;
+}
+function render(){
+  const list=applyFilter();
+  const tl=document.getElementById("timeline");
+  const empty=document.getElementById("empty");
+  const stats=document.getElementById("stats");
+  const counts={}; EVENT_TYPES.forEach(t=>counts[t]=0);
+  ALL.forEach(e=>{ if(counts[e.event_type]!==undefined) counts[e.event_type]++; });
+  stats.innerHTML = `共 <b>${ALL.length}</b> 条 · 当前显示 <b>${list.length}</b> 条`
+    + ` ｜ INVOCATION ${counts.INVOCATION} · TOOL_CALL ${counts.TOOL_CALL} · PERMISSION ${counts.PERMISSION} · DECISION ${counts.DECISION} · ERROR ${counts.ERROR}`;
+  tl.innerHTML="";
+  if(list.length===0){ empty.style.display="block"; return; }
+  empty.style.display="none";
+  list.forEach(e=>{
+    const div=document.createElement("div");
+    div.className="ev"; div.setAttribute("data-t",e.event_type);
+    const pid="pl-"+e.id;
+    div.innerHTML=`
+      <div class="ev-head">
+        <span class="tag ${e.event_type}">${e.event_type}</span>
+        <span class="meta">tenant <b>${e.tenant_id||"—"}</b> · agent <b>${e.agent_key||"—"}</b> · trace ${e.trace_id||"—"}</span>
+        <span class="time">${fmtTime(e.created_at)}</span>
+      </div>
+      <div class="pl-sum" data-toggle="${pid}">payload：<code>${plSummary(e.payload)}</code> ▾ 展开</div>
+      <div class="pl-full" id="${pid}"><pre>${escapeHtml(JSON.stringify(e.payload||{},null,2))}</pre></div>`;
+    tl.appendChild(div);
+  });
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+}
+document.getElementById("timeline").addEventListener("click",ev=>{
+  const t=ev.target.closest("[data-toggle]");
+  if(!t) return;
+  const box=document.getElementById(t.getAttribute("data-toggle"));
+  if(box){ box.classList.toggle("show"); t.textContent = box.classList.contains("show") ? "payload：▴ 收起" : "payload：▾ 展开"; }
+});
+
+document.querySelectorAll(".chip").forEach(ch=>{
+  ch.addEventListener("click",()=>{
+    const t=ch.getAttribute("data-t");
+    if(activeTypes.has(t)){ activeTypes.delete(t); ch.classList.remove("on"); }
+    else { activeTypes.add(t); ch.classList.add("on"); }
+    render();
+  });
+});
+document.getElementById("qTenant").addEventListener("input",render);
+document.getElementById("qPayload").addEventListener("input",render);
+
+const drop=document.getElementById("drop");
+const fileInput=document.getElementById("file");
+drop.addEventListener("click",()=>fileInput.click());
+fileInput.addEventListener("change",e=>{ if(e.target.files[0]) loadFile(e.target.files[0]); });
+["dragover","dragenter"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over");}));
+drop.addEventListener("drop",e=>{ const f=e.dataTransfer.files[0]; if(f) loadFile(f); });
+
+function loadFile(f){
+  const r=new FileReader();
+  r.onload=()=>{ ALL=parseJSONL(r.result); render(); };
+  r.readAsText(f);
+}
+document.getElementById("sample").addEventListener("click",()=>{ ALL=SAMPLE.slice(); render(); });
+document.getElementById("clear").addEventListener("click",()=>{ ALL=[]; render(); });
+
+render();
+</script>
+</body>
+</html>
