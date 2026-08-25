@@ -71,3 +71,89 @@ def test_consume_blocked_when_empty():
     assert ok is False  # 两池皆空 → 拦截，且不扣任何
     b = get_balance("t_wallet_3")["data"]
     assert b["total_credits"] == 0
+
+
+# ──────────────────────────────────────────────────────────────
+# 鉴权测试（#474 安全加固）：裸端点 → 必须登录 + 租户归属
+# ──────────────────────────────────────────────────────────────
+def test_wallet_auth_unauthenticated_rejected():
+    """无鉴权头 → 401（GET 与 recharge 同理）。"""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from qihuang_platform.billing.wallet_router import wallet_router
+    app = FastAPI()
+    app.include_router(wallet_router)
+    c = TestClient(app)
+    assert c.get("/billing/v1/wallet/any").status_code == 401
+    assert c.post("/billing/v1/wallet/recharge?tenant_id=any&pack=pack_50").status_code == 401
+
+
+def test_wallet_auth_admin_can_query_any_and_recharge():
+    from fastapi import FastAPI, Request
+    from fastapi.testclient import TestClient
+    from qihuang_platform.billing.wallet_router import wallet_router
+    from qihuang_platform.gateway.deps import get_current_principal, get_current_user
+    _wipe()
+    app = FastAPI()
+    app.include_router(wallet_router)
+
+    async def fake_principal(request: Request):
+        request.state.tenant_id = "admin_t"
+        request.state.roles = ["admin"]
+        return {"tenant_id": "admin_t", "roles": ["admin"]}
+
+    async def fake_user(request: Request):
+        request.state.tenant_id = "admin_t"
+        request.state.roles = ["admin"]
+        return {"tenant_id": "admin_t", "roles": ["admin"]}
+
+    app.dependency_overrides[get_current_principal] = fake_principal
+    app.dependency_overrides[get_current_user] = fake_user
+    c = TestClient(app)
+    r = c.get("/billing/v1/wallet/other_tenant")
+    assert r.status_code == 200 and r.json()["code"] == 0
+    r = c.post("/billing/v1/wallet/recharge?tenant_id=other_tenant&pack=pack_50")
+    assert r.status_code == 200
+    app.dependency_overrides.clear()
+
+
+def test_wallet_auth_tenant_only_self():
+    from fastapi import FastAPI, Request
+    from fastapi.testclient import TestClient
+    from qihuang_platform.billing.wallet_router import wallet_router
+    from qihuang_platform.gateway.deps import get_current_principal
+    _wipe()
+    app = FastAPI()
+    app.include_router(wallet_router)
+
+    async def fake_principal(request: Request):
+        request.state.tenant_id = "my_t"
+        request.state.roles = []
+        return {"tenant_id": "my_t", "roles": []}
+
+    app.dependency_overrides[get_current_principal] = fake_principal
+    c = TestClient(app)
+    assert c.get("/billing/v1/wallet/my_t").status_code == 200
+    assert c.get("/billing/v1/wallet/other_t").status_code == 403
+    app.dependency_overrides.clear()
+
+
+def test_wallet_auth_nonadmin_cannot_recharge():
+    from fastapi import FastAPI, Request
+    from fastapi.testclient import TestClient
+    from qihuang_platform.billing.wallet_router import wallet_router
+    from qihuang_platform.gateway.deps import get_current_user
+    _wipe()
+    app = FastAPI()
+    app.include_router(wallet_router)
+
+    async def fake_user(request: Request):
+        request.state.tenant_id = "my_t"
+        request.state.roles = []  # 非 admin
+        return {"tenant_id": "my_t", "roles": []}
+
+    app.dependency_overrides[get_current_user] = fake_user
+    c = TestClient(app)
+    r = c.post("/billing/v1/wallet/recharge?tenant_id=my_t&pack=pack_50")
+    assert r.status_code == 403  # get_current_admin 拒绝非 admin
+    app.dependency_overrides.clear()
