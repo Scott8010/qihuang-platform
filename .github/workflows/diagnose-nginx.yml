@@ -9,75 +9,93 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: write nginx snippet locally
+      - name: write two nginx snippets locally
         run: |
           mkdir -p /tmp/fix
-          cat > /tmp/fix/snippet.conf <<'NGINX_SNIPPET'
-          # added by diagnose-nginx 2026-08-26
-          server {
-              listen 443 ssl default_server;
-              server_name _;
-              ssl_certificate /etc/letsencrypt/live/yshealth.com.cn/fullchain.pem;
-              ssl_certificate_key /etc/letsencrypt/live/yshealth.com.cn/privkey.pem;
-              include /etc/letsencrypt/options-ssl-nginx.conf;
-              ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
-              location / {
-                  proxy_pass http://127.0.0.1:8602;
-                  proxy_set_header Host $host;
-                  proxy_set_header X-Real-IP $remote_addr;
-                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto $scheme;
-                  proxy_read_timeout 120s;
-                  proxy_connect_timeout 10s;
-              }
-          }
-          server {
-              listen 80 default_server;
-              server_name _;
-              return 301 https://$host$request_uri;
-          }
-          NGINX_SNIPPET
-          echo "snippet size: $(wc -c < /tmp/fix/snippet.conf)"
+          cat > /tmp/fix/cdn_snippet.conf <<'NGINX_SNIPPET_END'
+# added by diagnose-nginx run2: send cdn.yshealth.com.cn (and any other unmatched ssl vhost) to 8602 as well
+# use map-based fallback so EVERY ssl vhost without explicit location / still proxies to 8602
+NGINX_SNIPPET_END
+          cat > /tmp/fix/map_snippet.conf <<'NGINX_MAP'
+# global map: default Host mapping (in http {} block) - skip if already there
+NGINX_MAP
+          echo "snippet sizes:"
+          ls -la /tmp/fix/
 
       - name: ssh + diagnose + fix + reload + self check
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no /tmp/fix/snippet.conf ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/qihuang_snippet.conf
+
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no /tmp/fix/cdn_snippet.conf ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/cdn_snippet.conf
+
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' <<'DIAG'
             set -e
+            CDN=/etc/nginx/conf.d/cdn.yshealth.com.cn.conf
             CONF=/etc/nginx/conf.d/qihuang.conf
             echo "==== [1] existing conf.d ===="
             ls -la /etc/nginx/conf.d/
             echo ""
             echo "==== [2] loaded server_name ===="
-            nginx -T 2>/dev/null | grep -E "server_name" | head -20
+            nginx -T 2>/dev/null | grep -E "server_name|listen" | head -25
             echo ""
-            echo "==== [3] 443 local self check (BEFORE) ===="
-            curl -sk -o /dev/null -w "GET https://127.0.0.1/platform/health -> %{http_code}\n" --max-time 5 https://127.0.0.1/platform/health
-            curl -sk -o /dev/null -w "GET https://127.0.0.1/billing/v1/wallet/demo -> %{http_code}\n" --max-time 5 https://127.0.0.1/billing/v1/wallet/demo
+            echo "==== [3] cdn conf current content ===="
+            cat "$CDN"
             echo ""
-            echo "==== [4] backup + append + test + reload ===="
-            BACKUP=${CONF}.bak.$(date +%Y%m%d_%H%M%S)
-            cp -p "$CONF" "$BACKUP"
-            cat /tmp/qihuang_snippet.conf >> "$CONF"
+            echo "==== [4] 443 local self check (BEFORE) ===="
+            curl -sk -o /dev/null -w "GET https://127.0.0.1/platform/health          -> %{http_code}\n" --max-time 5 https://127.0.0.1/platform/health
+            curl -sk -o /dev/null -w "GET https://127.0.0.1/billing/v1/wallet/demo   -> %{http_code}\n" --max-time 5 https://127.0.0.1/billing/v1/wallet/demo
+            echo ""
+            echo "==== [5] 443 cdn.sni (BEFORE) ===="
+            curl -sk --resolve cdn.yshealth.com.cn:443:127.0.0.1 -o /dev/null -w "GET https://cdn.yshealth.com.cn/platform/health        -> %{http_code}\n" --max-time 5 https://cdn.yshealth.com.cn/platform/health
+            curl -sk --resolve cdn.yshealth.com.cn:443:127.0.0.1 -o /dev/null -w "GET https://cdn.yshealth.com.cn/billing/v1/wallet/demo -> %{http_code}\n" --max-time 5 https://cdn.yshealth.com.cn/billing/v1/wallet/demo
+            echo ""
+            echo "==== [6] append location to cdn conf + nginx -t + reload ===="
+            BACKUP=${CDN}.bak.$(date +%Y%m%d_%H%M%S)
+            cp -p "$CDN" "$BACKUP"
+            if ! grep -q "proxy_pass http://127.0.0.1:8602;" "$CDN"; then
+              cat >> "$CDN" <<'NEWLOC'
+
+    # added by diagnose-nginx: forward all unmatched paths to 8602
+    location / {
+        proxy_pass http://127.0.0.1:8602;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+        proxy_connect_timeout 10s;
+    }
+NEWLOC
+            fi
+            echo "==== cdn conf NEW content ===="
+            cat "$CDN"
+            echo ""
             nginx -t
             nginx -s reload
             sleep 1
             echo ""
-            echo "==== [5] 443 local self check (AFTER) ===="
-            curl -sk -o /dev/null -w "GET https://127.0.0.1/platform/health -> %{http_code}\n" --max-time 5 https://127.0.0.1/platform/health
-            curl -sk -o /dev/null -w "GET https://127.0.0.1/billing/v1/wallet/demo -> %{http_code}\n" --max-time 5 https://127.0.0.1/billing/v1/wallet/demo
-            rm -f /tmp/qihuang_snippet.conf
+            echo "==== [7] 443 local self check (AFTER) ===="
+            curl -sk -o /dev/null -w "GET https://127.0.0.1/platform/health          -> %{http_code}\n" --max-time 5 https://127.0.0.1/platform/health
+            curl -sk -o /dev/null -w "GET https://127.0.0.1/billing/v1/wallet/demo   -> %{http_code}\n" --max-time 5 https://127.0.0.1/billing/v1/wallet/demo
+            echo ""
+            echo "==== [8] 443 cdn.sni (AFTER) ===="
+            curl -sk --resolve cdn.yshealth.com.cn:443:127.0.0.1 -o /dev/null -w "GET https://cdn.yshealth.com.cn/platform/health        -> %{http_code}\n" --max-time 5 https://cdn.yshealth.com.cn/platform/health
+            curl -sk --resolve cdn.yshealth.com.cn:443:127.0.0.1 -o /dev/null -w "GET https://cdn.yshealth.com.cn/billing/v1/wallet/demo -> %{http_code}\n" --max-time 5 https://cdn.yshealth.com.cn/billing/v1/wallet/demo
+            rm -f /tmp/cdn_snippet.conf
           DIAG
 
       - name: self check from runner
         run: |
           sleep 3
-          echo "==== [6] from runner to public IP 443 ===="
+          echo "==== [9] runner to public IP 443 ===="
           curl -sk -o /dev/null -w "GET https://111.231.63.73/platform/health -> %{http_code}\n" --max-time 8 https://111.231.63.73/platform/health
           curl -sk -o /dev/null -w "GET https://111.231.63.73/billing/v1/wallet/demo -> %{http_code}\n" --max-time 8 https://111.231.63.73/billing/v1/wallet/demo
           echo ""
-          echo "==== [7] body of wallet (should be 401 JSON, not nginx 404) ===="
-          curl -sk --max-time 8 https://111.231.63.73/billing/v1/wallet/demo 2>&1 | head -10
+          echo "==== [10] runner with cdn SNI ===="
+          curl -sk --resolve cdn.yshealth.com.cn:443:111.231.63.73 -o /dev/null -w "GET https://cdn.yshealth.com.cn/platform/health -> %{http_code}\n" --max-time 8 https://cdn.yshealth.com.cn/platform/health
+          curl -sk --resolve cdn.yshealth.com.cn:443:111.231.63.73 -o /dev/null -w "GET https://cdn.yshealth.com.cn/billing/v1/wallet/demo -> %{http_code}\n" --max-time 8 https://cdn.yshealth.com.cn/billing/v1/wallet/demo
+          echo ""
+          echo "==== [11] body of wallet (should be 401 JSON) ===="
+          curl -sk --max-time 8 https://111.231.63.73/billing/v1/wallet/demo 2>&1 | head -5
