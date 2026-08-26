@@ -235,7 +235,7 @@ jobs:
           REMOTE_USER: ${{ secrets.SSH_USER }}
           TARGET: "/root/qihuang_platform/scripts/"
 
-      - name: nginx 反代兜底修复（含触发关键词才跑，避免日常部署变重）
+      - name: nginx reverse proxy fallback fix (only if commit msg has nginx-fix-cdn)
         if: contains(github.event.head_commit.message, 'nginx-fix-cdn')
         run: |
           mkdir -p ~/.ssh
