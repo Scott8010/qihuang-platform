@@ -324,13 +324,10 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'KGSTATS'
             PID=$( (ss -ltnp 2>/dev/null || netstat -ltnp 2>/dev/null) | grep -w 8601 | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2)
-            echo "8601 pid=$PID"
-            echo "=== try each KEY-like env var ==="
-            tr '\0' '\n' < /proc/$PID/environ 2>/dev/null | grep -iE "^(QIHUANG_API_KEY|X_API_KEY|API_KEY|KB_API_KEY|KNOWLEDGE_API_KEY)=" | while IFS= read -r line; do
-              name=${line%%=*}; val=${line#*=}
-              resp=$(curl -s --max-time 6 -H "X-API-Key: $val" http://127.0.0.1:8601/api/v1/status)
-              echo "$name => $(echo "$resp" | head -c 90)"
-            done
-            echo "=== try default key ==="
-            curl -s --max-time 6 -H "X-API-Key: qihuang-platform-internal-key-dev" http://127.0.0.1:8601/api/v1/status | head -c 90
+            echo "=== 8601 environ key-like NAMES ==="
+            tr '\0' '\n' < /proc/$PID/environ 2>/dev/null | grep -iE "KEY|SECRET|TOKEN|API|QIHUANG" | sed -E 's/=.*//' | sort -u
+            echo "=== 8601 code api-key verify logic ==="
+            grep -rniE "X-API-Key|api_key|API_KEY|getenv|internal-key|qihuang-platform|verify|status|graph_stats" /root/qihuang_platform/api/ 2>/dev/null | grep -iE "key" | head -30
+            echo "=== 8601 code: status endpoint ==="
+            grep -rniE "def status|/status|graph_stats|api/v1/status" /root/qihuang_platform/api/ 2>/dev/null | head -15
           KGSTATS
