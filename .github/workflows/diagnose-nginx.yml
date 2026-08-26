@@ -1,0 +1,43 @@
+name: Diagnose Nginx (生产机)
+
+on:
+  workflow_dispatch:  # 手动触发
+
+jobs:
+  diag:
+    name: 诊断生产机 nginx 现状
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: SSH 读生产机 nginx 状态（零侵入、只读）
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'DIAG'
+            echo "==== [1] /etc/nginx/conf.d/ 都有什么 ===="
+            ls -la /etc/nginx/conf.d/ 2>/dev/null
+            echo ""
+            echo "==== [2] /etc/nginx/sites-enabled/ 都有什么（如果存在） ===="
+            ls -la /etc/nginx/sites-enabled/ 2>/dev/null
+            echo ""
+            echo "==== [3] 实际加载的 server_name（取前 40 行） ===="
+            sudo nginx -T 2>/dev/null | grep -E "^\s*server_name" | head -40
+            echo ""
+            echo "==== [4] 443/80 监听情况 ===="
+            ss -tlnp 2>/dev/null | grep -E ":80|:443|:8601|:8602" || sudo netstat -tlnp 2>/dev/null | grep -E ":80|:443|:8601|:8602"
+            echo ""
+            echo "==== [5] 8602 后端本地探活（证明 8602 真的活） ===="
+            curl -s -o /dev/null -w "GET /platform/health -> %{http_code}\n" --max-time 5 http://localhost:8602/platform/health
+            curl -s -o /dev/null -w "GET /billing/v1/wallet/demo -> %{http_code}\n" --max-time 5 http://localhost:8602/billing/v1/wallet/demo
+            echo ""
+            echo "==== [6] 443 反代测试（从生产机自己 curl 自己的公网 IP） ===="
+            curl -sk -o /dev/null -w "GET https://127.0.0.1/platform/health -> %{http_code}\n" --max-time 5 https://127.0.0.1/platform/health
+            curl -sk -o /dev/null -w "GET https://127.0.0.1/billing/v1/wallet/demo -> %{http_code}\n" --max-time 5 https://127.0.0.1/billing/v1/wallet/demo
+            echo ""
+            echo "==== [7] nginx 进程状态 ===="
+            systemctl status nginx --no-pager 2>/dev/null | head -10 || service nginx status 2>/dev/null | head -5
+            echo ""
+            echo "==== [8] 证书文件是否在 ===="
+            ls -la /etc/letsencrypt/live/ 2>/dev/null
+          DIAG
