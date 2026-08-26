@@ -325,19 +325,12 @@ jobs:
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'KGSTATS'
             PID=$( (ss -ltnp 2>/dev/null || netstat -ltnp 2>/dev/null) | grep -w 8601 | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2)
             echo "8601 pid=$PID"
-            KEY=""
-            [ -n "$PID" ] && KEY=$(tr '\0' '\n' < /proc/$PID/environ 2>/dev/null | grep -iE "^(QIHUANG_API_KEY|X_API_KEY|API_KEY)=" | head -1 | cut -d= -f2-)
-            if [ -z "$KEY" ]; then
-              for f in $(find /root/qihuang_platform -maxdepth 3 -name ".env" 2>/dev/null); do
-                k=$(grep -iE "^(QIHUANG_API_KEY|X_API_KEY|API_KEY)=" "$f" 2>/dev/null | head -1 | cut -d= -f2-)
-                [ -n "$k" ] && KEY="$k" && echo "key in $f" && break
-              done
-            fi
-            if [ -z "$KEY" ]; then
-              CID=$(docker ps -q --filter "publish=8601" 2>/dev/null)
-              [ -n "$CID" ] && KEY=$(docker inspect $CID 2>/dev/null | grep -ioE "(QIHUANG_API_KEY|X_API_KEY|API_KEY)=[\"']?[^\"' ]+" | head -1 | sed 's/.*=//')
-            fi
-            [ -z "$KEY" ] && KEY="qihuang-platform-internal-key-dev"
-            echo "key len=${#KEY}"
-            curl -s --max-time 10 -H "X-API-Key: $KEY" http://127.0.0.1:8601/api/v1/status || echo CURL_FAILED
+            echo "=== try each KEY-like env var ==="
+            tr '\0' '\n' < /proc/$PID/environ 2>/dev/null | grep -iE "^(QIHUANG_API_KEY|X_API_KEY|API_KEY|KB_API_KEY|KNOWLEDGE_API_KEY)=" | while IFS= read -r line; do
+              name=${line%%=*}; val=${line#*=}
+              resp=$(curl -s --max-time 6 -H "X-API-Key: $val" http://127.0.0.1:8601/api/v1/status)
+              echo "$name => $(echo "$resp" | head -c 90)"
+            done
+            echo "=== try default key ==="
+            curl -s --max-time 6 -H "X-API-Key: qihuang-platform-internal-key-dev" http://127.0.0.1:8601/api/v1/status | head -c 90
           KGSTATS
