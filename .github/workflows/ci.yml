@@ -235,6 +235,39 @@ jobs:
           REMOTE_USER: ${{ secrets.SSH_USER }}
           TARGET: "/root/qihuang_platform/scripts/"
 
+      - name: nginx 反代兜底修复（含触发关键词才跑，避免日常部署变重）
+        if: contains(github.event.head_commit.message, 'nginx-fix-cdn')
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'NGINX_FIX'
+            set -e
+            CDN=/etc/nginx/conf.d/cdn.yshealth.com.cn.conf
+            BACKUP=${CDN}.bak.$(date +%Y%m%d_%H%M%S)
+            cp -p "$CDN" "$BACKUP" 2>/dev/null || true
+            if ! grep -q "proxy_pass http://127.0.0.1:8602;" "$CDN"; then
+              cat >> "$CDN" <<'NEWLOC'
+
+    # nginx-fix-cdn: forward unmatched paths to 8602 (老板机器 SSL 走到这个 server 时也能 200/401)
+    location / {
+        proxy_pass http://127.0.0.1:8602;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+        proxy_connect_timeout 10s;
+    }
+NEWLOC
+            fi
+            nginx -t
+            nginx -s reload
+            sleep 1
+            echo "==== nginx-fix-cdn AFTER ===="
+            curl -sk --resolve cdn.yshealth.com.cn:443:127.0.0.1 -o /dev/null -w "GET https://cdn.yshealth.com.cn/billing/v1/wallet/demo -> %{http_code}\n" --max-time 5 https://cdn.yshealth.com.cn/billing/v1/wallet/demo
+          NGINX_FIX
+
       - name: 重启服务（systemd 单一真源，避免与 nohup/pkill 冲突）
         run: |
           mkdir -p ~/.ssh
