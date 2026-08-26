@@ -1,0 +1,97 @@
+name: Fix Nginx Reverse Proxy (生产机 443)
+
+on:
+  workflow_dispatch:  # 手动触发（只在出问题修一次）
+
+jobs:
+  fix:
+    name: 修复生产机 nginx 反代，让 IP 访问能走 8602
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: SSH 拉生产 conf + 备份 + 加 catch-all default_server 反代 + reload + 自检
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'FIX'
+            set -e
+            CONF=/etc/nginx/conf.d/qihuang.conf
+            BACKUP=${CONF}.bak.$(date +%Y%m%d_%H%M%S)
+
+            echo "==== [1] 备份现有 conf ===="
+            cp -p "$CONF" "$BACKUP"
+            ls -la "$BACKUP"
+
+            echo ""
+            echo "==== [2] 看 conf 里现有 default_server 几个 ===="
+            DEFAULTS=$(grep -c "default_server" "$CONF" || true)
+            echo "default_server 出现次数: $DEFAULTS"
+
+            echo ""
+            echo "==== [3] 在 conf 末尾追加一个 443 default_server (catch-all) + 80 default_server ===="
+            # 找出现有 qihuang 证书的路径（crtbot 签的）
+            CERT_FULLCHAIN=/etc/letsencrypt/live/yshealth.com.cn/fullchain.pem
+            CERT_KEY=/etc/letsencrypt/live/yshealth.com.cn/privkey.pem
+            CERT_OPTIONS=/etc/letsencrypt/options-ssl-nginx.conf
+            CERT_DHPARAM=/etc/letsencrypt/ssl-dhparams.pem
+
+            cat >> "$CONF" <<'NGINX_EOF'
+
+# === added by fix-nginx workflow 2026-08-26: IP / unknown Host 反代到 8602 ===
+# catch-all 443 (IP 访问走这里)
+server {
+    listen 443 ssl default_server;
+    server_name _;
+
+    ssl_certificate /etc/letsencrypt/live/yshealth.com.cn/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/yshealth.com.cn/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8602;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+        proxy_connect_timeout 10s;
+    }
+}
+
+# catch-all 80 (重定向到 HTTPS)
+server {
+    listen 80 default_server;
+    server_name _;
+    return 301 https://$host$request_uri;
+}
+# === end added ===
+NGINX_EOF
+
+            echo "已追加新 server block"
+
+            echo ""
+            echo "==== [4] nginx -t 语法检查 ===="
+            nginx -t
+
+            echo ""
+            echo "==== [5] nginx -s reload (热加载, 不中断服务) ===="
+            nginx -s reload
+            sleep 1
+
+            echo ""
+            echo "==== [6] 自检 (从生产机本地 curl 自己的 443, 应该拿到 200/401 而不是 404) ===="
+            curl -sk -o /dev/null -w "GET https://127.0.0.1/platform/health -> %{http_code}\n" --max-time 5 https://127.0.0.1/platform/health
+            curl -sk -o /dev/null -w "GET https://127.0.0.1/billing/v1/wallet/demo -> %{http_code}\n" --max-time 5 https://127.0.0.1/billing/v1/wallet/demo
+          FIX
+
+      - name: 沙箱自检 (确认外网 IP 访问也通)
+        run: |
+          echo "==== [7] 从 GitHub runner 模拟老板外网 IP 访问 ===="
+          sleep 3
+          curl -sk -o /dev/null -w "GET https://111.231.63.73/platform/health -> %{http_code}\n" --max-time 8 https://111.231.63.73/platform/health
+          curl -sk -o /dev/null -w "GET https://111.231.63.73/billing/v1/wallet/demo -> %{http_code}\n" --max-time 8 https://111.231.63.73/billing/v1/wallet/demo
+          echo ""
+          echo "==== [8] 响应体 (确认是 401 而非 nginx 默认 404 页) ===="
+          curl -sk --max-time 8 https://111.231.63.73/billing/v1/wallet/demo 2>&1 | head -10
