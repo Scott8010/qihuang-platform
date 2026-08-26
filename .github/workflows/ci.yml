@@ -249,7 +249,7 @@ jobs:
             if ! grep -q "proxy_pass http://127.0.0.1:8602;" "$CDN"; then
               cat >> "$CDN" <<'NEWLOC'
 
-    # nginx-fix-cdn: forward unmatched paths to 8602 (老板机器 SSL 走到这个 server 时也能 200/401)
+    # nginx-fix-cdn: forward unmatched paths to 8602 (fixes 404 from SNI=cdn.yshealth.com.cn)
     location / {
         proxy_pass http://127.0.0.1:8602;
         proxy_set_header Host $host;
