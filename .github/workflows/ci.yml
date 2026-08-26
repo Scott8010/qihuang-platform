@@ -324,26 +324,9 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'KGSTATS'
             set +e
-            PID=$( (ss -ltnp 2>/dev/null || netstat -ltnp 2>/dev/null) | grep -w 8601 | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2)
-            echo "=== 8601 PID=$PID ==="
-            echo "=== cmdline ==="; tr '\0' ' ' < /proc/$PID/cmdline 2>/dev/null; echo
-            echo "=== cwd ==="; ls -l /proc/$PID/cwd 2>/dev/null
-            echo "=== exe ==="; ls -l /proc/$PID/exe 2>/dev/null
-            echo "=== docker ps (8601/qihuang/kb) ==="; docker ps --format '{{.ID}} {{.Names}} {{.Image}} {{.Ports}}' 2>/dev/null | grep -iE '8601|qihuang|kb' || echo "no docker match"
-            echo "=== systemd units (8601/qihuang) ==="; systemctl list-units --all 2>/dev/null | grep -iE '8601|qihuang' || true
-            echo "=== systemd unit files referencing 8601 ==="; systemctl cat $(systemctl list-units --all 2>/dev/null | grep -iE '8601|qihuang' | awk '{print $1}') 2>/dev/null | grep -iE 'ExecStart|Environment|EnvironmentFile|WorkingDirectory' | head -20
-            echo "=== broader env var NAMES ==="; tr '\0' '\n' < /proc/$PID/environ 2>/dev/null | grep -iE 'KEY|SECRET|TOKEN|API|QIHUANG|AUTH|PASS|KB|INTERNAL' | sed -E 's/=.*//' | sort -u
-            CWD=$(readlink /proc/$PID/cwd 2>/dev/null)
-            echo "=== CWD=$CWD ==="
-            echo "=== grep 8601 source for key + status (in CWD) ==="
-            grep -rniE "X-API-Key|api_key|API_KEY|INTERNAL|graph_stats|api/v1/status|def status" "$CWD" 2>/dev/null | grep -iE "key|status|graph" | head -40
-            echo "=== candidate key strings in CWD ==="
-            grep -rhoE "qihuang-[a-zA-Z0-9_-]+|internal-[a-zA-Z0-9_-]+" "$CWD" 2>/dev/null | sort -u | head -20
-            echo "=== try curl with dev default key ==="
-            curl -s --max-time 8 -H "X-API-Key: qihuang-platform-internal-key-dev" http://127.0.0.1:8601/api/v1/status; echo
-            echo "=== try curl with env-derived keys ==="
-            for K in $(tr '\0' '\n' < /proc/$PID/environ 2>/dev/null | grep -iE 'KEY|SECRET|TOKEN|API|KB|INTERNAL' | sed -E 's/^[^=]*=//'); do
-              echo "-- try key-len=${#K} --"
-              curl -s --max-time 8 -H "X-API-Key: $K" http://127.0.0.1:8601/api/v1/status; echo
-            done
+            echo "=== 8601 docker container ==="; docker ps --format '{{.ID}} {{.Names}} {{.Image}} {{.Ports}}' 2>/dev/null | grep -i 8601 || true
+            echo "=== curl 8601 status with nginx-conf key qh_key_default_2026 ==="
+            curl -s --max-time 15 -H "X-API-Key: qh_key_default_2026" http://127.0.0.1:8601/api/v1/status; echo
+            echo "=== curl 8601 status with dev default key (fallback) ==="
+            curl -s --max-time 15 -H "X-API-Key: qihuang-platform-internal-key-dev" http://127.0.0.1:8601/api/v1/status; echo
           KGSTATS
