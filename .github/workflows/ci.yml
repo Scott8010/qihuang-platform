@@ -1,4 +1,4 @@
-name: 岐黄智脑 CI/CD
+name: Qihuang CI CD
 
 on:
   push:
