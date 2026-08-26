@@ -180,7 +180,7 @@ jobs:
     name: deploy to prod
     runs-on: ubuntu-latest
     needs: [test, lint]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && !contains(github.event.head_commit.message, 'kg-stats-dump')
     environment: production
 
     steps:
@@ -309,3 +309,20 @@ jobs:
             if [ ! -f "$REF" ]; then echo "FATAL: 前端 bundle 漏同步 ($REF 不存在，index.html 已指向它 -> 线上会白屏)"; exit 1; fi
             echo "OK: 前端 bundle $REF 完整 ($(wc -c < "$REF") bytes)"
           VERIFY
+
+  kg-dump:
+    name: dump 8601 kg stats (prod, latest)
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, 'kg-stats-dump')
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: ssh dump 8601 status from prod
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'KGSTATS'
+            echo "==== 8601 /api/v1/status (PROD, latest) ===="
+            curl -s --max-time 10 -H "X-API-Key: qihuang-platform-internal-key-dev" http://127.0.0.1:8601/api/v1/status || echo "CURL_FAILED"
+          KGSTATS
