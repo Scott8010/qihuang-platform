@@ -245,6 +245,26 @@ jobs:
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash /tmp/fix-cdn-nginx.sh /etc/nginx/conf.d/cdn.yshealth.com.cn.conf'
           rm -f /tmp/fix-cdn-nginx.sh
 
+      - name: dump cdn conf for diagnosis
+        if: always()
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'DUMPCDN'
+            echo "==== /etc/nginx/conf.d/cdn.yshealth.com.cn.conf ===="
+            cat -n /etc/nginx/conf.d/cdn.yshealth.com.cn.conf
+            echo ""
+            echo "==== where is 8602 proxy in cdn conf ===="
+            grep -n '8602\|proxy_pass\|location' /etc/nginx/conf.d/cdn.yshealth.com.cn.conf
+            echo ""
+            echo "==== self check from prod (with cdn SNI) ===="
+            curl -sk --resolve cdn.yshealth.com.cn:443:127.0.0.1 -i --max-time 5 https://cdn.yshealth.com.cn/platform/health 2>&1 | head -10
+            echo ""
+            echo "==== self check from prod (with cdn SNI, billing) ===="
+            curl -sk --resolve cdn.yshealth.com.cn:443:127.0.0.1 -i --max-time 5 https://cdn.yshealth.com.cn/billing/v1/wallet/demo 2>&1 | head -10
+          DUMPCDN
+
       - name: 重启服务（systemd 单一真源，避免与 nohup/pkill 冲突）
         run: |
           mkdir -p ~/.ssh
