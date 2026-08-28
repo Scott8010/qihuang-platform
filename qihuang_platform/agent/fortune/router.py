@@ -29,6 +29,7 @@ from qihuang_platform.agent.fortune.schema import (
 from qihuang_platform.agent.fortune import engine
 from qihuang_platform.agent.fortune.store import FortuneStore, make_material_id
 from qihuang_platform.agent.fortune.audit import AuditStore
+from qihuang_platform.billing.wallet import charge_agent
 
 router = APIRouter()
 
@@ -72,6 +73,8 @@ async def fortune_archive(
         _store.upsert(material_id, prof)
         _audit.append("archive", operator=getattr(request.state, "user_id", "unknown"),
                       user_id=req.user_id, material_id=material_id)
+    tenant_id = getattr(request.state, "tenant_id", None) or user.get("tenant_id")
+    charge_agent(tenant_id, "fortune")  # 规则类固定 2 积分
     return success(data={"material_id": material_id, **prof})
 
 
@@ -91,6 +94,8 @@ async def fortune_cast(
     _store.upsert(material_id, result)
     _audit.append("cast", operator=getattr(request.state, "user_id", "unknown"),
                   user_id=req.user_id, ben_gua=result["ben_gua"])
+    tenant_id = getattr(request.state, "tenant_id", None) or user.get("tenant_id")
+    charge_agent(tenant_id, "fortune")  # 规则类固定 2 积分
     return success(data={"material_id": material_id, **result})
 
 
@@ -122,6 +127,8 @@ async def fortune_daily(
                              day_master=dm, ai=ai)
     _audit.append("daily", operator=getattr(request.state, "user_id", "unknown"),
                   user_id=user_id)
+    tenant_id = getattr(request.state, "tenant_id", None) or user.get("tenant_id")
+    charge_agent(tenant_id, "fortune")  # 规则类固定 2 积分
     return success(data=data)
 
 
@@ -151,6 +158,8 @@ async def fortune_report(
         return error(code_key="BAD_PILLARS", message=str(e))
     _audit.append("report", operator=getattr(request.state, "user_id", "unknown"),
                   user_id=req.user_id)
+    tenant_id = getattr(request.state, "tenant_id", None) or user.get("tenant_id")
+    charge_agent(tenant_id, "fortune")  # 规则类固定 2 积分
     return success(data=data)
 
 

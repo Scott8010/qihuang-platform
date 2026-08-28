@@ -31,6 +31,7 @@ from qihuang_platform.agent.store_coach.engine import customer_reply, evaluate
 from qihuang_platform.agent.store_coach.metering import check_quota, record_call
 from qihuang_platform.db.models import StoreCoachSession
 from qihuang_platform.db.config import SessionLocal
+from qihuang_platform.billing.wallet import charge_agent
 
 router = APIRouter()
 
@@ -174,6 +175,7 @@ async def create_store_coach_session(
             action="sessions", scene=req.scene,
         )
 
+        charge_agent(tenant_id, "store-coach", uses_llm=True)
         return success(data={
             "session_id": session.id,
             "scene": session.scene,
@@ -289,6 +291,7 @@ async def store_coach_evaluate(
             action="evaluate", scene=session.scene, compliance_ok=compliance["ok"],
         )
 
+        charge_agent(tenant_id, "store-coach", uses_llm=True)
         return success(data={
             "customer_reply": reply or "（AI 顾客暂不可用）",
             "reply_model": reply_model,

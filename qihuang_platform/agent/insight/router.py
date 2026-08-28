@@ -28,6 +28,7 @@ from qihuang_platform.gateway.metering import metering_store
 from qihuang_platform.agent.deps import require_agent_in_plan
 from qihuang_platform.agent.insight.engine import diagnose
 from qihuang_platform.agent.insight.metering import check_quota, record_call
+from qihuang_platform.billing.wallet import charge_agent
 
 router = APIRouter()
 
@@ -156,6 +157,7 @@ async def insight_diagnose(
             action="diagnose", metric_count=len(req.metrics),
         )
 
+        charge_agent(tenant_id, "insight", uses_llm=True)
         return success(data={
             "diagnosis": parsed,
             "model": model,

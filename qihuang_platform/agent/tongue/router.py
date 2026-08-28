@@ -16,6 +16,7 @@ from qihuang_platform.agent.deps import require_agent_in_plan
 from qihuang_platform.agent.tongue import engine
 from qihuang_platform.gateway.deps import get_current_principal
 from qihuang_platform.gateway.response import success
+from qihuang_platform.billing.wallet import charge_agent
 
 router = APIRouter()
 
@@ -38,9 +39,11 @@ async def tongue_analyze(
     输出对齐 tongue_face_analysis.md §3.5（含 petechiae/texture/deviation/corrosion/peeling）。
     fail-closed：视觉模型未配置或调用失败时返回 mode=image_pending/image_error，绝不返回假数据。
     """
+    tenant_id = getattr(request.state, "tenant_id", None) or user.get("tenant_id")
     data = engine.analyze_tongue(
         req.image,
         face_image=req.face_image,
         profile=req.profile,
     )
+    charge_agent(tenant_id, "tongue", uses_llm=True)
     return success(data=data)

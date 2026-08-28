@@ -6,6 +6,8 @@ API Gateway - 统一响应包装
 import uuid
 from typing import Any, Optional
 
+from fastapi.responses import JSONResponse
+
 # ---- 标准错误码 ----
 ERROR_CODES = {
     # 通用 1xxx
@@ -53,6 +55,34 @@ def success(data: Any = None, message: str = None) -> dict:
         "data": data,
         "trace_id": str(uuid.uuid4())[:8],
     }
+
+
+# 错误码 → 推荐 HTTP 状态码（B9：让错误响应带正确状态码，而非一律 200）
+DEFAULT_STATUS_BY_CODE: dict = {
+    1001: 400, 1002: 400, 1003: 400, 1004: 400,  # 参数类
+    2001: 401, 2002: 401, 2003: 401, 2004: 401, 2005: 401, 2006: 401, 2007: 401,  # 认证
+    2008: 403, 2009: 403,  # 权限/IP
+    3001: 429, 3002: 402,  # 限流 / 配额
+    5001: 500, 5002: 503, 5003: 503, 5004: 504,  # 服务
+    6001: 404, 6002: 409, 6003: 403, 6004: 403,  # 业务资源
+}
+
+
+def fail(code_key: str, message: str = None, data: Any = None, http_status: int = None):
+    """错误响应（带正确 HTTP 状态码，B9 修复）。
+
+    与 error() 语义一致，但返回 JSONResponse 并带状态码；用于需要「HTTP 状态码≠200」
+    的错误出口（如 onboard 失败、参数非法、资源不存在）。error() 仍返回纯 dict 供
+    内部/旁路使用，两者不冲突。
+    """
+    info = ERROR_CODES.get(code_key, {"code": 5001, "message": "未知错误"})
+    status = http_status or DEFAULT_STATUS_BY_CODE.get(info["code"], 400)
+    return JSONResponse({
+        "code": info["code"],
+        "message": message or info["message"],
+        "data": data,
+        "trace_id": str(uuid.uuid4())[:8],
+    }, status_code=status)
 
 
 def error(code_key: str, message: str = None, data: Any = None,

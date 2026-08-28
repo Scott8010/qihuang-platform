@@ -23,6 +23,7 @@ from qihuang_platform.agent.health_advisor.reports import get_report
 from qihuang_platform.agent.health_advisor.schema import ConsultRequest
 from qihuang_platform.gateway.deps import get_current_principal
 from qihuang_platform.gateway.response import error, success
+from qihuang_platform.billing.wallet import charge_agent
 
 router = APIRouter()
 _advisor = HealthAdvisor()
@@ -43,6 +44,7 @@ async def consult(
         return error("QUOTA_EXCEEDED", "本月健康顾问调用配额已用完，请升级套餐或次月恢复。")
     try:
         resp = await _advisor.consult(req, tenant_id)
+        charge_agent(tenant_id, "health-advisor", uses_llm=True)  # B2: 成功调用后扣积分
         return success(resp.model_dump())
     except Exception as e:  # noqa: BLE001
         return error("INTERNAL_ERROR", str(e))

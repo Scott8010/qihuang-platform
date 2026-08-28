@@ -30,13 +30,27 @@ def _month_str() -> str:
 def _get_or_create(db, tenant_id: str) -> Wallet:
     w = db.query(Wallet).filter_by(tenant_id=tenant_id).first()
     if w is None:
-        w = Wallet(tenant_id=tenant_id)
+        # B1 修复：首次建钱包即按当前套餐显式播种基本包赠送积分。
+        # 旧逻辑 Wallet(tenant_id=tenant_id) 用模型默认值（base_credits=0、
+        # period_month=当前月），导致 maybe_reset_base_monthly 守卫恒 False、
+        # 初始赠送永不触发，钱包恒为 0/回退 300。
+        w = Wallet(
+            tenant_id=tenant_id,
+            base_credits=get_base_credits(_current_plan_name(db, tenant_id)),
+            period_month=_month_str(),
+        )
         db.add(w)
         db.flush()
     return w
 
 
-def _current_plan_id(db, tenant_id: str) -> str:
+def _current_plan_name(db, tenant_id: str) -> str:
+    """当前活跃订阅对应套餐的 plan_name（trial/standard/professional/enterprise）。
+
+    B1 修复：旧实现返回 plan.id(UUID)，而 get_base_credits 按名查
+    （BASE_CREDITS_BY_PLAN 键为 trial/standard/...），两者不匹配 → 初始赠送
+    永远回退默认 300。这里改返 plan_name，与定价字典对齐。
+    """
     sub = (
         db.query(Subscription)
         .filter_by(tenant_id=tenant_id, status="active")
@@ -46,14 +60,14 @@ def _current_plan_id(db, tenant_id: str) -> str:
     if not sub:
         return ""
     plan = db.query(Plan).filter_by(id=sub.plan_id).first()
-    return plan.id if plan else ""
+    return plan.plan_name if plan else ""
 
 
 def maybe_reset_base_monthly(db, w: Wallet) -> None:
     """基本包按月清零：跨月则 base_credits 归零并按当前套餐重新赠送。"""
     cur = _month_str()
     if w.period_month != cur:
-        w.base_credits = get_base_credits(_current_plan_id(db, w.tenant_id))
+        w.base_credits = get_base_credits(_current_plan_name(db, w.tenant_id))
         w.period_month = cur
         db.flush()
 
@@ -148,3 +162,72 @@ def consume_credits(
         return True, 0  # 旁路非阻断：计量异常不阻断主响应
     finally:
         db.close()
+
+
+def charge_agent(
+    tenant_id: str,
+    agent_key: str,
+    *,
+    token_used: int = 0,
+    is_multimodal: bool = False,
+    uses_llm: Optional[bool] = None,
+) -> None:
+    """Agent 业务成功调用后统一扣积分（B2 落地点，旁路非阻断，绝不影响主响应）。
+
+    在各 agent 路由成功返回前调用；底层走 compute_credits + consume_credits。
+    rule 类(geo/fortune) uses_llm=False → 每次固定 2 积分起步价；LLM 类按 token 计。
+    """
+    if not tenant_id:
+        return  # 无租户上下文（如未注入 request.state.tenant_id）时不扣费、不建空钱包
+    try:
+        consume_credits(
+            tenant_id=tenant_id,
+            agent_key=agent_key,
+            token_used=token_used,
+            is_multimodal=is_multimodal,
+            uses_llm=uses_llm,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[wallet] charge_agent 失败(旁路): %s", e)
+
+
+def deduct_fixed(tenant_id: str, amount: int, reason: str = "") -> bool:
+    """按固定积分数扣减（先 base 后 addon）；两池皆不足则原子不放行返回 False。
+
+    用于单加 agent 月度订阅费等固定费用场景（B3）。
+    """
+    if amount <= 0:
+        return True
+    db = SessionLocal()
+    try:
+        w = _get_or_create(db, tenant_id)
+        maybe_reset_base_monthly(db, w)
+        if w.base_credits >= amount:
+            w.base_credits -= amount
+        else:
+            rem = amount - w.base_credits
+            w.base_credits = 0
+            if w.addon_credits >= rem:
+                w.addon_credits -= rem
+            else:
+                db.rollback()
+                return False
+        w.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        return True
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        logger.warning("[wallet] deduct_fixed 失败(旁路): %s", e)
+        return False
+    finally:
+        db.close()
+
+
+def charge_addon_subscription(tenant_id: str, agent_key: str, fee_cents: int) -> bool:
+    """单加 agent 开通：首月订阅费从积分池扣除（先赠后充）。
+
+    1 积分 = ¥0.05 → 积分 = 分 / 5（文本 ¥59=5900 分=1180 积分；多模态 ¥99=9900 分=1980 积分）。
+    返回是否扣费成功（余额不足时订阅仍建立、首月扣费失败，供运营对账）。
+    """
+    credits = max(1, round(fee_cents / 5))
+    return deduct_fixed(tenant_id, credits, reason=f"agent_addon:{agent_key}")

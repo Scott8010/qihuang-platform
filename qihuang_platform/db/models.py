@@ -489,6 +489,25 @@ class Wallet(Base):
     updated_at = Column(DateTime, default=_now, onupdate=_now)
 
 
+class AgentAddonSubscription(Base):
+    """单加 agent 月度订阅计费（B3 落地点）— 在套餐 agents 之外精准叠加的能力，按 ¥59/¥99 月度计费。
+
+    - fee_cents：月费（分）文本 5900 / 多模态 9900（老板 2026-08-25 拍板）。
+    - 开通即在 set_tenant_agent_addons 落一条 active 记录 + 首月从积分池扣费（先赠后充）；
+      后续月度由计费中台定时任务续扣（本期先落地记录 + 首月扣费，递归续扣为后续项）。
+    """
+    __tablename__ = "agent_addon_subscription"
+    id = Column(String(36), primary_key=True, default=_uid)
+    tenant_id = Column(String(36), ForeignKey("tenant.id"), nullable=False, index=True)
+    agent_key = Column(String(100), nullable=False)
+    fee_cents = Column(Integer, default=0)
+    cycle_months = Column(Integer, default=1)
+    status = Column(String(20), default="active")  # active / cancelled
+    start_date = Column(DateTime, default=_now)
+    next_charge_at = Column(DateTime, default=_now)
+    created_at = Column(DateTime, default=_now)
+
+
 # ═══════════════════════════════════════════════════
 # 5. 活态化业务实证（回路三）& 多租户能力中心（二期）域
 # ═══════════════════════════════════════════════════

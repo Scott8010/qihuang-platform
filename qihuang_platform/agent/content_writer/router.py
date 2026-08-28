@@ -27,6 +27,7 @@ from qihuang_platform.gateway.metering import metering_store
 from qihuang_platform.agent.deps import require_agent_in_plan
 from qihuang_platform.agent.content_writer.engine import generate
 from qihuang_platform.agent.content_writer.metering import check_quota, record_call
+from qihuang_platform.billing.wallet import charge_agent
 
 router = APIRouter()
 
@@ -165,6 +166,7 @@ async def generate_content(
             variants=req.variants,
         )
 
+        charge_agent(tenant_id, "content-writer", uses_llm=True)
         return success(data={
             "topic": req.topic,
             "content_type": req.content_type,

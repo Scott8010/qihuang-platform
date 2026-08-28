@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 
 from qihuang_platform.gateway.deps import get_current_principal
 from qihuang_platform.gateway.response import success, error
+from qihuang_platform.billing.wallet import charge_agent
 from qihuang_platform.agent.deps import require_agent_in_plan
 from qihuang_platform.agent.compliance.engine_l2 import compliance_engine
 from qihuang_platform.agent.compliance.audit import (
@@ -131,6 +132,7 @@ async def compliance_scan(
         hit_count=result.get("hit_count", 0),
         text_preview=req.text[:120],
     ))
+    charge_agent(tenant_id, "compliance", uses_llm=True)  # B2: 成功调用后扣积分（L2 语义层走 LLM 再叠加 token）
     return success(data=result)
 
 

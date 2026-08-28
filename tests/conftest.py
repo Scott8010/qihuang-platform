@@ -122,26 +122,32 @@ def api_key_info(client, admin_headers):
 
 @pytest.fixture(scope="session")
 def api_key_headers(api_key_info):
-    """API Key 签名请求头"""
-    import hashlib
-    import time
-    import uuid
+    """API Key 签名请求头工厂：api_key_headers(method, path, body="") -> dict
+
+    使用与网关 verify_api_key 完全一致的 HMAC-SHA256 规范报文签名
+    （message = f"{app_key}\\n{method}\\n{path}\\n{timestamp}\\n{nonce}\\n{body}"），
+    替代原先错误的 sha256(app_secret:ts:nonce) 写法，使 401 鉴权测试可信。
+    """
+    from qihuang_platform.gateway.auth import generate_api_signature
 
     app_key = api_key_info["app_key"]
     app_secret = api_key_info["app_secret"]
-    timestamp = str(int(time.time()))
-    nonce = uuid.uuid4().hex[:16]
-    # 简单签名: HMAC-SHA256(path+timestamp+nonce+body)
-    signature = hashlib.sha256(
-        f"{app_secret}:{timestamp}:{nonce}".encode()
-    ).hexdigest()
 
-    return {
-        "X-App-Key": app_key,
-        "X-Signature": signature,
-        "X-Timestamp": timestamp,
-        "X-Nonce": nonce,
-    }
+    def _sign(method: str, path: str, body: str = "") -> dict:
+        import time
+        import uuid
+
+        timestamp = str(int(time.time()))
+        nonce = uuid.uuid4().hex[:16]
+        signature = generate_api_signature(app_key, app_secret, method, path, timestamp, nonce, body)
+        return {
+            "X-App-Key": app_key,
+            "X-Signature": signature,
+            "X-Timestamp": timestamp,
+            "X-Nonce": nonce,
+        }
+
+    return _sign
 
 
 def pytest_configure(config):

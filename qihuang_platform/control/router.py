@@ -20,7 +20,7 @@ import logging
 from qihuang_platform.gateway.deps import get_current_admin
 from qihuang_platform.agent.refine_llm import refine_review_content
 from qihuang_platform.control.kg_bridge import write_review_to_kg
-from qihuang_platform.gateway.response import success, error, paginated
+from qihuang_platform.gateway.response import success, error, paginated, fail
 from qihuang_platform.db.config import SessionLocal
 from qihuang_platform.db.models import (
     Plan, Subscription, Bill, CallLog, AuditLog,
@@ -29,8 +29,10 @@ from qihuang_platform.db.models import (
     Org, ApiKey, AgentDef,
     MedCase, MedReport, HealthAssessment, HealthPlan,
     EduCoachSession, EduExamRecord, ConsultAttribution,
+    AgentAddonSubscription,
     UploadFile,
 )
+from qihuang_platform.billing.wallet import charge_addon_subscription
 import bcrypt
 from qihuang_platform.rbac.service import validate_password
 from qihuang_platform.gateway.monitor import monitor
@@ -396,21 +398,70 @@ async def set_tenant_agent_addons(
         extra = dict(t.extra or {})
         current = list(extra.get("agent_addons", []) or [])
         new_set = list(current)
+        newly_added = []
         for k in req.add:
             if k not in new_set:
                 new_set.append(k)
+                newly_added.append(k)
+        removed = []
         for k in req.remove:
             if k in new_set:
                 new_set.remove(k)
+                removed.append(k)
 
         extra["agent_addons"] = new_set
         t.extra = extra
+
+        # ── B3：单加 agent 落地月度订阅计费（老板 2026-08-25 拍板 文本¥59/多模态¥99）──
+        # 不含赠送积分，开通走积分池、先赠后充；首月即扣，后续月度由计费中台定时续扣。
+        _MULTIMODAL_ADDON_AGENTS = {"tongue", "geo", "health-assistant", "health-advisor"}
+        for k in newly_added:
+            fee_cents = 9900 if k in _MULTIMODAL_ADDON_AGENTS else 5900
+            db.add(AgentAddonSubscription(
+                tenant_id=tenant_id, agent_key=k,
+                fee_cents=fee_cents, cycle_months=1, status="active",
+            ))
+            charge_addon_subscription(tenant_id, k, fee_cents)  # 首月从积分池扣（先赠后充）
+        # 移除叠加项 → 同步取消其订阅（不再续扣）
+        if removed:
+            db.query(AgentAddonSubscription).filter(
+                AgentAddonSubscription.tenant_id == tenant_id,
+                AgentAddonSubscription.agent_key.in_(removed),
+                AgentAddonSubscription.status == "active",
+            ).update({"status": "cancelled"}, synchronize_session=False)
+
         db.commit()
         return success(data={
             "tenant_id": tenant_id,
             "agent_addons": new_set,
         }, message="租户级 Agent 叠加已更新（在套餐 agents 基础上生效）")
     except Exception as e:
+        db.rollback()
+        return error("INTERNAL_ERROR", message=str(e))
+    finally:
+        db.close()
+
+
+@router.get("/tenants/{tenant_id}/agent-addon-bills", summary="单加 agent 订阅计费列表(B3)")
+async def get_tenant_agent_addon_bills(tenant_id: str, admin: dict = Depends(get_current_admin)):
+    """返回该租户在套餐 agents 之外单加的 Agent 月度订阅（active 状态），含月费与下次扣费时间。
+
+    供前端/运营查看「单加口子」落地情况与计费对账（老板 2026-08-25 拍板 59/99）。
+    """
+    db = SessionLocal()
+    try:
+        rows = db.query(AgentAddonSubscription).filter_by(
+            tenant_id=tenant_id, status="active"
+        ).all()
+        return success(data=[{
+            "agent_key": r.agent_key,
+            "fee_cents": r.fee_cents,
+            "cycle_months": r.cycle_months,
+            "status": r.status,
+            "start_date": r.start_date.isoformat() if r.start_date else None,
+            "next_charge_at": r.next_charge_at.isoformat() if r.next_charge_at else None,
+        } for r in rows])
+    except Exception as e:  # noqa: BLE001
         db.rollback()
         return error("INTERNAL_ERROR", message=str(e))
     finally:
@@ -1960,7 +2011,7 @@ async def onboard_tenant(req: TenantOnboardRequest, admin: dict = Depends(get_cu
     try:
         existing = db.query(Tenant).filter_by(name=req.name).first()
         if existing:
-            return error("DUPLICATE", message=f"租户 {req.name} 已存在")
+            return fail("DUPLICATE", message=f"租户 {req.name} 已存在", http_status=409)
 
         tenant = Tenant(
             id=_uid(), name=req.name,
@@ -1997,7 +2048,7 @@ async def onboard_tenant(req: TenantOnboardRequest, admin: dict = Depends(get_cu
         if not plan:
             plan = db.query(Plan).filter_by(plan_name="free").first()
         if not plan:
-            return error("NOT_FOUND", message=f"套餐 {req.plan} 不存在且无默认免费套餐")
+            return fail("NOT_FOUND", message=f"套餐 {req.plan} 不存在且无默认免费套餐", http_status=404)
 
         # 2026-08-22 老黄拍板：3D 岐黄三境不做单独加购，按套餐门槛——
         # 体验版/标准版不含（传入 true 也强制 false），专业版/企业版自动含（传入 false 也强制 true）。

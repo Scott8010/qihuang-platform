@@ -24,6 +24,7 @@ from qihuang_platform.agent.coach.metering import check_quota, record_call
 from qihuang_platform.db.models import EduCoachSession
 from qihuang_platform.db.config import SessionLocal
 from qihuang_platform.capability.proxy import proxy
+from qihuang_platform.billing.wallet import charge_agent
 
 router = APIRouter()
 
@@ -103,6 +104,7 @@ async def create_coach_session(
         )
         db.add(session)
         db.commit()
+        charge_agent(tenant_id, "coach", uses_llm=True)
         return success(data={
             "session_id": session.id,
             "topic": session.topic,

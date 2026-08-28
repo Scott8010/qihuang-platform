@@ -23,6 +23,7 @@ from qihuang_platform.agent.fortune.schema import GeoRequest
 from qihuang_platform.agent.fortune import engine
 from qihuang_platform.agent.fortune.store import FortuneStore, make_material_id
 from qihuang_platform.agent.fortune.audit import AuditStore
+from qihuang_platform.billing.wallet import charge_agent
 
 router = APIRouter()
 
@@ -58,7 +59,11 @@ async def geo_create(
     _agent=Depends(require_agent_in_plan("geo")),
 ):
     """风水堪舆（看空间）：坐向(罗盘/24山) + GPS → 宅卦/八宅吉凶方/九宫/峦头。"""
-    return geo_analysis(req, request, operator=getattr(request.state, "user_id", "unknown"))
+    tenant_id = getattr(request.state, "tenant_id", None) or user.get("tenant_id")
+    result = geo_analysis(req, request, operator=getattr(request.state, "user_id", "unknown"))
+    if isinstance(result, dict) and result.get("code") == 0:
+        charge_agent(tenant_id, "geo", uses_llm=False)  # B2: 规则类固定 2 积分
+    return result
 
 
 @router.get("/geo/dashboard")
