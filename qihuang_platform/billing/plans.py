@@ -2,7 +2,7 @@
 套餐管理 — 按场景分档的 Agent 编排 + 双层配额（机构级 + 终端用户级）
 
 老黄 2026-08-22 敲定（从勾选调研表导出 JSON 落地）：
-- 4 档套餐：体验版(免费/限次) / 标准版 ¥299 / 专业版 ¥599(+3D) / 企业版 ¥999(+3D)
+- 4 档套餐：体验版 ¥99 / 标准版 ¥299 / 专业版 ¥599(+3D) / 企业版 ¥999(+3D)
 - 每档 Agent 数阶梯：体验1 / 标准2 / 专业3 / 企业4
 - 4 业务场景 MED(医馆)/EDU(教育)/RETAIL(门店)/HQ(总部)，各场景同档 Agent 不同
 - HQ 仅企业版可订阅（无其他版本）
@@ -22,7 +22,7 @@ DEFAULT_PLANS = [
         "qps": 3,
         "month_calls": 500,
         "month_tokens": 50000,
-        "price_cents": 0,
+        "price_cents": 9900,
         "features_json": {
             "module_3d": False,
             "report_export": False,
@@ -34,7 +34,7 @@ DEFAULT_PLANS = [
             # 兼容兜底：取 MED 场景同档编排（门控优先走 SCENE_PLAN_AGENTS）
             "agents": ["health-assistant"],
         },
-        "description": "免费体验30天，健康助手每C端用户限10次/月，尝鲜大健康C端服务",
+        "description": "体验版 ¥99/月，健康助手每C端用户限10次/月，低门槛尝鲜大健康C端服务",
     },
     {
         "plan_name": "standard",
@@ -81,11 +81,11 @@ DEFAULT_PLANS = [
             "module_3d": True,
             "report_export": True,
             "priority_support": True,
-            "custom_skin": True,
+            "custom_skin": False,
             # 兼容兜底：MED 场景企业版编排
             "agents": ["compliance", "health-assistant", "insight", "tongue"],
         },
-        "description": "企业版 ¥999/月 — 4个Agent+3D+品牌定制+专属支持，全功能旗舰",
+        "description": "企业版 ¥999/月 — 4个Agent+3D+专属客户成功经理+优先工单，全功能旗舰",
     },
 ]
 
@@ -179,6 +179,16 @@ def seed_plans(session):
         default_agents = (pdata.get("features_json") or {}).get("agents", [])
         existing = session.query(Plan).filter_by(plan_name=plan_name).first()
         if existing:
+            # 同步价格/名称/描述：老板调价后 re-seed 即生效，无需手动 UPDATE（#474 延伸）
+            if existing.price_cents != pdata_copy.get("price_cents"):
+                existing.price_cents = pdata_copy["price_cents"]
+                session.flush()
+            if existing.display_name != display_name:
+                existing.display_name = display_name
+                session.flush()
+            if existing.description != description:
+                existing.description = description
+                session.flush()
             # 幂等合并：已存在套餐补 agents 字段；若已有 agents，则与内置默认做并集，
             # 保证新增内置能力能纳入已播种的套餐（不覆盖运营端已定制的额外组合）。
             # 必须用 dict() 副本，否则原地改 existing.features_json 同对象引用，

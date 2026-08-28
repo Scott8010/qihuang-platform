@@ -247,7 +247,7 @@ tr:hover{background:rgba(201,169,110,.05)}
           控制各套餐档位的 module_3d 功能开关。开启后该套餐租户可使用岐黄三境3D经络穴位可视化。
         </p>
         <table><thead><tr>
-          <th>套餐</th><th>3D模块</th><th>名医智能体</th><th>报告导出</th><th>优先支持</th><th>品牌皮肤</th>
+          <th>套餐</th><th>3D模块</th><th>名医智能体</th><th>报告导出</th><th>优先支持</th>
         </tr></thead>
         <tbody id="planFeatureTable"><tr><td colspan="6" class="empty">加载中...</td></tr></tbody></table>
       </div>
@@ -267,7 +267,8 @@ tr:hover{background:rgba(201,169,110,.05)}
         </tbody></table>
       </div>
 
-      <div class="card" style="margin-top:16px">
+      <!-- 品牌皮肤(custom_skin) 权益已下线：老板 2026-08-26 拍板移除"品牌定制"，改专属客户成功经理+优先工单。卡片隐藏 -->
+      <div class="card" style="display:none;margin-top:16px">
         <h3><span class="dot blue"></span>品牌皮肤配置（企业版专属）</h3>
         <p style="color:var(--text-dim);font-size:13px;margin-bottom:12px">
           为开通企业版 + custom_skin 的租户提供3D页面品牌定制。
@@ -706,10 +707,10 @@ function revokeKey(keyId){
 // ═══════════════ 3D模块管理 ═══════════════
 async function loadPlanFeatures(){
   const defaults = [
-    {plan_name:'trial',display_name:'体验版',features_json:{module_3d:false,module_agent:false,report_export:false,priority_support:false,custom_skin:false}},
-    {plan_name:'standard',display_name:'标准版',features_json:{module_3d:false,module_agent:false,report_export:true,priority_support:false,custom_skin:false}},
-    {plan_name:'professional',display_name:'专业版',features_json:{module_3d:true,module_agent:false,report_export:true,priority_support:true,custom_skin:false}},
-    {plan_name:'enterprise',display_name:'企业版',features_json:{module_3d:true,module_agent:true,report_export:true,priority_support:true,custom_skin:true}},
+    {plan_name:'trial',display_name:'体验版',features_json:{module_3d:false,module_agent:false,report_export:false,priority_support:false}},
+    {plan_name:'standard',display_name:'标准版',features_json:{module_3d:false,module_agent:false,report_export:true,priority_support:false}},
+    {plan_name:'professional',display_name:'专业版',features_json:{module_3d:true,module_agent:false,report_export:true,priority_support:true}},
+    {plan_name:'enterprise',display_name:'企业版',features_json:{module_3d:true,module_agent:true,report_export:true,priority_support:true}},
   ];
   function render(data){
     let html = '';
@@ -722,7 +723,6 @@ async function loadPlanFeatures(){
         <td>${check(f.module_agent)}</td>
         <td>${check(f.report_export)}</td>
         <td>${check(f.priority_support)}</td>
-        <td>${check(f.custom_skin)}</td>
       </tr>`;
     });
     document.getElementById('planFeatureTable').innerHTML = html;

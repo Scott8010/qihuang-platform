@@ -5,8 +5,10 @@
 调价只需改本文件 commit 部署，不碰任何业务代码（老黄 2026-08-25 拍板）。
 
 计量单位：积分（底层 = token，统一单一表，无双轨换算）。
-  - 调 LLM 的 agent：消耗积分 = token × A（文本）/ token × A × 1.5（多模态）
-  - 不调 LLM 的 agent：消耗积分 = flat_credits_per_call（固定积分/次，见下方）
+  - 混合计量（三规则类 agent：compliance/fortune/geo）：每次必收固定基值(FLAT_CREDITS_PER_CALL)起步价，
+    若本次实际走了 LLM（L2 语义层 / 象义层）再叠加 token × A（多模态 ×1.5）。
+    即：实际计价 = 基本固定值 + LLM 调用费（老板 2026-08-26 拍板）。
+  - 纯 LLM agent（其余）：无基值，直接 token × A（多模态 ×1.5）。
 
 清零规则（两层）：
   - 基本包（套餐内含）：base_credits，按自然月清零
@@ -55,23 +57,23 @@ RECHARGE_PACKS: Dict[str, Dict[str, Any]] = {
     "pack_50":   {"yuan": 50,  "credits": 1000, "label": "标准充值包"},
     "pack_100":  {"yuan": 100, "credits": 2200, "label": "进阶充值包"},
     "pack_200":  {"yuan": 200, "credits": 4500, "label": "专业充值包"},
-    "pack_500":  {"yuan": 500, "credits": 8800, "label": "企业充值包"},
+    "pack_500":  {"yuan": 500, "credits": 12000, "label": "企业充值包"},
 }
 
 
 # ──────────────────────────────────────────────────────────────
-# 不调 LLM 的 agent — 固定积分/次（老板 2026-08-25 拍板：3~5 分，金虎拿捏）
+# 三规则类 agent 固定基值（起步价，单位：积分）— 老板 2026-08-26 拍板
 # ──────────────────────────────────────────────────────────────
-# 设计意图：这些 agent 默认走规则引擎、不消耗 token，但消耗算力/DB/规则资源，必须计价（老板硬约束）。
-# ⚠️ 实测坑（代码核查 2026-08-25）：compliance 有 L2 LLM 语义层、fortune 有可选 ai=True LLM 象义层——
-#   这俩的 LLM 层一旦开启，只收固定积分会少算真实 token 成本。当前（默认关闭）按固定积分收合理；
-#   若启用 LLM 层，应升级为「固定积分 + 实际 token 增量」混合计量（#474 延伸，待排期）。
-# geo 为真正纯规则引擎（代码零 LLM 调用），固定积分无歧义。
-# 数值：geo=3（最便宜）/ fortune=4 / compliance=5（L2 风险最高）。改本文件一行即调。
+# 混合计量模型（事件二）：这三个 agent 每次调用必收固定基值作起步价；
+# 若本次实际走了 LLM（compliance 的 L2 语义层 / fortune 的 ai=True 象义层），
+# 再叠加 token × 汇率。即：实际计价 = 基本固定值 + LLM 调用费。
+#   - 0.1 元 = 2 积分（按 1 积分 = ¥0.05 推导），三类统一基值 2。
+#   - geo 纯规则零 LLM：只收 2 积分起步价，不再上浮。
+#   - 改本文件一行即调价（不碰业务代码）。
 FLAT_CREDITS_PER_CALL: Dict[str, int] = {
-    "compliance": 5,   # 内容合规审核：L0/L1 正则+检索，L2 语义层会真调 LLM（命中模糊违规），风险最高
-    "fortune": 4,      # 命理运程：默认 ai=False 纯规则保底；ai=True 挂 LLM 象义层才烧 token
-    "geo": 3,          # 风水堪舆：纯规则引擎，代码零 LLM 调用（最便宜）
+    "compliance": 2,   # 内容合规审核：起步价 0.1元(2积分)；L2 语义层真调 LLM 时再叠加 token
+    "fortune": 2,      # 命理运程：起步价 0.1元(2积分)；ai=True 象义层真调 LLM 时再叠加 token
+    "geo": 2,          # 风水堪舆：起步价 0.1元(2积分)；纯规则零 LLM，仅收基值
 }
 # 未列出的 agent 一律视为调 LLM（uses_llm=True），走 token 计量。
 
@@ -82,16 +84,22 @@ def compute_credits(
     is_multimodal: bool = False,
     uses_llm: bool = True,
 ) -> int:
-    """计算一次 agent 调用消耗的积分（向上取整，最少 1 积分）。
+    """计算一次 agent 调用消耗的积分。
 
-    - 调 LLM：token × A（多模态 ×1.5）
-    - 不调 LLM：flat_credits_per_call 固定值
+    混合计量模型（老板 2026-08-26 拍板）：
+      - 三规则类 agent（在 FLAT_CREDITS_PER_CALL 中）：必收固定基值作起步价；
+        若本次实际走了 LLM，再叠加 token × 汇率（多模态 ×1.5）。
+        即：实际计价 = 基本固定值 + LLM 调用费。
+      - 纯 LLM agent（其余）：无基值，直接 token × 汇率。
+
+    token 部分向上取整（0 token 时不叠加）；整笔保底为基值（已含）+ 叠加。
     """
+    base = FLAT_CREDITS_PER_CALL.get(agent_key, 0)  # 三规则类起步价；其余为 0
     if not uses_llm:
-        return FLAT_CREDITS_PER_CALL.get(agent_key, 1)
+        return max(base, 1)  # 没走 LLM：只收起步价；未配置起步价的 agent 兜底 1 积分
     rate = CREDITS_PER_MULTIMODAL_TOKEN if is_multimodal else CREDITS_PER_TEXT_TOKEN
-    raw = token_used * rate
-    return max(1, int(raw + 0.999))  # 向上取整，保底 1 积分
+    extra = max(0, int(token_used * rate + 0.999))  # 向上取整，0 token 时不加
+    return base + extra
 
 
 def get_base_credits(plan_id: str) -> int:
