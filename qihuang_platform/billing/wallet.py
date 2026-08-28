@@ -231,3 +231,22 @@ def charge_addon_subscription(tenant_id: str, agent_key: str, fee_cents: int) ->
     """
     credits = max(1, round(fee_cents / 5))
     return deduct_fixed(tenant_id, credits, reason=f"agent_addon:{agent_key}")
+
+
+def get_available_balance(tenant_id: str, *, db_session=None) -> int:
+    """返回租户当前可用积分（base + addon，含跨月重置），供开通前余额硬拦截（B3）使用。
+
+    - db_session 传入时复用调用方会话（不自行关闭）；为 None 时自建会话用毕即关。
+    - 余额不足即拒开通：调用方应先查此值，不够则直接 fail(HTTP 402)，不建订阅、不递延对账。
+    """
+    own = db_session is not None
+    db = db_session or SessionLocal()
+    try:
+        w = _get_or_create(db, tenant_id)
+        maybe_reset_base_monthly(db, w)
+        if not own:
+            db.flush()
+        return (w.base_credits or 0) + (w.addon_credits or 0)
+    finally:
+        if not own:
+            db.close()

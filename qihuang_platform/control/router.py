@@ -32,7 +32,7 @@ from qihuang_platform.db.models import (
     AgentAddonSubscription,
     UploadFile,
 )
-from qihuang_platform.billing.wallet import charge_addon_subscription
+from qihuang_platform.billing.wallet import charge_addon_subscription, get_available_balance
 import bcrypt
 from qihuang_platform.rbac.service import validate_password
 from qihuang_platform.gateway.monitor import monitor
@@ -412,16 +412,29 @@ async def set_tenant_agent_addons(
         extra["agent_addons"] = new_set
         t.extra = extra
 
-        # ── B3：单加 agent 落地月度订阅计费（老板 2026-08-25 拍板 文本¥59/多模态¥99）──
+        # ── B3：单加 agent 月度订阅计费（老板 2026-08-25 拍板 文本¥59/多模态¥99）──
         # 不含赠送积分，开通走积分池、先赠后充；首月即扣，后续月度由计费中台定时续扣。
+        # 2026-08-29 硬拦截：余额不足直接拒绝开通（HTTP 402），不建订阅、不递延对账。
         _MULTIMODAL_ADDON_AGENTS = {"tongue", "geo", "health-assistant", "health-advisor"}
-        for k in newly_added:
-            fee_cents = 9900 if k in _MULTIMODAL_ADDON_AGENTS else 5900
-            db.add(AgentAddonSubscription(
-                tenant_id=tenant_id, agent_key=k,
-                fee_cents=fee_cents, cycle_months=1, status="active",
-            ))
-            charge_addon_subscription(tenant_id, k, fee_cents)  # 首月从积分池扣（先赠后充）
+        if newly_added:
+            fees = [(k, 9900 if k in _MULTIMODAL_ADDON_AGENTS else 5900) for k in newly_added]
+            total_credits = sum(max(1, round(fc / 5)) for _, fc in fees)
+            # 预检余额（含跨月重置）；不足即拒，连 addon 都不改
+            available = get_available_balance(tenant_id, db_session=db)
+            if available < total_credits:
+                return fail("QUOTA_EXCEEDED",
+                            message=(f"积分余额不足，无法开通单加 Agent（共 {len(newly_added)} 个）。"
+                                     f"需 {total_credits} 积分（≈¥{total_credits * 5 / 100:.0f}），"
+                                     f"当前可用 {available} 积分（≈¥{available * 5 / 100:.0f}）。"
+                                     f"请先充值后再开通。"),
+                            http_status=402)
+            # 余额足够：逐个建订阅 + 从积分池扣首月费（先赠后充）
+            for k, fc in fees:
+                db.add(AgentAddonSubscription(
+                    tenant_id=tenant_id, agent_key=k,
+                    fee_cents=fc, cycle_months=1, status="active",
+                ))
+                charge_addon_subscription(tenant_id, k, fc)
         # 移除叠加项 → 同步取消其订阅（不再续扣）
         if removed:
             db.query(AgentAddonSubscription).filter(
