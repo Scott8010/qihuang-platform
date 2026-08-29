@@ -176,3 +176,68 @@ class TestDatabaseInit:
     def test_init_db(self, client):
         resp = client.post("/admin/v1/init-db")
         assert resp.status_code in [200, 201, 409, 500]  # 500=表已存在
+
+
+# ═════════════════════════════════════════════════
+# #597 机构锚点：机构级角色 + 机构维度视图 + 跨机构越权防护
+# ═════════════════════════════════════════════════
+
+class TestOrgScopedRoles:
+    """机构级角色闭环（机构内设立角色 + 机构维度视图 + 跨机构越权防护）"""
+
+    def _make_org(self, client):
+        from qihuang_platform.db.config import SessionLocal
+        from qihuang_platform.db import models
+        import uuid
+        org_id = "org_" + uuid.uuid4().hex[:10]
+        db = SessionLocal()
+        db.add(models.Org(id=org_id, tenant_id="tenant_default", org_type="branch", name="测试机构"))
+        db.commit(); db.close()
+        return org_id
+
+    def test_create_org_scoped_role(self, client, admin_headers):
+        import uuid
+        org_id = self._make_org(client)
+        resp = client.post("/admin/v1/roles", json={
+            "name": "br_org_ci_" + uuid.uuid4().hex[:6],
+            "display_name": "机构管理员CI",
+            "description": "机构级角色",
+            "org_id": org_id,
+        }, headers=admin_headers)
+        assert resp.status_code == 200, resp.text[:200]
+        d = resp.json()["data"]
+        assert d["org_scoped"] is True
+        assert d["org_id"] == org_id
+
+    def test_list_roles_org_view(self, client, admin_headers):
+        import uuid
+        org_id = self._make_org(client)
+        client.post("/admin/v1/roles", json={
+            "name": "br_ov_ci_" + uuid.uuid4().hex[:6],
+            "display_name": "x", "org_id": org_id,
+        }, headers=admin_headers)
+        resp = client.get(f"/admin/v1/roles?org_id={org_id}", headers=admin_headers)
+        assert resp.status_code == 200
+        for r in resp.json()["data"]:
+            assert r["org_id"] == org_id or r["org_scoped"] is False
+
+    def test_assign_org_scoped_role_mismatch(self, client, admin_headers):
+        import uuid
+        org_a = self._make_org(client)
+        org_b = self._make_org(client)
+        r = client.post("/admin/v1/roles", json={
+            "name": "br_a_ci_" + uuid.uuid4().hex[:6],
+            "display_name": "x", "org_id": org_a,
+        }, headers=admin_headers)
+        role_name = r.json()["data"]["name"]
+        u = client.post("/admin/v1/users", json={
+            "username": "u_org_ci_" + uuid.uuid4().hex[:6],
+            "password": "Test@123456", "tenant_id": "tenant_default",
+        }, headers=admin_headers)
+        assert u.status_code == 200, u.text[:200]
+        uid_val = u.json()["data"]["id"]
+        resp = client.post("/admin/v1/roles/assign", json={
+            "user_id": uid_val, "role_name": role_name, "org_id": org_b,
+        }, headers=admin_headers)
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "ORG_MISMATCH"
