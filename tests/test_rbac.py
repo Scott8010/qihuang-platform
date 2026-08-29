@@ -5,6 +5,7 @@ tests/test_rbac.py — RBAC 权限管理端点测试
 总计: 19 测试用例
 """
 import pytest
+from qihuang_platform.gateway.response import ERROR_CODES
 
 
 # ═══════════════════════════════════════════════════════════
@@ -240,4 +241,14 @@ class TestOrgScopedRoles:
             "user_id": uid_val, "role_name": role_name, "org_id": org_b,
         }, headers=admin_headers)
         assert resp.status_code == 400
-        assert resp.json()["code"] == "ORG_MISMATCH"
+        assert resp.json()["code"] == ERROR_CODES["ORG_MISMATCH"]["code"]
+
+    def test_create_role_invalid_org(self, client, admin_headers):
+        import uuid
+        resp = client.post("/admin/v1/roles", json={
+            "name": "br_bad_ci_" + uuid.uuid4().hex[:6],
+            "display_name": "x",
+            "org_id": "nonexistent_org_xyz",
+        }, headers=admin_headers)
+        assert resp.status_code == 400
+        assert resp.json()["code"] == ERROR_CODES["INVALID_ORG"]["code"]

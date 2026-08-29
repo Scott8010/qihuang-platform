@@ -16,6 +16,8 @@ ERROR_CODES = {
     "MISSING_PARAM":          {"code": 1002, "message": "缺少必要参数"},
     "INVALID_FORMAT":         {"code": 1003, "message": "格式错误"},
     "ORG_ID_REQUIRED":        {"code": 1004, "message": "API Key 路径创建机构模板必须携带 org_id"},
+    "INVALID_ORG":            {"code": 1005, "message": "机构不存在或不属于当前租户"},
+    "ORG_MISMATCH":           {"code": 1006, "message": "机构级角色必须在其所属机构内分配"},
 
     # 认证 2xxx
     "UNAUTHORIZED":           {"code": 2001, "message": "未授权"},
@@ -59,7 +61,7 @@ def success(data: Any = None, message: str = None) -> dict:
 
 # 错误码 → 推荐 HTTP 状态码（B9：让错误响应带正确状态码，而非一律 200）
 DEFAULT_STATUS_BY_CODE: dict = {
-    1001: 400, 1002: 400, 1003: 400, 1004: 400,  # 参数类
+    1001: 400, 1002: 400, 1003: 400, 1004: 400, 1005: 400, 1006: 400,  # 参数类
     2001: 401, 2002: 401, 2003: 401, 2004: 401, 2005: 401, 2006: 401, 2007: 401,  # 认证
     2008: 403, 2009: 403,  # 权限/IP
     3001: 429, 3002: 402,  # 限流 / 配额
