@@ -5,6 +5,7 @@ import { BarChart3, Download, Sparkles, Check, Minus, Loader2 } from "lucide-rea
 import { C, billStatus, planFeatureLabels, sceneMap } from "@/lib/types";
 import type { PlanItem, BillItem, SubscriptionItem, SceneUsageItem } from "@/lib/types";
 import { fetchBillingStats, fetchPlans, fetchBills, fetchSubscriptions, fetchSceneUsage } from "@/lib/api";
+import { CodeCopy } from "@/components/ui/code-copy";
 
 /* ═══════════════════════════════════════════
    计费与套餐 — 真实接口驱动
@@ -110,8 +111,8 @@ export default function Billing() {
               <tbody>
                 {subs.map((s) => (
                   <tr key={s.id} className="border-t" style={{ borderColor: C.border }}>
-                    <td className="py-2.5 font-mono text-[13.5px]" style={{ color: C.ink }}>
-                      {s.tenantId.slice(0, 8)}…
+                    <td className="py-2.5" style={{ color: C.ink }}>
+                      <CodeCopy value={s.tenantId} short />
                     </td>
                     <td className="py-2.5">
                       <span className="text-[13px] px-2 py-0.5 rounded" style={{
@@ -169,6 +170,9 @@ export default function Billing() {
                     )}
                     <div className="text-[16px] font-semibold" style={{ color: C.primary }}>{p.name}</div>
                     <div className="text-[13px] mt-0.5 font-mono" style={{ color: C.light }}>{p.planName}</div>
+                    <div className="text-[15px] mt-1 font-medium" style={{ color: C.ink }}>
+                      ¥{(p.priceCents / 100).toLocaleString()}<span className="text-[12px] font-normal" style={{ color: C.light }}> /月</span>
+                    </div>
                     <div className="mt-2.5 space-y-1 text-[13.5px]">
                       {planFeatureLabels.map((f) => {
                         const on = p.features[f.key];
@@ -183,6 +187,9 @@ export default function Billing() {
                           </div>
                         );
                       })}
+                    </div>
+                    <div className="mt-2 text-[12.5px]" style={{ color: C.light }}>
+                      月调用 {p.monthCalls.toLocaleString()} 次
                     </div>
                   </div>
                 );
