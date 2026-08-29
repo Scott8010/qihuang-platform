@@ -53,6 +53,7 @@ def init_db():
     Base.metadata.create_all(bind=engine)
     _migrate_living_columns()
     _migrate_template_center_columns()
+    _migrate_role_org_column()
 
 
 def _migrate_living_columns():
@@ -100,3 +101,21 @@ def _migrate_template_center_columns():
             ))
     except Exception as e:  # 迁移失败不应阻断平台启动
         print("WARN: db_template migration skipped:", e)
+
+
+def _migrate_role_org_column():
+    """机构锚点闭环(#597)：为已有 role 表增补 org_id 列（机构级角色标记，空=平台级）。
+
+    create_all 不会为已存在的表追加新列。用 inspect 检测列是否已存在，再 ALTER 补齐，
+    兼容 PostgreSQL 与 SQLite（SQLite 不支持 ADD COLUMN IF NOT EXISTS 语法，故改用 inspect 判存）。
+    机构级角色用于"机构内设立角色"闭环。
+    """
+    try:
+        from sqlalchemy import inspect as sa_inspect
+        existing_cols = [c["name"] for c in sa_inspect(engine).get_columns("role")]
+        if "org_id" in existing_cols:
+            return  # 已迁移，幂等跳过
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE role ADD COLUMN org_id VARCHAR(36)"))
+    except Exception as e:  # 迁移失败不应阻断平台启动
+        print("WARN: role.org_id migration skipped:", e)

@@ -223,8 +223,12 @@ class RBACService:
         return len(perms)
 
     def create_role(self, tenant_id: str, name: str, display_name: str = None,
-                    description: str = None, perm_codes: List[str] = None) -> Role:
-        """创建自定义角色（is_system=False，可删可改）"""
+                    description: str = None, perm_codes: List[str] = None,
+                    org_id: str = None) -> Role:
+        """创建自定义角色（is_system=False，可删可改）。
+
+        org_id 非空表示机构级角色（机构内设立，平台级不可见），为空表示平台级角色。
+        """
         name = (name or "").strip()
         if not name:
             raise ValueError("角色标识(name)不能为空")
@@ -234,7 +238,7 @@ class RBACService:
         role = Role(
             id=_uid(), tenant_id=tenant_id, name=name,
             display_name=display_name or name, description=description,
-            is_system=False,
+            is_system=False, org_id=org_id,
         )
         self.db.add(role)
         self.db.flush()

@@ -82,6 +82,7 @@ class Role(Base):
     __tablename__ = "role"
     id = Column(String(36), primary_key=True, default=_uid)
     tenant_id = Column(String(36), ForeignKey("tenant.id"), nullable=False, index=True)
+    org_id = Column(String(36), ForeignKey("org.id"), nullable=True, index=True)  # 机构级角色标记（为空=平台级角色）
     name = Column(String(100), nullable=False)
     display_name = Column(String(200))
     description = Column(Text)

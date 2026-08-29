@@ -40,6 +40,7 @@ class CreateUserRequest(BaseModel):
 class AssignRoleRequest(BaseModel):
     user_id: str
     role_name: str
+    org_id: Optional[str] = None  # 机构级角色分配（与机构内角色绑定，为空=平台级）
 
 class UpdateUserRequest(BaseModel):
     display_name: Optional[str] = None
@@ -65,6 +66,7 @@ class CreateRoleRequest(BaseModel):
     display_name: Optional[str] = None
     description: Optional[str] = None
     perm_codes: List[str] = []
+    org_id: Optional[str] = None  # 机构级角色：指定所属机构（为空=平台级角色）
 
 
 # ========== 初始化 ==========
@@ -370,12 +372,20 @@ async def list_roles(
     user: dict = Depends(get_current_admin),
     rbac: RBACService = Depends(get_rbac),
     db: Session = Depends(get_db),
+    org_id: Optional[str] = None,
 ):
-    """列出所有角色（含权限列表）"""
+    """列出所有角色（含权限列表）。
+
+    org_id 传值时仅返回「该机构级角色 + 平台级角色」，供机构管理页"机构内角色"视图；
+    不传则返回本租户全部角色（含平台级与所有机构级）。
+    """
     from qihuang_platform.db.models import RolePermission, Permission
     tenant_id = user.get("tenant_id", "tenant_default")
     roles = rbac.list_roles(tenant_id)
-    
+    if org_id:
+        # 机构维度视图：本机构专属角色 + 平台级可继承角色
+        roles = [r for r in roles if (r.org_id == org_id or not r.org_id)]
+
     result = []
     for r in roles:
         # 查该角色绑定的权限
@@ -384,13 +394,15 @@ async def list_roles(
         perms = db.query(Permission).filter(Permission.id.in_(perm_ids)).all() if perm_ids else []
         # 查该角色下的用户数
         user_count = db.query(UserRole).filter_by(role_id=r.id).count()
-        
+
         result.append({
             "id": r.id,
             "name": r.name,
             "display_name": r.display_name,
             "description": r.description,
             "is_system": r.is_system,
+            "org_id": r.org_id,
+            "org_scoped": bool(r.org_id),
             "users": user_count,
             "permissions": [{
                 "code": p.code,
@@ -444,8 +456,14 @@ async def assign_role(
     role = rbac.get_role_by_name(target_user.tenant_id, req.role_name)
     if not role:
         raise HTTPException(404, detail=error("NOT_FOUND", f"角色 {req.role_name} 不存在"))
-    rbac.assign_role(req.user_id, role.id)
-    return success({"user_id": req.user_id, "role": req.role_name})
+    # 机构级角色只能在其所属机构内分配，防止跨机构越权挂载
+    if role.org_id and role.org_id != (req.org_id or ""):
+        raise HTTPException(400, detail=error(
+            "ORG_MISMATCH",
+            f"机构级角色 {req.role_name} 必须在其所属机构({role.org_id})内分配",
+        ))
+    rbac.assign_role(req.user_id, role.id, req.org_id)
+    return success({"user_id": req.user_id, "role": req.role_name, "org_id": req.org_id})
 
 
 @rbac_router.delete("/roles/revoke")
@@ -484,18 +502,29 @@ async def create_role(
     user: dict = Depends(get_current_admin),
     rbac: RBACService = Depends(get_rbac),
 ):
-    """创建自定义角色（is_system=False，可删可改）"""
+    """创建自定义角色（is_system=False，可删可改）。
+
+    org_id 非空 => 机构级角色（机构内设立，平台级不可见）；为空 => 平台级角色。
+    """
     tenant_id = user.get("tenant_id", "tenant_default")
+    # 机构级角色需校验 org 归属本租户，避免越权挂载到他人机构
+    if req.org_id:
+        from qihuang_platform.db.models import Org
+        org = rbac.db.query(Org).filter_by(id=req.org_id, tenant_id=tenant_id).first()
+        if not org:
+            raise HTTPException(400, detail=error("INVALID_ORG", "机构不存在或不属于当前租户"))
     try:
         role = rbac.create_role(
             tenant_id, req.name, req.display_name,
             req.description, req.perm_codes or [],
+            org_id=req.org_id,
         )
     except ValueError as e:
         raise HTTPException(400, detail=error("CREATE_FAILED", str(e)))
     return success({
         "id": role.id, "name": role.name,
         "display_name": role.display_name, "is_system": role.is_system,
+        "org_id": role.org_id, "org_scoped": bool(role.org_id),
         "perm_count": len(req.perm_codes or []),
     })
 
