@@ -224,6 +224,7 @@ export async function fetchTenants(): Promise<Tenant[]> {
       const statusUpper = (t.status || "active").toUpperCase();
       return {
         id: t.id || t.code || "",
+        code: t.code || null,
         name: t.display_name || t.name || "",
         scene: sceneUpper === "MED" ? "MED" : sceneUpper === "EDU" ? "EDU" : "HEALTH",
         plan: planName,
@@ -258,6 +259,7 @@ export async function fetchTenants(): Promise<Tenant[]> {
 export async function createTenant(body: {
   name: string; scene: string; plan: string;
   contactName: string; contactPhone: string; module3d: boolean;
+  code?: string;
   contactEmail?: string;
   addressCountry?: string; addressProvince?: string; addressCity?: string; addressDistrict?: string;
   addressDetail?: string;
@@ -277,6 +279,7 @@ export async function createTenant(body: {
     contact_phone: body.contactPhone,
     contact_email: body.contactEmail || null,
     module_3d: body.module3d,
+    code: body.code || null,
     duration_months: 12,
     // 2026-08-22 开户表单升级：机构资质信息
     address_country: body.addressCountry || null,

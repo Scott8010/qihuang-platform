@@ -34,7 +34,7 @@ from qihuang_platform.db.models import (
 )
 from qihuang_platform.billing.wallet import charge_addon_subscription, get_available_balance
 import bcrypt
-from qihuang_platform.rbac.service import validate_password
+from qihuang_platform.rbac.service import validate_password, resolve_tenant_code
 from qihuang_platform.gateway.monitor import monitor
 from qihuang_platform.gateway.llm_fallback import llm_fallback
 from qihuang_platform.gateway.health_probe import get_services_health
@@ -1969,6 +1969,7 @@ class TenantOnboardRequest(BaseModel):
     display_name: Optional[str] = Field(None, description="显示名称")
     scene: str = Field("MED", description="业务场景: MED/EDU/RETAIL/HQ")
     plan: str = Field("free", description="套餐plan_name")
+    code: Optional[str] = Field(None, description="可读机构代号（可选；缺省自动生成 JGxxxx）")
     contact_name: Optional[str] = Field(None, description="联系人姓名")
     contact_phone: Optional[str] = Field(None, description="联系人手机/座机(座机须带区号)")
     contact_email: Optional[str] = Field(None, description="联系邮箱")
@@ -2030,6 +2031,7 @@ async def onboard_tenant(req: TenantOnboardRequest, admin: dict = Depends(get_cu
             id=_uid(), name=req.name,
             display_name=req.display_name or req.name,
             scene=req.scene, status="active",
+            code=resolve_tenant_code(db, req.code),
             extra={
                 "contact_name": req.contact_name,
                 "contact_phone": req.contact_phone,

@@ -46,7 +46,7 @@ export const billStatus: Record<string, { label: string; cls: string }> = {
 // ═══ 类型 ═══
 
 export interface Tenant {
-  id: string; name: string; scene: "MED" | "HEALTH" | "EDU";
+  id: string; code?: string; name: string; scene: "MED" | "HEALTH" | "EDU";
   plan: string; planId?: string; orgs: number; users: number;
   usedCalls: number; quotaCalls: number; status: string; expires: string; module3d: boolean;
   pendingPlan?: string | null;          // 待生效预约的目标套餐

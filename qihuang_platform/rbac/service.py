@@ -6,11 +6,29 @@ from typing import Optional, List
 from sqlalchemy.orm import Session
 import bcrypt
 import re
+import uuid
 
 from qihuang_platform.db.models import (
     Tenant, Org, User, Role, Permission,
     UserRole, RolePermission, AuditLog, _uid, _now
 )
+
+
+def resolve_tenant_code(db: Session, preferred: str = None) -> str:
+    """生成可读机构代号：优先用用户指定值（校验格式），否则 JG+序号；保证库内唯一。"""
+    base = None
+    if preferred:
+        c = preferred.strip().upper()
+        if re.match(r"^[A-Z0-9_]{2,16}$", c):
+            base = c
+    if not base:
+        n = db.query(Tenant).count()
+        base = f"JG{n + 1:04d}"
+    code = base
+    # 防唯一约束冲突：若已占用，追加 3 位随机后缀重试
+    while db.query(Tenant).filter_by(code=code).first():
+        code = base + "_" + uuid.uuid4().hex[:3].upper()
+    return code
 
 
 def validate_password(pwd: str) -> tuple[bool, str]:
@@ -41,12 +59,13 @@ class RBACService:
     # ── 租户管理 ──
 
     def create_tenant(self, name: str, display_name: str = None,
-                      scene: str = "health", extra: dict = None) -> Tenant:
-        """创建租户"""
+                      scene: str = "health", extra: dict = None, code: str = None) -> Tenant:
+        """创建租户（code 可读机构代号：指定则校验，否则自动生成 JGxxxx）"""
         t = Tenant(
             id=_uid(), name=name,
             display_name=display_name or name,
             scene=scene, extra=extra or {},
+            code=resolve_tenant_code(self.db, code),
         )
         self.db.add(t)
         self.db.flush()  # 先落租户行，确保后续根机构 org 的外键依赖可见

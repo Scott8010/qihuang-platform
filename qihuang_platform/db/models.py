@@ -40,6 +40,8 @@ class Tenant(Base):
     extra = Column(JSON)
     created_at = Column(DateTime, default=_now)
     updated_at = Column(DateTime, default=_now, onupdate=_now)
+    # 2026-08-29 #596 机构ID可读化：可读机构代号（如 JG0007 / 金不换拼音 jbh），与 uuid 主键解耦
+    code = Column(String(32), unique=True, nullable=True, index=True)
 
 
 class Org(Base):
@@ -681,10 +683,20 @@ PRESET_PERMISSIONS = [
 def seed_preset_data(session):
     """初始化预置角色和权限"""
     from qihuang_platform.db.models import Role, Permission, RolePermission, Tenant, Org
+    from sqlalchemy import inspect as _sa_inspect, text as _sa_text
+    # 2026-08-29 #596 迁移：生产库 tenant 为既有表，create_all 不会自动加列，
+    # 启动时检测并 ALTER 补 code 列（PostgreSQL/SQLite 通用）。
+    try:
+        _cols = [c["name"] for c in _sa_inspect(session.bind).get_columns("tenant")]
+        if "code" not in _cols:
+            session.execute(_sa_text("ALTER TABLE tenant ADD COLUMN code VARCHAR(32)"))
+            session.flush()
+    except Exception as _e:  # 极端情况下不影响其余种子
+        print(f"[migrate] tenant.code 列迁移跳过: {_e}")
 
     # 创建默认租户
     if not session.query(Tenant).filter_by(name="default").first():
-        t = Tenant(id="tenant_default", name="default", display_name="默认租户", scene="MED")
+        t = Tenant(id="tenant_default", name="default", display_name="默认租户", scene="MED", code="DEFAULT")
         session.add(t)
         session.flush()
 
@@ -696,6 +708,17 @@ def seed_preset_data(session):
                   name="default org", org_type="root", status="active")
         session.add(org)
         session.flush()
+
+    # 2026-08-29 #596 机构ID可读化：存量租户 code 为空时补可读代号（JG0001 递增，跳过已占用）
+    _occupied = {c for (c,) in session.query(Tenant.code).filter(Tenant.code.isnot(None)).all()}
+    _seq = 1
+    for _t in session.query(Tenant).filter_by(code=None).order_by(Tenant.created_at).all():
+        while f"JG{_seq:04d}" in _occupied:
+            _seq += 1
+        _t.code = f"JG{_seq:04d}"
+        _occupied.add(_t.code)
+        _seq += 1
+    session.flush()
 
     # 创建预置权限
     perm_map = {}

@@ -26,6 +26,7 @@ class CreateTenantRequest(BaseModel):
     name: str
     display_name: Optional[str] = None
     scene: str = "health"
+    code: Optional[str] = None  # 可读机构代号（可选，缺省自动生成 JGxxxx）
 
 class CreateUserRequest(BaseModel):
     username: str
@@ -90,7 +91,7 @@ async def create_tenant(
 ):
     """创建新租户（需要管理员权限）"""
     try:
-        tenant = rbac.create_tenant(req.name, req.display_name, req.scene)
+        tenant = rbac.create_tenant(req.name, req.display_name, req.scene, code=req.code)
         return success({
             "id": tenant.id, "name": tenant.name,
             "display_name": tenant.display_name, "scene": tenant.scene,
@@ -138,7 +139,7 @@ async def list_tenants(
         plan = entry.get("plan")  # Plan ORM 对象或 None
         sub = entry.get("sub")    # Subscription ORM 对象或 None
         rows.append({
-            "id": t.id, "name": t.name, "display_name": t.display_name,
+            "id": t.id, "code": t.code, "name": t.name, "display_name": t.display_name,
             "scene": t.scene, "status": t.status, "created_at": t.created_at.isoformat() if t.created_at else None,
             "plan_id": plan.id if plan else "",
             "plan_name": plan.plan_name if plan else "",
@@ -176,7 +177,7 @@ async def get_tenant(
     t = rbac.get_tenant(tenant_id)
     if not t:
         raise HTTPException(404, detail=error("NOT_FOUND", "租户不存在"))
-    return success({"id": t.id, "name": t.name, "scene": t.scene, "status": t.status})
+    return success({"id": t.id, "code": t.code, "name": t.name, "scene": t.scene, "status": t.status})
 
 
 # ========== 用户管理 ==========

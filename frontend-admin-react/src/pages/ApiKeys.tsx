@@ -301,7 +301,7 @@ export default function ApiKeys() {
                 <SelectContent>
                   {tenants.map((t) => (
                     <SelectItem key={t.id} value={t.id}>
-                      {t.name || t.id}（{t.id.slice(0, 8)}…）
+                      {t.name || t.id}（{t.code || t.id.slice(0, 8)}）
                     </SelectItem>
                   ))}
                 </SelectContent>

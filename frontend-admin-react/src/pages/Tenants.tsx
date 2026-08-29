@@ -37,7 +37,7 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState<"" | "business" | "medical">("");
   const [form, setForm] = useState({
-    name: "", scene: "HEALTH", plan: "standard",
+    name: "", code: "", scene: "HEALTH", plan: "standard",
     contactName: "", contactPhone: "", contactEmail: "",
     addressCountry: "中国", addressProvince: "", addressCity: "", addressDistrict: "", addressDetail: "",
     orgIntro: "",
@@ -90,7 +90,7 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
   useEffect(() => { load(); }, []);
 
   const shown = list.filter(
-    (t) => (tab === "ALL" || t.scene === tab) && (!kw || t.name.includes(kw) || t.id.includes(kw))
+    (t) => (tab === "ALL" || t.scene === tab) && (!kw || t.name.includes(kw) || (t.code || "").includes(kw) || t.id.includes(kw))
   );
 
   const create = async () => {
@@ -109,6 +109,7 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
     setSubmitting(true);
     const r: any = await createTenant({
       name: form.name.trim(),
+      code: form.code.trim() || undefined,
       scene: form.scene,
       plan: form.plan,
       contactName: form.contactName.trim(),
@@ -130,7 +131,7 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
     if (r?.code === 0) {
       toast.success(`租户 ${form.name} 开户成功：套餐已生效、根机构已创建`);
       setOpen(false);
-      setForm({ name: "", scene: "HEALTH", plan: "standard", contactName: "", contactPhone: "", contactEmail: "", addressCountry: "中国", addressProvince: "", addressCity: "", addressDistrict: "", addressDetail: "", orgIntro: "", licenseBusiness: "", licenseBusinessName: "", licenseMedical: "", licenseMedicalName: "" });
+      setForm({ name: "", code: "", scene: "HEALTH", plan: "standard", contactName: "", contactPhone: "", contactEmail: "", addressCountry: "中国", addressProvince: "", addressCity: "", addressDistrict: "", addressDetail: "", orgIntro: "", licenseBusiness: "", licenseBusinessName: "", licenseMedical: "", licenseMedicalName: "" });
       await load();
     } else {
       // 后端校验失败（如医疗两证缺失/电话格式）提示原话，不假装成功
@@ -204,6 +205,10 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
                 <div className="space-y-1.5">
                   <Label>机构名称（合同主体）<span style={{ color: "#B03A2E" }}> *</span></Label>
                   <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="如：某某中医馆连锁有限公司" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>机构代号（code，可选）<span className="text-[11px]" style={{ color: C.light }}> · 留空自动生成 JGxxxx，替代复杂 uuid</span></Label>
+                  <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="如 JG0007 或拼音 jbh（2-16 位大写字母/数字/下划线）" maxLength={16} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
@@ -451,7 +456,7 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
                     <tr key={t.id} className="border-b last:border-0 hover:bg-[#F8FAF9] transition-colors" style={{ borderColor: C.border }}>
                       <td className="px-5 py-3.5 align-middle">
                         <div className="font-medium whitespace-nowrap truncate" style={{ color: C.ink, maxWidth: 260 }} title={t.name}>{t.name}</div>
-                        <div className="text-[11px] font-mono truncate" style={{ color: C.light, maxWidth: 260 }} title={t.id}>{t.id}</div>
+                        <div className="text-[11px] font-mono truncate" style={{ color: C.light, maxWidth: 260 }} title={`${t.name} · ${t.id}`}>{t.code || t.id}</div>
                       </td>
                       <td className="px-3 py-3.5 align-middle">
                         <span className="inline-block px-2.5 py-1 rounded text-[11px] font-medium whitespace-nowrap" style={{ color: sceneMap[t.scene].color, background: sceneMap[t.scene].bg }}>
