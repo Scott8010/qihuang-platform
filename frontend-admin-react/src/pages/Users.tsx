@@ -313,7 +313,7 @@ export default function Users() {
                           {u.roles && u.roles.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
                               {u.roles.map((r) => (
-                                <Badge key={r.id} variant="outline" className="text-[11px] font-normal"
+                                <Badge key={r.id} variant="outline" className="text-[13px] font-normal"
                                   style={{ borderColor: C.border, color: C.primary, background: C.soft }}>
                                   {r.displayName || r.name}
                                 </Badge>
@@ -324,7 +324,7 @@ export default function Users() {
                           )}
                         </td>
                         <td className="px-4 py-2.5">
-                          <Badge variant="outline" className={`text-[11px] font-normal ${st.cls}`}>{st.label}</Badge>
+                          <Badge variant="outline" className={`text-[13px] font-normal ${st.cls}`}>{st.label}</Badge>
                         </td>
                         <td className="px-4 py-2.5 text-xs whitespace-nowrap" style={{ color: C.light }}>
                           {u.createdAt ? u.createdAt.slice(0, 10) : "—"}
@@ -396,7 +396,7 @@ export default function Users() {
                   className="h-8 text-sm"
                 />
                 {k === 'password' && (
-                  <div className='text-[11px] mt-1.5 leading-relaxed' style={{ color: C.light }}>
+                  <div className='text-[13px] mt-1.5 leading-relaxed' style={{ color: C.light }}>
                     需 8-64 位，须同时包含大小写字母与数字；特殊字符可选。留空由系统生成随机强密码。
                   </div>
                 )}
@@ -461,7 +461,7 @@ export default function Users() {
                     : <Checkbox checked={had} onCheckedChange={() => roleUser && toggleRole(roleUser, r.code, had)} />}
                   <div className="flex-1 min-w-0">
                     <div className="text-sm" style={{ color: C.ink }}>{r.name}</div>
-                    <div className="text-[11px]" style={{ color: C.light }}>
+                    <div className="text-[13px]" style={{ color: C.light }}>
                       {r.code} · {r.permissions.length} 项权限
                     </div>
                   </div>
@@ -503,7 +503,7 @@ export default function Users() {
               <div className="text-xs mb-1" style={{ color: C.mid }}>新密码（选填）</div>
               <Input type="text" value={pwdInput} onChange={(e) => setPwdInput(e.target.value)}
                 placeholder="留空自动生成" className="h-8 text-sm" />
-              <div className="text-[11px] mt-1.5 leading-relaxed" style={{ color: pwdInput && validatePassword(pwdInput) ? "#B03A2E" : C.light }}>
+              <div className="text-[13px] mt-1.5 leading-relaxed" style={{ color: pwdInput && validatePassword(pwdInput) ? "#B03A2E" : C.light }}>
                 {!pwdInput
                   ? '留空则由系统生成随机强密码；自定义需 8-64 位，须同时含大小写字母与数字，特殊字符可选。'
                   : (validatePassword(pwdInput)

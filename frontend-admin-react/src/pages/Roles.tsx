@@ -169,7 +169,7 @@ export default function Roles() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20 text-[13px]" style={{ color: C.light }}>
+      <div className="flex items-center justify-center py-20 text-[15px]" style={{ color: C.light }}>
         <Loader2 className="w-5 h-5 mr-2 animate-spin" /> 加载中…
       </div>
     );
@@ -181,9 +181,9 @@ export default function Roles() {
     <div className="space-y-4">
       {grouped.map(([g, list]) => (
         <div key={g}>
-          <div className="text-[12px] font-medium mb-2 flex items-center gap-2" style={{ color: C.mid }}>
+          <div className="text-[14px] font-medium mb-2 flex items-center gap-2" style={{ color: C.mid }}>
             {permGroupMap[g] || g}
-            <span className="text-[11px] font-normal" style={{ color: C.light }}>
+            <span className="text-[13px] font-normal" style={{ color: C.light }}>
               {list.filter((p) => value.has(p.code)).length}/{list.length}
             </span>
           </div>
@@ -195,7 +195,7 @@ export default function Roles() {
                 <button
                   key={p.code}
                   onClick={() => onToggle(p.code)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-full border text-[12px] transition-colors"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full border text-[14px] transition-colors"
                   style={{
                     borderColor: on ? C.primary : C.border,
                     background: on ? C.soft : "#fff",
@@ -204,9 +204,9 @@ export default function Roles() {
                 >
                   <Checkbox checked={on} className="pointer-events-none w-3.5 h-3.5" />
                   <span>{p.name}</span>
-                  <span className="font-mono text-[10px]" style={{ color: C.light }}>{p.code}</span>
+                  <span className="font-mono text-[12px]" style={{ color: C.light }}>{p.code}</span>
                   {p.scene !== "all" && (
-                    <span className="text-[10px] px-1.5 rounded"
+                    <span className="text-[12px] px-1.5 rounded"
                       style={{ background: sc.bg, color: sc.color }}>{sc.label}</span>
                   )}
                 </button>
@@ -224,8 +224,8 @@ export default function Roles() {
       <Card className="border" style={{ borderColor: C.border }}>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-[15px]" style={{ color: C.primary }}>
-              角色 <span className="text-[12px] font-normal" style={{ color: C.light }}>{roles.length} 个</span>
+            <CardTitle className="text-[17px]" style={{ color: C.primary }}>
+              角色 <span className="text-[14px] font-normal" style={{ color: C.light }}>{roles.length} 个</span>
             </CardTitle>
             <Button size="sm" variant="outline" style={{ borderColor: C.border, color: C.primary }}
               onClick={() => setCreateOpen(true)}>
@@ -235,7 +235,7 @@ export default function Roles() {
         </CardHeader>
         <CardContent className="p-2 space-y-1">
           {roles.length === 0 && (
-            <div className="px-3 py-6 text-center text-[12px]" style={{ color: C.light }}>暂无角色数据</div>
+            <div className="px-3 py-6 text-center text-[14px]" style={{ color: C.light }}>暂无角色数据</div>
           )}
           {roles.map((r) => {
             const active = r.id === selId;
@@ -249,16 +249,16 @@ export default function Roles() {
               >
                 <ShieldCheck className="w-4 h-4 shrink-0" style={{ color: active ? C.primary : C.light }} />
                 <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-medium truncate" style={{ color: active ? C.primary : C.ink }}>
+                  <div className="text-[15px] font-medium truncate" style={{ color: active ? C.primary : C.ink }}>
                     {r.name}
                   </div>
-                  <div className="text-[11px] font-mono truncate" style={{ color: C.light }}>
+                  <div className="text-[13px] font-mono truncate" style={{ color: C.light }}>
                     {r.code} · {r.permissions.length} 权限 · {r.users} 人
                   </div>
                 </div>
                 {empty && <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-500" />}
                 {!r.is_system && (
-                  <Badge variant="outline" className="text-[10px] shrink-0"
+                  <Badge variant="outline" className="text-[12px] shrink-0"
                     style={{ color: C.accent, borderColor: C.accent }}>自定义</Badge>
                 )}
               </button>
@@ -273,17 +273,17 @@ export default function Roles() {
           <CardHeader className="pb-2">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <CardTitle className="text-[15px]" style={{ color: C.primary }}>
-                  {sel.name} <span className="font-mono text-[12px] font-normal" style={{ color: C.light }}>{sel.code}</span>
+                <CardTitle className="text-[17px]" style={{ color: C.primary }}>
+                  {sel.name} <span className="font-mono text-[14px] font-normal" style={{ color: C.light }}>{sel.code}</span>
                 </CardTitle>
-                <div className="text-[12px] mt-1" style={{ color: C.mid }}>
+                <div className="text-[14px] mt-1" style={{ color: C.mid }}>
                   {sel.description || "暂无描述"} · 覆盖用户 {sel.users.toLocaleString()} 人 ·{" "}
                   {sel.is_system ? "系统预置角色（不可删除）" : "自定义角色"}
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {dirty && (
-                  <span className="text-[12px] px-2 py-1 rounded-md" style={{ background: "#FBF4E4", color: C.gold }}>
+                  <span className="text-[14px] px-2 py-1 rounded-md" style={{ background: "#FBF4E4", color: C.gold }}>
                     有未保存改动
                   </span>
                 )}
@@ -310,14 +310,14 @@ export default function Roles() {
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="flex items-center gap-2 text-[13px] font-medium" style={{ color: C.primary }}>
+            <div className="flex items-center gap-2 text-[15px] font-medium" style={{ color: C.primary }}>
               权限清单
-              <span className="text-[11px] font-normal" style={{ color: C.light }}>
+              <span className="text-[13px] font-normal" style={{ color: C.light }}>
                 已勾选 {checked.size} / 全部 {perms.length} 项 —— 勾选结果即最终授权，保存后整体替换
               </span>
             </div>
             <PermGrid value={checked} onToggle={toggle} />
-            <div className="rounded-lg p-3 text-[12px] leading-relaxed" style={{ background: C.bg, color: C.mid }}>
+            <div className="rounded-lg p-3 text-[14px] leading-relaxed" style={{ background: C.bg, color: C.mid }}>
               保存即整体替换该角色的权限集合（勾掉的会被收回）。super_admin 在后端硬编码为全权限放行，
               即使这里未勾选也拥有全部能力。权限变更全程写入审计日志（操作人、对象、前后值）。
             </div>
@@ -330,7 +330,7 @@ export default function Roles() {
         <DialogContent className="sm:max-w-[520px]">
           <DialogHeader>
             <DialogTitle style={{ color: C.primary }}>为「{sel?.name}」分配用户</DialogTitle>
-            <DialogDescription className="text-[12px]">
+            <DialogDescription className="text-[14px]">
               点击即时生效：未持有则授予，已持有则移除。
             </DialogDescription>
           </DialogHeader>
@@ -338,11 +338,11 @@ export default function Roles() {
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: C.light }} />
               <Input value={kw} onChange={(e) => setKw(e.target.value)}
-                placeholder="搜索账号 / 姓名 / 手机号" className="pl-9 text-[13px]" style={{ borderColor: C.border }} />
+                placeholder="搜索账号 / 姓名 / 手机号" className="pl-9 text-[15px]" style={{ borderColor: C.border }} />
             </div>
             <div className="max-h-72 overflow-y-auto space-y-1">
               {shownUsers.length === 0 && (
-                <div className="py-8 text-center text-[12px]" style={{ color: C.light }}>
+                <div className="py-8 text-center text-[14px]" style={{ color: C.light }}>
                   {users.length === 0 ? "系统内暂无用户，请先到「用户管理」新建" : "没有匹配的用户"}
                 </div>
               )}
@@ -361,15 +361,15 @@ export default function Roles() {
                       ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: C.primary }} />
                       : <Checkbox checked={has} className="pointer-events-none" />}
                     <div className="flex-1 min-w-0">
-                      <div className="text-[13px] font-medium truncate">
+                      <div className="text-[15px] font-medium truncate">
                         {u.displayName}
-                        <span className="font-mono text-[11px] font-normal ml-2" style={{ color: C.light }}>{u.username}</span>
+                        <span className="font-mono text-[13px] font-normal ml-2" style={{ color: C.light }}>{u.username}</span>
                       </div>
-                      <div className="text-[11px] truncate" style={{ color: C.light }}>
+                      <div className="text-[13px] truncate" style={{ color: C.light }}>
                         {u.roles.length ? u.roles.map((r) => r.displayName).join(" / ") : "未分配角色"}
                       </div>
                     </div>
-                    <span className="text-[11px] shrink-0" style={{ color: has ? C.primary : C.light }}>
+                    <span className="text-[13px] shrink-0" style={{ color: has ? C.primary : C.light }}>
                       {has ? "点击移除" : "点击授予"}
                     </span>
                   </button>
@@ -388,34 +388,34 @@ export default function Roles() {
         <DialogContent className="sm:max-w-[640px]">
           <DialogHeader>
             <DialogTitle style={{ color: C.primary }}>新建自定义角色</DialogTitle>
-            <DialogDescription className="text-[12px]">
+            <DialogDescription className="text-[14px]">
               自定义角色可随时修改权限或删除；系统预置的 9 个角色不可删除。
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-1">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <div className="text-[12px] mb-1" style={{ color: C.mid }}>角色标识 *</div>
+                <div className="text-[14px] mb-1" style={{ color: C.mid }}>角色标识 *</div>
                 <Input value={newRole.name} placeholder="如 clinic_manager"
                   onChange={(e) => setNewRole({ ...newRole, name: e.target.value })}
-                  className="text-[13px] font-mono" style={{ borderColor: C.border }} />
-                <div className="text-[11px] mt-1" style={{ color: C.light }}>小写字母 / 数字 / 下划线</div>
+                  className="text-[15px] font-mono" style={{ borderColor: C.border }} />
+                <div className="text-[13px] mt-1" style={{ color: C.light }}>小写字母 / 数字 / 下划线</div>
               </div>
               <div>
-                <div className="text-[12px] mb-1" style={{ color: C.mid }}>中文名称</div>
+                <div className="text-[14px] mb-1" style={{ color: C.mid }}>中文名称</div>
                 <Input value={newRole.display_name} placeholder="如 门店经理"
                   onChange={(e) => setNewRole({ ...newRole, display_name: e.target.value })}
-                  className="text-[13px]" style={{ borderColor: C.border }} />
+                  className="text-[15px]" style={{ borderColor: C.border }} />
               </div>
             </div>
             <div>
-              <div className="text-[12px] mb-1" style={{ color: C.mid }}>职责说明</div>
+              <div className="text-[14px] mb-1" style={{ color: C.mid }}>职责说明</div>
               <Textarea value={newRole.description} rows={2} placeholder="这个角色负责什么"
                 onChange={(e) => setNewRole({ ...newRole, description: e.target.value })}
-                className="text-[13px]" style={{ borderColor: C.border }} />
+                className="text-[15px]" style={{ borderColor: C.border }} />
             </div>
             <div>
-              <div className="text-[12px] mb-2" style={{ color: C.mid }}>
+              <div className="text-[14px] mb-2" style={{ color: C.mid }}>
                 初始权限（已选 {newPerms.size} 项，创建后仍可调整）
               </div>
               <div className="max-h-56 overflow-y-auto pr-1">
@@ -441,7 +441,7 @@ export default function Roles() {
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
             <DialogTitle className="text-red-600">删除角色「{sel?.name}」</DialogTitle>
-            <DialogDescription className="text-[13px]">
+            <DialogDescription className="text-[15px]">
               该角色下的 {sel?.users ?? 0} 名用户将失去这份授权，角色与权限绑定会一并清除。此操作不可撤销。
             </DialogDescription>
           </DialogHeader>

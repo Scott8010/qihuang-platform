@@ -66,8 +66,8 @@ export default function PlanUpgrade() {
       {/* 标题 + 说明 */}
       <div className="flex items-center gap-2 flex-wrap">
         <ArrowUpCircle className="w-5 h-5" style={{ color: C.primary }} />
-        <span className="text-[15px] font-semibold" style={{ color: C.primary }}>套餐升级</span>
-        <span className="text-[12px]" style={{ color: C.light }}>
+        <span className="text-[17px] font-semibold" style={{ color: C.primary }}>套餐升级</span>
+        <span className="text-[14px]" style={{ color: C.light }}>
           预约次月1号生效，当月仍按原套餐计费与鉴权
         </span>
       </div>
@@ -75,7 +75,7 @@ export default function PlanUpgrade() {
       {/* 结果提示 */}
       {toast && (
         <div
-          className="flex items-center gap-2 rounded-lg p-3 text-[13px]"
+          className="flex items-center gap-2 rounded-lg p-3 text-[15px]"
           style={{
             background: toast.type === "ok" ? "#EAF2EE" : "#FDECEA",
             color: toast.type === "ok" ? C.mid : "#B03A2E",
@@ -87,14 +87,14 @@ export default function PlanUpgrade() {
       )}
 
       {loading && (
-        <div className="flex items-center gap-2 text-[13px]" style={{ color: C.light }}>
+        <div className="flex items-center gap-2 text-[15px]" style={{ color: C.light }}>
           <Loader2 className="w-4 h-4 animate-spin" /> 加载租户与套餐…
         </div>
       )}
 
       <Card className="border" style={{ borderColor: C.border }}>
         <CardContent className="p-0">
-          <table className="w-full text-[13px]">
+          <table className="w-full text-[15px]">
             <thead>
               <tr className="border-b text-left" style={{ borderColor: C.border, color: C.light }}>
                 <th className="px-5 py-3 font-medium">租户</th>
@@ -115,11 +115,11 @@ export default function PlanUpgrade() {
                   <tr key={t.id} className="border-b last:border-0 hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
                     <td className="px-5 py-3.5">
                       <div className="font-medium" style={{ color: C.ink }}>{t.name}</div>
-                      <div className="text-[11px]" style={{ color: C.light }}>{t.id}</div>
+                      <div className="text-[13px]" style={{ color: C.light }}>{t.id}</div>
                     </td>
                     <td className="px-3 py-3.5">
                       <span
-                        className="px-2 py-0.5 rounded text-[11px]"
+                        className="px-2 py-0.5 rounded text-[13px]"
                         style={{ color: (sceneMap as any)[t.scene]?.color || C.mid, background: (sceneMap as any)[t.scene]?.bg || C.bg }}
                       >
                         {(sceneMap as any)[t.scene]?.label || t.scene}
@@ -129,7 +129,7 @@ export default function PlanUpgrade() {
                       {t.plan || <span style={{ color: C.light }}>未配置</span>}
                       {hasPending && (
                         <span
-                          className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium"
+                          className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[13px] font-medium"
                           style={{ background: "#FBF4E4", color: "#8A6A1F", border: "1px solid #EDD9A8" }}
                           title={`将于 ${t.pendingEffectiveDate} 生效`}
                         >
@@ -140,14 +140,14 @@ export default function PlanUpgrade() {
                     </td>
                     <td className="px-3 py-3.5">
                       {hasPending ? (
-                        <span className="text-[12px]" style={{ color: C.light }}>
+                        <span className="text-[14px]" style={{ color: C.light }}>
                           次月将生效，本月不可再改
                         </span>
                       ) : (
                         <select
                           value={target[t.id] || ""}
                           onChange={(e) => setTarget((m) => ({ ...m, [t.id]: e.target.value }))}
-                          className="text-[13px] rounded-lg border px-3 py-2 bg-white outline-none"
+                          className="text-[15px] rounded-lg border px-3 py-2 bg-white outline-none"
                           style={{ borderColor: C.border, minWidth: 150 }}
                         >
                           <option value="">选择目标套餐</option>
@@ -196,14 +196,14 @@ export default function PlanUpgrade() {
               })}
               {tenants.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={5} className="py-10 text-center text-[12px]" style={{ color: C.light }}>暂无租户</td>
+                  <td colSpan={5} className="py-10 text-center text-[14px]" style={{ color: C.light }}>暂无租户</td>
                 </tr>
               )}
             </tbody>
           </table>
         </CardContent>
       </Card>
-      <div className="text-[12px]" style={{ color: C.light }}>
+      <div className="text-[14px]" style={{ color: C.light }}>
         共 {tenants.length} 家租户 · 升级为次月1号生效，当前月仍按原套餐计费与鉴权
       </div>
     </div>

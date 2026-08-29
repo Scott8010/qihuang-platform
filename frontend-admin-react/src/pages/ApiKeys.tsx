@@ -45,7 +45,7 @@ function ProgressBar({ pct }: { pct: number }) {
       <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "#E3ECE8" }}>
         <div className="h-full rounded-full" style={{ width: `${Math.min(100, pct)}%`, background: color }} />
       </div>
-      <span className="text-[11px] w-8 text-right shrink-0" style={{ color: pct >= 100 ? "#B03A2E" : C.mid }}>{pct}%</span>
+      <span className="text-[13px] w-8 text-right shrink-0" style={{ color: pct >= 100 ? "#B03A2E" : C.mid }}>{pct}%</span>
     </div>
   );
 }
@@ -147,7 +147,7 @@ export default function ApiKeys() {
     <div className="space-y-4">
       {/* 顶部 */}
       <div className="flex items-center justify-between">
-        <div className="text-[12px]" style={{ color: C.mid }}>
+        <div className="text-[14px]" style={{ color: C.mid }}>
           API Key 绑定租户与配额，签名验签（HMAC-SHA256 + 时间窗 ±5min + nonce 防重放）在网关完成；轮换提供 72 小时新旧并行期。
         </div>
         <Button size="sm" style={{ background: C.primary }}
@@ -159,7 +159,7 @@ export default function ApiKeys() {
       {/* 列表 */}
       <Card className="border shadow-none" style={{ borderColor: C.border }}>
         <CardContent className="p-0">
-          <table className="w-full text-[13px]">
+          <table className="w-full text-[15px]">
             <thead>
               <tr className="border-b text-left" style={{ borderColor: C.border, color: C.light }}>
                 <th className="px-5 py-3 font-medium">API Key</th>
@@ -184,8 +184,8 @@ export default function ApiKeys() {
                 <tr>
                   <td colSpan={7} className="px-5 py-12 text-center" style={{ color: C.light }}>
                     <KeyRound className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                    <div className="text-[13px]">暂无 API 密钥</div>
-                    <div className="text-[11px] mt-1">点击右上角「签发新密钥」为租户创建第一个 Key</div>
+                    <div className="text-[15px]">暂无 API 密钥</div>
+                    <div className="text-[13px] mt-1">点击右上角「签发新密钥」为租户创建第一个 Key</div>
                   </td>
                 </tr>
               )}
@@ -200,7 +200,7 @@ export default function ApiKeys() {
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">
                         <KeyRound className="w-4 h-4" style={{ color: C.light }} />
-                        <span className="font-mono text-[12px]" style={{ color: C.ink }}>{maskKey(k.appKey)}</span>
+                        <span className="font-mono text-[14px]" style={{ color: C.ink }}>{maskKey(k.appKey)}</span>
                         <button className="hover:opacity-70" onClick={() => copy(k.appKey, 'app_key')} title="复制完整 Key">
                           <Copy className="w-3.5 h-3.5" style={{ color: copied === k.appKey ? C.primary : C.light }} />
                         </button>
@@ -208,35 +208,35 @@ export default function ApiKeys() {
                     </td>
                     <td className="px-3 py-3.5" style={{ color: C.mid }}>{k.tenant || "—"}</td>
                     <td className="px-3 py-3.5">
-                      <span className="text-[11px] px-2 py-0.5 rounded" style={ps}>{k.purpose}</span>
+                      <span className="text-[13px] px-2 py-0.5 rounded" style={ps}>{k.purpose}</span>
                     </td>
                     <td className="px-3 py-3.5" style={{ color: C.mid }}>{k.qps || "—"}</td>
                     <td className="px-3 py-3.5">
                       {hasQuota ? (
                         <>
-                          <div className="flex justify-between text-[11px] mb-1" style={{ color: pct >= 100 ? "#B03A2E" : C.mid }}>
+                          <div className="flex justify-between text-[13px] mb-1" style={{ color: pct >= 100 ? "#B03A2E" : C.mid }}>
                             <span>{k.used.toLocaleString()} / {(k.quota as number).toLocaleString()}</span>
                           </div>
                           <ProgressBar pct={pct} />
                         </>
                       ) : (
-                        <span className="text-[12px]" style={{ color: C.mid }}>
+                        <span className="text-[14px]" style={{ color: C.mid }}>
                           {k.used.toLocaleString()} / <span style={{ color: C.light }}>不限</span>
                         </span>
                       )}
                     </td>
                     <td className="px-3 py-3.5">
-                      <span className="text-[11px] px-2 py-0.5 rounded" style={{ color: st.color, background: st.background }}>
+                      <span className="text-[13px] px-2 py-0.5 rounded" style={{ color: st.color, background: st.background }}>
                         {st.label}
                       </span>
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       <div className="flex items-center justify-end gap-3">
-                        <button className='flex items-center gap-1 text-[12px] hover:opacity-70' style={{ color: C.mid }}
+                        <button className='flex items-center gap-1 text-[14px] hover:opacity-70' style={{ color: C.mid }}
                           onClick={() => setConfirm({ type: 'rotate', key: k })}>
                           <RefreshCw className='w-3.5 h-3.5' /> 轮换
                         </button>
-                        <button className='flex items-center gap-1 text-[12px] hover:opacity-70' style={{ color: '#B03A2E' }}
+                        <button className='flex items-center gap-1 text-[14px] hover:opacity-70' style={{ color: '#B03A2E' }}
                           onClick={() => setConfirm({ type: 'revoke', key: k })}>
                           <Ban className='w-3.5 h-3.5' /> 吊销
                         </button>
@@ -250,7 +250,7 @@ export default function ApiKeys() {
         </CardContent>
       </Card>
 
-      <div className="text-[11px]" style={{ color: C.light }}>
+      <div className="text-[13px]" style={{ color: C.light }}>
         轮换说明：新 Key 签发后旧 Key 进入 72h 并行期（状态"轮换中"），到期自动失效；吊销即时生效并记录审计日志。
       </div>
 
@@ -263,12 +263,12 @@ export default function ApiKeys() {
           </DialogHeader>
           {issued ? (
             <div className='space-y-3'>
-              <div className='text-[12px]' style={{ color: C.mid }}>密钥已签发，secret 仅展示一次：</div>
-              <div className='rounded p-3 bg-[#F8FAF9] text-[12px] font-mono break-all'>
+              <div className='text-[14px]' style={{ color: C.mid }}>密钥已签发，secret 仅展示一次：</div>
+              <div className='rounded p-3 bg-[#F8FAF9] text-[14px] font-mono break-all'>
                 <div>app_key: {issued.app_key}</div>
                 <div>app_secret: {issued.app_secret}</div>
               </div>
-              <div className='rounded p-2 text-[11px]' style={{ background: '#FFF6E6', border: '1px solid #F0DDA8', color: '#6B4900' }}>
+              <div className='rounded p-2 text-[13px]' style={{ background: '#FFF6E6', border: '1px solid #F0DDA8', color: '#6B4900' }}>
                 <b>⚠️ 妥善保管</b>：SK 关闭此弹窗后<b>永远不可再查</b>，丢失需走运营方轮换流程（旧 SK 72h 内仍可并行使用）。
               </div>
               <div className='flex gap-2'>
@@ -283,7 +283,7 @@ export default function ApiKeys() {
                   download="8602-客户接入手册-v1.0.html"
                   target="_blank"
                   rel="noopener"
-                  className='inline-flex items-center gap-1 rounded-md border px-3 h-8 text-[12px] hover:bg-[#F8FAF9]'
+                  className='inline-flex items-center gap-1 rounded-md border px-3 h-8 text-[14px] hover:bg-[#F8FAF9]'
                   style={{ borderColor: C.border, color: C.primary }}
                   title='下载后一并交付给客户'
                 >
@@ -293,7 +293,7 @@ export default function ApiKeys() {
             </div>
           ) : (
             <div className='space-y-2'>
-              <div className='text-[12px]' style={{ color: C.mid }}>租户 *（从下拉选择，避免手填 uuid 出错）</div>
+              <div className='text-[14px]' style={{ color: C.mid }}>租户 *（从下拉选择，避免手填 uuid 出错）</div>
               <Select value={tenantInput} onValueChange={(v) => setTenantInput(v)}>
                 <SelectTrigger className='h-8 text-sm w-full'>
                   <SelectValue placeholder={tenantsLoading ? '加载租户中…' : '选择租户'} />
@@ -306,7 +306,7 @@ export default function ApiKeys() {
                   ))}
                 </SelectContent>
               </Select>
-              <div className='text-[11px]' style={{ color: C.light }}>
+              <div className='text-[13px]' style={{ color: C.light }}>
                 已选 tenant_id：{tenantInput || '—'}；套餐默认 standard，可在开户时配置。
               </div>
             </div>

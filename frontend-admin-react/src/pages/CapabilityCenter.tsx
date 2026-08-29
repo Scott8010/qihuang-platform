@@ -51,17 +51,17 @@ function KnowledgeSectionsView({ data }: { data: Record<string, unknown> }) {
     <div className="space-y-3">
       <FieldRow label="主题分类" value={safeStr(data.category)} icon={<BookOpen className="w-3.5 h-3.5" />} />
       <div className="space-y-1.5">
-        <div className="text-[11px] flex items-center gap-1" style={{ color: C.light }}>
-          <ListOrdered className="w-3 h-3" />知识章节 <span className="text-[10px]">（共 {items.length} 节）</span>
+        <div className="text-[13px] flex items-center gap-1" style={{ color: C.light }}>
+          <ListOrdered className="w-3 h-3" />知识章节 <span className="text-[12px]">（共 {items.length} 节）</span>
         </div>
         <ol className="space-y-1.5">
           {items.map((s, i) => (
             <li key={i} className="flex gap-2 rounded-md border px-2.5 py-2" style={{ borderColor: C.border, background: "#FCFCFA" }}>
-              <span className="shrink-0 w-5 h-5 rounded-full text-[10.5px] font-bold flex items-center justify-center"
+              <span className="shrink-0 w-5 h-5 rounded-full text-[12.5px] font-bold flex items-center justify-center"
                 style={{ background: C.primary, color: "#fff" }}>{i + 1}</span>
               <div className="min-w-0 flex-1">
-                <div className="text-[12.5px] font-medium" style={{ color: C.ink }}>{s.title || `第 ${i + 1} 节`}</div>
-                <div className="text-[11.5px] mt-0.5 leading-relaxed whitespace-pre-wrap" style={{ color: C.mid }}>{s.body || "—"}</div>
+                <div className="text-[14.5px] font-medium" style={{ color: C.ink }}>{s.title || `第 ${i + 1} 节`}</div>
+                <div className="text-[13.5px] mt-0.5 leading-relaxed whitespace-pre-wrap" style={{ color: C.mid }}>{s.body || "—"}</div>
               </div>
             </li>
           ))}
@@ -82,8 +82,8 @@ function KnowledgePointsView({ data }: { data: Record<string, unknown> }) {
     <div className="space-y-3">
       <FieldRow label="主题分类" value={safeStr(data.category)} icon={<BookOpen className="w-3.5 h-3.5" />} />
       <div className="space-y-1.5">
-        <div className="text-[11px] flex items-center gap-1" style={{ color: C.light }}>
-          <MapPin className="w-3 h-3" />穴位 <span className="text-[10px]">（共 {points.length} 个）</span>
+        <div className="text-[13px] flex items-center gap-1" style={{ color: C.light }}>
+          <MapPin className="w-3 h-3" />穴位 <span className="text-[12px]">（共 {points.length} 个）</span>
         </div>
         <div className="grid grid-cols-1 gap-1.5">
           {points.map((p, i) => {
@@ -91,9 +91,9 @@ function KnowledgePointsView({ data }: { data: Record<string, unknown> }) {
             return (
               <div key={i} className="rounded-md border px-2.5 py-2 space-y-1" style={{ borderColor: C.border, background: "#FCFCFA" }}>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[12.5px] font-semibold" style={{ color: C.ink }}>{safeStr(p.name)}</span>
+                  <span className="text-[14.5px] font-semibold" style={{ color: C.ink }}>{safeStr(p.name)}</span>
                   {p.meridian ? (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#FBF4E4", color: "#8A6A1F" }}>
+                    <span className="text-[12px] px-1.5 py-0.5 rounded" style={{ background: "#FBF4E4", color: "#8A6A1F" }}>
                       {safeStr(p.meridian)}
                     </span>
                   ) : null}
@@ -112,8 +112,8 @@ function KnowledgePointsView({ data }: { data: Record<string, unknown> }) {
       </div>
       {cautions.length > 0 && (
         <div className="rounded-md border px-2.5 py-2" style={{ borderColor: "#F0D9B5", background: "#FFF8EC" }}>
-          <div className="text-[11px] font-medium mb-1" style={{ color: "#8A6A1F" }}>⚠ 通用注意事项</div>
-          <ul className="text-[11.5px] space-y-0.5" style={{ color: "#6B5212" }}>
+          <div className="text-[13px] font-medium mb-1" style={{ color: "#8A6A1F" }}>⚠ 通用注意事项</div>
+          <ul className="text-[13.5px] space-y-0.5" style={{ color: "#6B5212" }}>
             {cautions.map((c, i) => <li key={i}>· {c}</li>)}
           </ul>
         </div>
@@ -136,19 +136,19 @@ function ProjectFlowView({ data }: { data: Record<string, unknown> }) {
         ) : null}
       </div>
       <div className="space-y-1.5">
-        <div className="text-[11px] flex items-center gap-1" style={{ color: C.light }}>
-          <ClipboardList className="w-3 h-3" />服务流程 <span className="text-[10px]">（共 {flow.length} 步）</span>
+        <div className="text-[13px] flex items-center gap-1" style={{ color: C.light }}>
+          <ClipboardList className="w-3 h-3" />服务流程 <span className="text-[12px]">（共 {flow.length} 步）</span>
         </div>
         <ol className="space-y-1">
           {flow.map((s, i) => (
             <li key={i} className="flex gap-2 rounded-md border px-2.5 py-1.5" style={{ borderColor: C.border, background: "#FCFCFA" }}>
-              <span className="shrink-0 w-5 h-5 rounded-full text-[10.5px] font-bold flex items-center justify-center"
+              <span className="shrink-0 w-5 h-5 rounded-full text-[12.5px] font-bold flex items-center justify-center"
                 style={{ background: C.accent, color: "#fff" }}>
                 {typeof s.step === "number" ? s.step : i + 1}
               </span>
               <div className="min-w-0 flex-1">
-                <div className="text-[12px] font-medium" style={{ color: C.ink }}>{safeStr(s.name)}</div>
-                {s.script ? <div className="text-[11px] mt-0.5 leading-relaxed" style={{ color: C.mid }}>{safeStr(s.script)}</div> : null}
+                <div className="text-[14px] font-medium" style={{ color: C.ink }}>{safeStr(s.name)}</div>
+                {s.script ? <div className="text-[13px] mt-0.5 leading-relaxed" style={{ color: C.mid }}>{safeStr(s.script)}</div> : null}
               </div>
             </li>
           ))}
@@ -179,20 +179,20 @@ function ProductTrainingView({ data }: { data: Record<string, unknown> }) {
       {data.suitable ? <FieldRow label="适宜人群" value={safeStr(data.suitable)} /> : null}
       {ingredients.length > 0 && (
         <div>
-          <div className="text-[11px] mb-1" style={{ color: C.light }}>配方 / 成分</div>
+          <div className="text-[13px] mb-1" style={{ color: C.light }}>配方 / 成分</div>
           <div className="flex flex-wrap gap-1">
             {ingredients.map((s, i) => (
-              <span key={i} className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: C.soft, color: C.primary }}>{s}</span>
+              <span key={i} className="text-[13px] px-2 py-0.5 rounded-full" style={{ background: C.soft, color: C.primary }}>{s}</span>
             ))}
           </div>
         </div>
       )}
       {sales.length > 0 && (
         <div>
-          <div className="text-[11px] mb-1" style={{ color: C.light }}>销售卖点</div>
+          <div className="text-[13px] mb-1" style={{ color: C.light }}>销售卖点</div>
           <div className="flex flex-wrap gap-1">
             {sales.map((s, i) => (
-              <span key={i} className="text-[11px] px-2 py-0.5 rounded-full border" style={{ borderColor: "#F5EDD9", color: "#8A6A1F", background: "#FBF4E4" }}>{s}</span>
+              <span key={i} className="text-[13px] px-2 py-0.5 rounded-full border" style={{ borderColor: "#F5EDD9", color: "#8A6A1F", background: "#FBF4E4" }}>{s}</span>
             ))}
           </div>
         </div>
@@ -220,15 +220,15 @@ function QuestionnaireDraftView({ data }: { data: Record<string, unknown> }) {
       {schema?.description ? <FieldRow label="说明" value={safeStr(schema.description)} /> : null}
       {fields.length > 0 && (
         <div>
-          <div className="text-[11px] mb-1" style={{ color: C.light }}>字段（{fields.length}）</div>
+          <div className="text-[13px] mb-1" style={{ color: C.light }}>字段（{fields.length}）</div>
           <div className="rounded-md border divide-y" style={{ borderColor: C.border }}>
             {fields.map((f, i) => (
-              <div key={i} className="px-2.5 py-1.5 flex items-baseline gap-2 text-[11.5px]" style={{ borderColor: C.border }}>
+              <div key={i} className="px-2.5 py-1.5 flex items-baseline gap-2 text-[13.5px]" style={{ borderColor: C.border }}>
                 <span className="font-medium" style={{ color: C.ink }}>{String(f.label || f.name || f.key || `字段 ${i + 1}`)}</span>
-                <span className="text-[10px] px-1 py-0.5 rounded font-mono" style={{ background: C.soft, color: C.primary }}>
+                <span className="text-[12px] px-1 py-0.5 rounded font-mono" style={{ background: C.soft, color: C.primary }}>
                   {String(f.type || f.field_type || "—")}
                 </span>
-                {!!f.required && <span className="text-[10px] text-red-600">*必填</span>}
+                {!!f.required && <span className="text-[12px] text-red-600">*必填</span>}
               </div>
             ))}
           </div>
@@ -241,7 +241,7 @@ function QuestionnaireDraftView({ data }: { data: Record<string, unknown> }) {
 /** 话术脚本（紫色特别行，店员可直接读） */
 function TalkScript({ value }: { value: string }) {
   return (
-    <div className="rounded-md px-2 py-1.5 text-[11.5px] leading-relaxed italic"
+    <div className="rounded-md px-2 py-1.5 text-[13.5px] leading-relaxed italic"
       style={{ background: "#F2EFEA", color: "#5B4F35", borderLeft: `3px solid ${C.accent}` }}>
       💬 {value}
     </div>
@@ -251,7 +251,7 @@ function TalkScript({ value }: { value: string }) {
 /** 顶部 key-value 横排 */
 function FieldRow({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
   return (
-    <div className="inline-flex items-center gap-1.5 text-[11.5px] px-2 py-1 rounded border" style={{ borderColor: C.border, background: "#F8FAF9" }}>
+    <div className="inline-flex items-center gap-1.5 text-[13.5px] px-2 py-1 rounded border" style={{ borderColor: C.border, background: "#F8FAF9" }}>
       <span className="flex items-center gap-1" style={{ color: C.light }}>{icon}{label}</span>
       <span style={{ color: C.ink }}>{value || "—"}</span>
     </div>
@@ -260,7 +260,7 @@ function FieldRow({ label, value, icon }: { label: string; value: string; icon?:
 function FieldRowInline({ label, value, tone }: { label: string; value: string; tone?: "warn" | "info" }) {
   const color = tone === "warn" ? "#8A6A1F" : tone === "info" ? "#3D5A80" : C.mid;
   return (
-    <div className="text-[11.5px] leading-relaxed">
+    <div className="text-[13.5px] leading-relaxed">
       <span style={{ color: C.light }}>{label}：</span>
       <span style={{ color }}>{value}</span>
     </div>
@@ -281,10 +281,10 @@ function CautionsBlock({ title, items, tone }: { title: string; items: string[];
   return (
     <div className="rounded-md border px-2.5 py-2"
       style={{ borderColor: warn ? "#F0D9B5" : "#C9D9EA", background: warn ? "#FFF8EC" : "#F3F7FB" }}>
-      <div className="text-[11px] font-medium mb-1" style={{ color: warn ? "#8A6A1F" : "#3D5A80" }}>
+      <div className="text-[13px] font-medium mb-1" style={{ color: warn ? "#8A6A1F" : "#3D5A80" }}>
         {warn ? "⚠" : "ℹ"} {title}
       </div>
-      <ul className="text-[11.5px] space-y-0.5" style={{ color: warn ? "#6B5212" : "#2F4A6A" }}>
+      <ul className="text-[13.5px] space-y-0.5" style={{ color: warn ? "#6B5212" : "#2F4A6A" }}>
         {items.map((c, i) => <li key={i}>· {c}</li>)}
       </ul>
     </div>
@@ -294,21 +294,21 @@ function CautionsBlock({ title, items, tone }: { title: string; items: string[];
 /** ⑥ 未知 schema fallback：KV 平铺 + 折叠 JSON + 复制 */
 function GenericKVView({ value, depth = 0 }: { value: unknown; depth?: number }) {
   if (value === null || value === undefined) {
-    return <span className="text-[11.5px]" style={{ color: C.light }}>—</span>;
+    return <span className="text-[13.5px]" style={{ color: C.light }}>—</span>;
   }
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
     return (
-      <span className="text-[11.5px] break-all" style={{ color: C.ink }}>
+      <span className="text-[13.5px] break-all" style={{ color: C.ink }}>
         {typeof value === "string" ? `「${value}」` : String(value)}
       </span>
     );
   }
   if (Array.isArray(value)) {
-    if (value.length === 0) return <span className="text-[11.5px]" style={{ color: C.light }}>（空）</span>;
+    if (value.length === 0) return <span className="text-[13.5px]" style={{ color: C.light }}>（空）</span>;
     return (
       <ol className="space-y-1 list-decimal pl-4">
         {value.map((v, i) => (
-          <li key={i} className="text-[11.5px]">
+          <li key={i} className="text-[13.5px]">
             <GenericKVView value={v} depth={depth + 1} />
           </li>
         ))}
@@ -317,11 +317,11 @@ function GenericKVView({ value, depth = 0 }: { value: unknown; depth?: number })
   }
   if (typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>);
-    if (entries.length === 0) return <span className="text-[11.5px]" style={{ color: C.light }}>（空对象）</span>;
+    if (entries.length === 0) return <span className="text-[13.5px]" style={{ color: C.light }}>（空对象）</span>;
     return (
       <div className={depth === 0 ? "space-y-1 rounded-md border p-2" : "space-y-1"} style={{ borderColor: C.border, background: depth === 0 ? "#FCFCFA" : undefined }}>
         {entries.map(([k, v]) => (
-          <div key={k} className="grid grid-cols-[auto_1fr] gap-x-2 items-baseline text-[11.5px]">
+          <div key={k} className="grid grid-cols-[auto_1fr] gap-x-2 items-baseline text-[13.5px]">
             <span className="font-medium" style={{ color: C.mid }}>{k}</span>
             <GenericKVView value={v} depth={depth + 1} />
           </div>
@@ -336,8 +336,8 @@ function GenericKVView({ value, depth = 0 }: { value: unknown; depth?: number })
 function StatTile({ label, value, tone }: { label: string; value: number; tone?: "warn" }) {
   return (
     <div className="rounded-md border px-2.5 py-2 text-center" style={{ borderColor: C.border, background: "#fff" }}>
-      <div className="text-[18px] font-bold leading-none" style={{ color: tone === "warn" ? "#8A6A1F" : C.primary }}>{value}</div>
-      <div className="text-[11px] mt-1" style={{ color: C.light }}>{label}</div>
+      <div className="text-[20px] font-bold leading-none" style={{ color: tone === "warn" ? "#8A6A1F" : C.primary }}>{value}</div>
+      <div className="text-[13px] mt-1" style={{ color: C.light }}>{label}</div>
     </div>
   );
 }
@@ -388,23 +388,23 @@ function TemplateMeta({ tpl }: { tpl: CapabilityTemplate }) {
   const vis = visInfo(tpl.ownership?.visibility);
   const isPlatform = tpl.ownership?.source === "platform";
   return (
-    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
+    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[14.5px]">
       <span style={{ color: C.light }}>归属</span>
       <span className="inline-flex items-center gap-1.5">
-        <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ color: vis.color, background: vis.bg }}>
+        <span className="inline-flex items-center gap-1 text-[13px] px-2 py-0.5 rounded-full font-medium" style={{ color: vis.color, background: vis.bg }}>
           {vis.label === "共享池" ? <Globe className="w-3 h-3" /> : vis.label === "私有" ? <Lock className="w-3 h-3" /> : <ShieldCheck className="w-3 h-3" />}
           {vis.label}
         </span>
-        {isPlatform && <span className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: "#F5EDD9", color: "#8A6A1F" }}>官方模板</span>}
+        {isPlatform && <span className="text-[13px] px-1.5 py-0.5 rounded" style={{ background: "#F5EDD9", color: "#8A6A1F" }}>官方模板</span>}
         {tpl.ownership?.source && (
-          <span className="text-[11px] font-mono" style={{ color: C.light }}>· source={tpl.ownership.source}</span>
+          <span className="text-[13px] font-mono" style={{ color: C.light }}>· source={tpl.ownership.source}</span>
         )}
       </span>
       <span style={{ color: C.light }}>版本</span><span style={{ color: C.ink }}>{tpl.current_version}</span>
       <span style={{ color: C.light }}>创建</span>
       <span style={{ color: C.ink }}>{(tpl.created_at || "").replace("T", " ").slice(0, 19) || "—"}</span>
       <span style={{ color: C.light }}>ID</span>
-      <span className="font-mono text-[11px] break-all" style={{ color: C.mid }}>{tpl.id}</span>
+      <span className="font-mono text-[13px] break-all" style={{ color: C.mid }}>{tpl.id}</span>
     </div>
   );
 }
@@ -426,32 +426,32 @@ function TemplateRow({ t, onView, onSubmit }: {
     <tr className="border-b last:border-0 hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
       <td className="px-4 py-3">
         <div className="font-medium" style={{ color: C.ink }}>{t.name}</div>
-        <div className="text-[11px] font-mono" style={{ color: C.light }}>{t.id.slice(0, 12)}…</div>
+        <div className="text-[13px] font-mono" style={{ color: C.light }}>{t.id.slice(0, 12)}…</div>
       </td>
       <td className="px-3 py-3">
-        <span className="text-[11px] px-2 py-0.5 rounded" style={{ background: C.soft, color: C.primary }}>
+        <span className="text-[13px] px-2 py-0.5 rounded" style={{ background: C.soft, color: C.primary }}>
           {KIND_LABEL[t.kind] || t.kind}
         </span>
       </td>
       <td className="px-3 py-3" style={{ color: C.mid }}>{t.current_version}</td>
       <td className="px-3 py-3">
-        <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ color: vis.color, background: vis.bg }}>
+        <span className="inline-flex items-center gap-1 text-[13px] px-2 py-0.5 rounded-full font-medium" style={{ color: vis.color, background: vis.bg }}>
           {vis.label === "共享池" ? <Globe className="w-3 h-3" /> : vis.label === "私有" ? <Lock className="w-3 h-3" /> : <ShieldCheck className="w-3 h-3" />}
           {vis.label}
         </span>
-        {isPlatform && <span className="ml-1.5 text-[11px] px-1.5 py-0.5 rounded" style={{ background: "#F5EDD9", color: "#8A6A1F" }}>官方</span>}
+        {isPlatform && <span className="ml-1.5 text-[13px] px-1.5 py-0.5 rounded" style={{ background: "#F5EDD9", color: "#8A6A1F" }}>官方</span>}
       </td>
-      <td className="px-3 py-3 text-[12px]" style={{ color: C.light }}>
+      <td className="px-3 py-3 text-[14px]" style={{ color: C.light }}>
         {(t.created_at || "").slice(0, 10)}
       </td>
       <td className="px-4 py-3 text-right">
         <div className="inline-flex items-center gap-1.5">
-          <Button size="sm" variant="outline" className="h-7 text-[12px]" style={{ color: C.mid }}
+          <Button size="sm" variant="outline" className="h-7 text-[14px]" style={{ color: C.mid }}
             onClick={() => onView(t)}>
             <Eye className="w-3.5 h-3.5 mr-1" /> 详情
           </Button>
           {!isPlatform && (
-            <Button size="sm" variant="outline" className="h-7 text-[12px]" style={{ color: C.primary }}
+            <Button size="sm" variant="outline" className="h-7 text-[14px]" style={{ color: C.primary }}
               onClick={() => onSubmit(t)}>
               <Send className="w-3.5 h-3.5 mr-1" /> 提交审核
             </Button>
@@ -610,8 +610,8 @@ export default function CapabilityCenter() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <Boxes className="w-5 h-5" style={{ color: C.primary }} />
-          <span className="text-[15px] font-semibold" style={{ color: C.primary }}>能力中心</span>
-          <span className="text-[12px]" style={{ color: C.light }}>多租户能力模板 · 平台↔机构归属全模型</span>
+          <span className="text-[17px] font-semibold" style={{ color: C.primary }}>能力中心</span>
+          <span className="text-[14px]" style={{ color: C.light }}>多租户能力模板 · 平台↔机构归属全模型</span>
         </div>
         <Button size="sm" style={{ background: C.primary }} onClick={() => { setNewContent(defaultContentFor(newKind)); setCreateOpen(true); }}>
           <FilePlus2 className="w-4 h-4 mr-1" /> 新建模板
@@ -619,7 +619,7 @@ export default function CapabilityCenter() {
       </div>
 
       {/* 业务定位卡：告诉运营"这页面解决啥问题" */}
-      <div className="rounded-lg border p-3 grid grid-cols-1 md:grid-cols-4 gap-2 text-[11.5px]" style={{ borderColor: C.border, background: "#F8FAF9" }}>
+      <div className="rounded-lg border p-3 grid grid-cols-1 md:grid-cols-4 gap-2 text-[13.5px]" style={{ borderColor: C.border, background: "#F8FAF9" }}>
         <div className="md:col-span-1 flex items-center gap-2 font-medium" style={{ color: C.ink }}>
           <Info className="w-4 h-4" style={{ color: C.accent }} />
           这页面解决什么
@@ -637,7 +637,7 @@ export default function CapabilityCenter() {
       {/* 运营统计卡片 */}
       {stats && (
         <div className="rounded-lg border p-3" style={{ borderColor: C.border, background: "#F8FAF9" }}>
-          <div className="flex items-center gap-2 mb-2 text-[12px] font-medium" style={{ color: C.ink }}>
+          <div className="flex items-center gap-2 mb-2 text-[14px] font-medium" style={{ color: C.ink }}>
             <BarChart3 className="w-4 h-4" style={{ color: C.accent }} /> 运营统计（能力中心全景）
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
@@ -648,7 +648,7 @@ export default function CapabilityCenter() {
             <StatTile label="同步·下发" value={stats.sync.push || 0} />
             <StatTile label="同步·贡献" value={stats.sync.contribute || 0} />
           </div>
-          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px]" style={{ color: C.light }}>
+          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[13px]" style={{ color: C.light }}>
             <span>审核：已采纳 {stats.reviews.APPROVED || 0} · 已驳回 {stats.reviews.REJECTED || 0}</span>
             <span>关插件申请：待审 {stats.disable_requests.PENDING || 0} · 已批 {stats.disable_requests.APPROVED || 0} · 已拒 {stats.disable_requests.REJECTED || 0}</span>
           </div>
@@ -658,26 +658,26 @@ export default function CapabilityCenter() {
       {/* Tabs */}
       <div className="flex gap-1 border-b pb-2" style={{ borderColor: C.border }}>
         <button
-          className="px-3 py-1.5 rounded-t-md text-[13px] font-medium transition-colors"
+          className="px-3 py-1.5 rounded-t-md text-[15px] font-medium transition-colors"
           style={{ color: tab === "templates" ? C.primary : C.light, background: tab === "templates" ? C.soft : "transparent", borderBottom: tab === "templates" ? `2px solid ${C.primary}` : "2px solid transparent" }}
           onClick={() => setTab("templates")}
         >
           模板市场（{templates.length}）
         </button>
         <button
-          className="px-3 py-1.5 rounded-t-md text-[13px] font-medium transition-colors"
+          className="px-3 py-1.5 rounded-t-md text-[15px] font-medium transition-colors"
           style={{ color: tab === "reviews" ? C.primary : C.light, background: tab === "reviews" ? C.soft : "transparent", borderBottom: tab === "reviews" ? `2px solid ${C.primary}` : "2px solid transparent" }}
           onClick={() => setTab("reviews")}
         >
           审核工作台
           {pendingCount > 0 && (
-            <span className="ml-1.5 text-[11px] px-1.5 py-0.5 rounded-full" style={{ background: "#FDECEA", color: "#B03A2E" }}>{pendingCount}</span>
+            <span className="ml-1.5 text-[13px] px-1.5 py-0.5 rounded-full" style={{ background: "#FDECEA", color: "#B03A2E" }}>{pendingCount}</span>
           )}
         </button>
       </div>
 
       {loading && (
-        <div className="flex items-center gap-2 text-[13px]" style={{ color: C.light }}>
+        <div className="flex items-center gap-2 text-[15px]" style={{ color: C.light }}>
           <Loader2 className="w-4 h-4 animate-spin" /> 加载能力中心…
         </div>
       )}
@@ -686,15 +686,15 @@ export default function CapabilityCenter() {
       {tab === "templates" && !loading && (
         <Card className="border shadow-none" style={{ borderColor: C.border }}>
           <CardContent className="p-0">
-            <table className="w-full text-[13px]">
+            <table className="w-full text-[15px]">
               <thead>
                 <tr className="border-b text-left" style={{ borderColor: C.border, background: C.soft }}>
-                  <th className="px-4 py-3 text-[12px] font-semibold whitespace-nowrap" style={{ color: C.mid }}>模板</th>
-                  <th className="px-3 py-3 text-[12px] font-semibold whitespace-nowrap" style={{ color: C.mid }}>类型</th>
-                  <th className="px-3 py-3 text-[12px] font-semibold whitespace-nowrap" style={{ color: C.mid }}>版本</th>
-                  <th className="px-3 py-3 text-[12px] font-semibold whitespace-nowrap" style={{ color: C.mid }}>归属</th>
-                  <th className="px-3 py-3 text-[12px] font-semibold whitespace-nowrap" style={{ color: C.mid }}>创建时间</th>
-                  <th className="px-4 py-3 text-right text-[12px] font-semibold whitespace-nowrap" style={{ color: C.mid }}>操作</th>
+                  <th className="px-4 py-3 text-[14px] font-semibold whitespace-nowrap" style={{ color: C.mid }}>模板</th>
+                  <th className="px-3 py-3 text-[14px] font-semibold whitespace-nowrap" style={{ color: C.mid }}>类型</th>
+                  <th className="px-3 py-3 text-[14px] font-semibold whitespace-nowrap" style={{ color: C.mid }}>版本</th>
+                  <th className="px-3 py-3 text-[14px] font-semibold whitespace-nowrap" style={{ color: C.mid }}>归属</th>
+                  <th className="px-3 py-3 text-[14px] font-semibold whitespace-nowrap" style={{ color: C.mid }}>创建时间</th>
+                  <th className="px-4 py-3 text-right text-[14px] font-semibold whitespace-nowrap" style={{ color: C.mid }}>操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -702,7 +702,7 @@ export default function CapabilityCenter() {
                   <TemplateRow key={t.id} t={t} onView={openDetail} onSubmit={doSubmit} />
                 ))}
                 {templates.length === 0 && (
-                  <tr><td colSpan={6} className="py-10 text-center text-[12px]" style={{ color: C.light }}>暂无模板</td></tr>
+                  <tr><td colSpan={6} className="py-10 text-center text-[14px]" style={{ color: C.light }}>暂无模板</td></tr>
                 )}
               </tbody>
             </table>
@@ -714,15 +714,15 @@ export default function CapabilityCenter() {
       {tab === "reviews" && !loading && (
         <Card className="border shadow-none" style={{ borderColor: C.border }}>
           <CardContent className="p-0">
-            <table className="w-full text-[13px]">
+            <table className="w-full text-[15px]">
               <thead>
                 <tr className="border-b text-left" style={{ borderColor: C.border, background: C.soft }}>
-                  <th className="px-4 py-3 text-[12px] font-semibold" style={{ color: C.mid }}>审核单</th>
-                  <th className="px-3 py-3 text-[12px] font-semibold" style={{ color: C.mid }}>提交机构</th>
-                  <th className="px-3 py-3 text-[12px] font-semibold" style={{ color: C.mid }}>状态</th>
-                  <th className="px-3 py-3 text-[12px] font-semibold" style={{ color: C.mid }}>提交时间</th>
-                  <th className="px-3 py-3 text-[12px] font-semibold" style={{ color: C.mid }}>审核意见</th>
-                  <th className="px-4 py-3 text-right text-[12px] font-semibold" style={{ color: C.mid }}>操作</th>
+                  <th className="px-4 py-3 text-[14px] font-semibold" style={{ color: C.mid }}>审核单</th>
+                  <th className="px-3 py-3 text-[14px] font-semibold" style={{ color: C.mid }}>提交机构</th>
+                  <th className="px-3 py-3 text-[14px] font-semibold" style={{ color: C.mid }}>状态</th>
+                  <th className="px-3 py-3 text-[14px] font-semibold" style={{ color: C.mid }}>提交时间</th>
+                  <th className="px-3 py-3 text-[14px] font-semibold" style={{ color: C.mid }}>审核意见</th>
+                  <th className="px-4 py-3 text-right text-[14px] font-semibold" style={{ color: C.mid }}>操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -735,22 +735,22 @@ export default function CapabilityCenter() {
                     <tr key={s.id} className="border-b last:border-0 hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
                       <td className="px-4 py-3">
                         <div className="font-medium" style={{ color: C.ink }}>{tpl?.name || s.template_id.slice(0, 12)}</div>
-                        <div className="text-[11px] font-mono" style={{ color: C.light }}>{s.id.slice(0, 12)}…</div>
+                        <div className="text-[13px] font-mono" style={{ color: C.light }}>{s.id.slice(0, 12)}…</div>
                       </td>
                       <td className="px-3 py-3" style={{ color: C.mid }}>{s.submitter_org_id || "—"}</td>
                       <td className="px-3 py-3">
-                        <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ color: st.color, background: st.bg }}>{st.label}</span>
+                        <span className="text-[13px] px-2 py-0.5 rounded-full font-medium" style={{ color: st.color, background: st.bg }}>{st.label}</span>
                       </td>
-                      <td className="px-3 py-3 text-[12px]" style={{ color: C.light }}>{(s.submitted_at || "").replace("T", " ").slice(0, 16)}</td>
-                      <td className="px-3 py-3 text-[12px] max-w-[160px] truncate" style={{ color: C.light }} title={s.review_note || ""}>{s.review_note || "—"}</td>
+                      <td className="px-3 py-3 text-[14px]" style={{ color: C.light }}>{(s.submitted_at || "").replace("T", " ").slice(0, 16)}</td>
+                      <td className="px-3 py-3 text-[14px] max-w-[160px] truncate" style={{ color: C.light }} title={s.review_note || ""}>{s.review_note || "—"}</td>
                       <td className="px-4 py-3 text-right">
                         {s.status === "PENDING" ? (
-                          <Button size="sm" variant="outline" className="h-7 text-[12px]" style={{ color: C.primary }}
+                          <Button size="sm" variant="outline" className="h-7 text-[14px]" style={{ color: C.primary }}
                             onClick={() => { setReviewSub(s); setReviewNote(""); }}>
                             <ShieldCheck className="w-3.5 h-3.5 mr-1" /> 审核
                           </Button>
                         ) : (
-                          <span className="text-[11px]" style={{ color: C.light }}>
+                          <span className="text-[13px]" style={{ color: C.light }}>
                             {s.reviewed_at ? s.reviewed_at.replace("T", " ").slice(0, 16) : "—"}
                           </span>
                         )}
@@ -759,7 +759,7 @@ export default function CapabilityCenter() {
                   );
                 })}
                 {submissions.length === 0 && (
-                  <tr><td colSpan={6} className="py-10 text-center text-[12px]" style={{ color: C.light }}>暂无审核单</td></tr>
+                  <tr><td colSpan={6} className="py-10 text-center text-[14px]" style={{ color: C.light }}>暂无审核单</td></tr>
                 )}
               </tbody>
             </table>
@@ -767,7 +767,7 @@ export default function CapabilityCenter() {
         </Card>
       )}
 
-      <div className="text-[11px]" style={{ color: C.light }}>
+      <div className="text-[13px]" style={{ color: C.light }}>
         归属模型：平台模板（source=platform）全网可见；机构自建（private）仅本机构；提交平台审核通过后提升为共享池（public），驳回则强收回私有。
       </div>
 
@@ -781,14 +781,14 @@ export default function CapabilityCenter() {
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-[12px]">名称</Label>
+                <Label className="text-[14px]">名称</Label>
                 <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="如：门店接单话术模板" className="mt-1 h-8" />
               </div>
               <div>
-                <Label className="text-[12px]">类型</Label>
+                <Label className="text-[14px]">类型</Label>
                 <select value={newKind}
                   onChange={(e) => { setNewKind(e.target.value); setNewContent(defaultContentFor(e.target.value)); }}
-                  className="w-full text-[13px] rounded-lg border px-3 py-2 bg-white outline-none mt-1" style={{ borderColor: C.border }}>
+                  className="w-full text-[15px] rounded-lg border px-3 py-2 bg-white outline-none mt-1" style={{ borderColor: C.border }}>
                   <option value="script">话术脚本</option>
                   <option value="knowledge">知识课件</option>
                   <option value="project">项目培训</option>
@@ -804,7 +804,7 @@ export default function CapabilityCenter() {
             </div>
             <TextImporter kind={newKind} onImport={(parsed) => setNewContent(parsed)} />
             <div className="rounded-md border p-3" style={{ borderColor: C.border, background: "#fff" }}>
-              <div className="text-[12px] font-medium mb-2 flex items-center gap-1" style={{ color: C.mid }}>
+              <div className="text-[14px] font-medium mb-2 flex items-center gap-1" style={{ color: C.mid }}>
                 <Sparkles className="w-3.5 h-3.5" style={{ color: C.accent }} />
                 内容编辑
               </div>
@@ -830,7 +830,7 @@ export default function CapabilityCenter() {
             </DialogTitle>
             <DialogDescription>
               {viewTpl?.kind && (
-                <span className="text-[11px] px-1.5 py-0.5 rounded mr-1.5" style={{ background: C.soft, color: C.primary }}>
+                <span className="text-[13px] px-1.5 py-0.5 rounded mr-1.5" style={{ background: C.soft, color: C.primary }}>
                   {KIND_LABEL[viewTpl.kind] || viewTpl.kind}
                 </span>
               )}
@@ -847,7 +847,7 @@ export default function CapabilityCenter() {
               <div className="flex gap-1.5">
                 <button type="button"
                   onClick={() => setViewTab("view")}
-                  className="inline-flex items-center gap-1 text-[12px] px-3 py-1.5 rounded-full border transition-colors"
+                  className="inline-flex items-center gap-1 text-[14px] px-3 py-1.5 rounded-full border transition-colors"
                   style={viewTab === "view"
                     ? { background: C.primary, color: "#fff", borderColor: C.primary }
                     : { background: "#fff", color: C.mid, borderColor: C.border }}>
@@ -855,7 +855,7 @@ export default function CapabilityCenter() {
                 </button>
                 <button type="button"
                   onClick={() => { setEditContent((viewTpl.content_json as Record<string, unknown>) || {}); setViewTab("edit"); }}
-                  className="inline-flex items-center gap-1 text-[12px] px-3 py-1.5 rounded-full border transition-colors"
+                  className="inline-flex items-center gap-1 text-[14px] px-3 py-1.5 rounded-full border transition-colors"
                   style={viewTab === "edit"
                     ? { background: C.primary, color: "#fff", borderColor: C.primary }
                     : { background: "#fff", color: C.mid, borderColor: C.border }}>
@@ -866,7 +866,7 @@ export default function CapabilityCenter() {
               {viewTab === "view" && (
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <div className="text-[12px] font-medium flex items-center gap-1" style={{ color: C.mid }}>
+                  <div className="text-[14px] font-medium flex items-center gap-1" style={{ color: C.mid }}>
                     <Sparkles className="w-3.5 h-3.5" style={{ color: C.accent }} />
                     内容（{viewTpl.kind === "knowledge" ? "课件知识切片" :
                           viewTpl.kind === "project" ? "项目 SOP" :
@@ -893,7 +893,7 @@ export default function CapabilityCenter() {
                     {savingEdit && <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />}保存修改
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => setViewTab("view")}>取消编辑</Button>
-                  <span className="text-[11px]" style={{ color: C.light }}>保存会生成新版本，旧内容可在「版本历史」回滚</span>
+                  <span className="text-[13px]" style={{ color: C.light }}>保存会生成新版本，旧内容可在「版本历史」回滚</span>
                 </div>
               </div>
               )}
@@ -901,14 +901,14 @@ export default function CapabilityCenter() {
               {/* 版本历史 */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <div className="text-[12px] font-medium flex items-center gap-1" style={{ color: C.mid }}>
+                  <div className="text-[14px] font-medium flex items-center gap-1" style={{ color: C.mid }}>
                     <History className="w-3.5 h-3.5" style={{ color: C.accent }} />
                     版本历史（{versions.length}）
                   </div>
                 </div>
                 <div className="rounded-md border p-2.5 max-h-[260px] overflow-auto space-y-1.5" style={{ borderColor: C.border }}>
                   {versions.length === 0 && (
-                    <div className="text-[11.5px]" style={{ color: C.light }}>暂无历史版本（至少编辑一次才会生成快照）</div>
+                    <div className="text-[13.5px]" style={{ color: C.light }}>暂无历史版本（至少编辑一次才会生成快照）</div>
                   )}
                   {versions.map((v) => {
                     const isCurrent = v.version_tag === viewTpl?.current_version;
@@ -916,15 +916,15 @@ export default function CapabilityCenter() {
                       <div key={v.version_tag} className="flex items-center justify-between gap-2 rounded-md px-2.5 py-2" style={{ border: `1px solid ${C.border}`, background: isCurrent ? "#EAF2EE" : "#FCFCFA" }}>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-[12.5px] font-semibold" style={{ color: C.ink }}>{v.version_tag}</span>
-                            {isCurrent && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: C.primary, color: "#fff" }}>当前</span>}
+                            <span className="text-[14.5px] font-semibold" style={{ color: C.ink }}>{v.version_tag}</span>
+                            {isCurrent && <span className="text-[12px] px-1.5 py-0.5 rounded-full" style={{ background: C.primary, color: "#fff" }}>当前</span>}
                           </div>
-                          <div className="text-[11px]" style={{ color: C.light }}>
+                          <div className="text-[13px]" style={{ color: C.light }}>
                             {(v.created_at || "").replace("T", " ").slice(0, 19) || "—"}
                             {v.created_by ? ` · ${v.created_by.slice(0, 8)}` : ""}
                           </div>
                         </div>
-                        <Button size="sm" variant="outline" className="h-7 text-[12px]" style={{ color: C.primary }}
+                        <Button size="sm" variant="outline" className="h-7 text-[14px]" style={{ color: C.primary }}
                           disabled={isCurrent || rollbackBusy}
                           onClick={() => doRollback(v.version_tag)}>
                           <Undo2 className="w-3.5 h-3.5 mr-1" /> 回滚
@@ -955,10 +955,10 @@ export default function CapabilityCenter() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label className="text-[12px]">审核意见</Label>
+            <Label className="text-[14px]">审核意见</Label>
             <textarea value={reviewNote} onChange={(e) => setReviewNote(e.target.value)}
               placeholder="填写采纳/驳回理由（必填）"
-              className="w-full text-[12px] rounded-lg border p-2 outline-none h-20" style={{ borderColor: C.border }} />
+              className="w-full text-[14px] rounded-lg border p-2 outline-none h-20" style={{ borderColor: C.border }} />
           </div>
           <DialogFooter className="gap-2">
             <Button size="sm" variant="outline" onClick={() => setReviewSub(null)}>取消</Button>

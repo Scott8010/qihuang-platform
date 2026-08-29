@@ -104,8 +104,8 @@ export default function App() {
               <Sprout className="w-6 h-6 text-white" />
             </div>
             <div>
-              <div className="font-bold text-[18px] tracking-wide" style={{ color: C.primary }}>岐黄智脑</div>
-              <div className="text-[12px]" style={{ color: C.light }}>运营控制台 · V1.2</div>
+              <div className="font-bold text-[20px] tracking-wide" style={{ color: C.primary }}>岐黄智脑</div>
+              <div className="text-[14px]" style={{ color: C.light }}>运营控制台 · V1.2</div>
             </div>
           </div>
           <div className="space-y-4">
@@ -113,7 +113,7 @@ export default function App() {
               value={loginUser} onChange={(e) => setLoginUser(e.target.value)}
               placeholder="管理员账号" autoFocus
               onKeyDown={(e) => e.key === "Enter" && doLogin()}
-              className="w-full px-4 py-3 rounded-lg border text-[14px] outline-none"
+              className="w-full px-4 py-3 rounded-lg border text-[16px] outline-none"
               style={{ borderColor: C.border }}
             />
             <div className="relative">
@@ -122,7 +122,7 @@ export default function App() {
                 onChange={(e) => setLoginPass(e.target.value)}
                 placeholder="密码（可选）"
                 onKeyDown={(e) => e.key === "Enter" && doLogin()}
-                className="w-full px-4 py-3 pr-11 rounded-lg border text-[14px] outline-none"
+                className="w-full px-4 py-3 pr-11 rounded-lg border text-[16px] outline-none"
                 style={{ borderColor: C.border }}
               />
               <button
@@ -134,14 +134,14 @@ export default function App() {
               </button>
             </div>
             <div className="flex justify-end -mt-1">
-              <button type="button" onClick={onForgot} className="text-[12px] hover:underline" style={{ color: C.light }}>
+              <button type="button" onClick={onForgot} className="text-[14px] hover:underline" style={{ color: C.light }}>
                 忘记密码？
               </button>
             </div>
-            {loginErr && <div className="text-[13px] text-red-600">{loginErr}</div>}
+            {loginErr && <div className="text-[15px] text-red-600">{loginErr}</div>}
             <button
               onClick={doLogin}
-              className="w-full py-3 rounded-lg text-white font-medium text-[14px]"
+              className="w-full py-3 rounded-lg text-white font-medium text-[16px]"
               style={{ background: C.primary }}
             >登录控制台</button>
           </div>
@@ -162,19 +162,19 @@ export default function App() {
             <Sprout className="w-5 h-5 text-white" />
           </div>
           <div>
-            <div className="font-bold text-[15px] tracking-wide" style={{ color: C.primary }}>岐黄智脑</div>
-            <div className="text-[11px]" style={{ color: C.light }}>运营控制台 · V1.2</div>
+            <div className="font-bold text-[17px] tracking-wide" style={{ color: C.primary }}>岐黄智脑</div>
+            <div className="text-[13px]" style={{ color: C.light }}>运营控制台 · V1.2</div>
           </div>
         </div>
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          <div className="px-3 pt-2 pb-1 text-[11px] font-medium" style={{ color: C.light }}>运营管理</div>
+          <div className="px-3 pt-2 pb-1 text-[13px] font-medium" style={{ color: C.light }}>运营管理</div>
           {nav.map((n) => {
             const active = page === n.id;
             return (
               <button
                 key={n.id}
                 onClick={() => setPage(n.id)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[14px] transition-colors"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[16px] transition-colors"
                 style={{
                   background: active ? C.soft : "transparent",
                   color: active ? C.primary : C.mid,
@@ -187,7 +187,7 @@ export default function App() {
             );
           })}
         </nav>
-        <div className="p-4 border-t text-[12px] leading-relaxed" style={{ borderColor: C.border, color: C.light }}>
+        <div className="p-4 border-t text-[14px] leading-relaxed" style={{ borderColor: C.border, color: C.light }}>
           <div className="flex items-center gap-2 mb-1">
             <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
             <span style={{ color: C.mid }}>平台运行正常</span>
@@ -201,13 +201,13 @@ export default function App() {
       {/* 主区域 */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 bg-white border-b flex items-center gap-4 px-6 shrink-0" style={{ borderColor: C.border }}>
-          <h1 className="text-[17px] font-semibold" style={{ color: C.primary }}>{current.label}</h1>
+          <h1 className="text-[19px] font-semibold" style={{ color: C.primary }}>{current.label}</h1>
           <div className="flex-1" />
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: C.light }} />
             <input
               placeholder="搜索租户 / 用户 / 密钥"
-              className="pl-9 pr-4 py-2 text-[13px] rounded-lg border outline-none w-64"
+              className="pl-9 pr-4 py-2 text-[15px] rounded-lg border outline-none w-64"
               style={{ borderColor: C.border, background: C.bg }}
             />
           </div>
@@ -219,8 +219,8 @@ export default function App() {
               className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-lg hover:bg-gray-50"
               onClick={() => setMenuOpen((v) => !v)}
             >
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[13px] font-medium" style={{ background: C.primary }}>管</div>
-              <span className="text-[13px]" style={{ color: C.mid }}>{identity?.display_name || identity?.username || "管理员"}</span>
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[15px] font-medium" style={{ background: C.primary }}>管</div>
+              <span className="text-[15px]" style={{ color: C.mid }}>{identity?.display_name || identity?.username || "管理员"}</span>
               <ChevronDown className="w-4 h-4" style={{ color: C.light }} />
             </button>
             {menuOpen && (
@@ -230,14 +230,14 @@ export default function App() {
                 onMouseLeave={() => setMenuOpen(false)}
               >
                 <button
-                  className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] text-left hover:bg-gray-50"
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-[15px] text-left hover:bg-gray-50"
                   style={{ color: C.mid }}
                   onClick={() => { setMenuOpen(false); setCpErr(""); setCpOk(""); setCpOld(""); setCpNew(""); setCpConfirm(""); setShowPwdModal(true); }}
                 >
                   <Lock className="w-4 h-4" style={{ color: C.light }} /> 修改密码
                 </button>
                 <button
-                  className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] text-left hover:bg-gray-50"
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-[15px] text-left hover:bg-gray-50"
                   style={{ color: C.mid }}
                   onClick={doLogout}
                 >
@@ -276,49 +276,49 @@ export default function App() {
           >
             <div className="flex items-center gap-2 mb-1">
               <Lock className="w-5 h-5" style={{ color: C.primary }} />
-              <div className="font-bold text-[16px]" style={{ color: C.primary }}>修改密码</div>
+              <div className="font-bold text-[18px]" style={{ color: C.primary }}>修改密码</div>
             </div>
-            <div className="text-[12px] mb-5" style={{ color: C.light }}>
+            <div className="text-[14px] mb-5" style={{ color: C.light }}>
               需验证原密码；修改成功后其他设备将重新登录
             </div>
             <div className="space-y-3">
               <input
                 type="password" placeholder="原密码" value={cpOld}
                 onChange={(e) => setCpOld(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border text-[14px] outline-none"
+                className="w-full px-4 py-3 rounded-lg border text-[16px] outline-none"
                 style={{ borderColor: C.border }}
               />
               <input
                 type={cpShowNew ? "text" : "password"} placeholder="新密码（8-64位，含大小写+数字+特殊字符）"
                 value={cpNew} onChange={(e) => setCpNew(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border text-[14px] outline-none"
+                className="w-full px-4 py-3 rounded-lg border text-[16px] outline-none"
                 style={{ borderColor: C.border }}
               />
               <input
                 type={cpShowNew ? "text" : "password"} placeholder="确认新密码"
                 value={cpConfirm} onChange={(e) => setCpConfirm(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border text-[14px] outline-none"
+                className="w-full px-4 py-3 rounded-lg border text-[16px] outline-none"
                 style={{ borderColor: C.border }}
               />
               <button
                 type="button" onClick={() => setCpShowNew((v) => !v)}
-                className="text-[12px] hover:underline -mt-1" style={{ color: C.light }}
+                className="text-[14px] hover:underline -mt-1" style={{ color: C.light }}
               >
                 {cpShowNew ? "隐藏密码" : "显示密码"}
               </button>
-              {cpErr && <div className="text-[13px] text-red-600">{cpErr}</div>}
-              {cpOk && <div className="text-[13px] text-emerald-600">{cpOk}</div>}
+              {cpErr && <div className="text-[15px] text-red-600">{cpErr}</div>}
+              {cpOk && <div className="text-[15px] text-emerald-600">{cpOk}</div>}
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={submitChangePwd} disabled={cpBusy}
-                  className="flex-1 py-2.5 rounded-lg text-white text-[14px] font-medium disabled:opacity-60"
+                  className="flex-1 py-2.5 rounded-lg text-white text-[16px] font-medium disabled:opacity-60"
                   style={{ background: C.primary }}
                 >
                   {cpBusy ? "提交中..." : "确认修改"}
                 </button>
                 <button
                   onClick={() => { setShowPwdModal(false); setMenuOpen(false); }}
-                  className="flex-1 py-2.5 rounded-lg border text-[14px]"
+                  className="flex-1 py-2.5 rounded-lg border text-[16px]"
                   style={{ borderColor: C.border, color: C.mid }}
                 >取消</button>
               </div>

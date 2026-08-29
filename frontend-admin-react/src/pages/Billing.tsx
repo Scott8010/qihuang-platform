@@ -79,11 +79,11 @@ export default function Billing() {
         {kpiCards.map((k) => (
           <Card key={k.label} className="border shadow-none" style={{ borderColor: C.border }}>
             <CardContent className="p-4">
-              <div className="text-[12px] mb-1" style={{ color: C.light }}>{k.label}</div>
-              <div className="text-[22px] font-bold" style={{ color: C.ink }}>
-                {loading ? <span className="text-[14px]" style={{ color: C.light }}>加载中…</span> : k.value}
+              <div className="text-[14px] mb-1" style={{ color: C.light }}>{k.label}</div>
+              <div className="text-[24px] font-bold" style={{ color: C.ink }}>
+                {loading ? <span className="text-[16px]" style={{ color: C.light }}>加载中…</span> : k.value}
               </div>
-              <div className="text-[11px] mt-1" style={{ color: C.mid }}>{k.sub}</div>
+              <div className="text-[13px] mt-1" style={{ color: C.mid }}>{k.sub}</div>
             </CardContent>
           </Card>
         ))}
@@ -96,11 +96,11 @@ export default function Billing() {
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <BarChart3 className="w-4 h-4" style={{ color: C.primary }} />
-              <span className="text-[14px] font-medium" style={{ color: C.ink }}>租户订阅</span>
+              <span className="text-[16px] font-medium" style={{ color: C.ink }}>租户订阅</span>
             </div>
-            <table className="w-full text-[13px]">
+            <table className="w-full text-[15px]">
               <thead>
-                <tr className="text-left text-[11px]" style={{ color: C.light }}>
+                <tr className="text-left text-[13px]" style={{ color: C.light }}>
                   <th className="pb-2 font-normal">租户</th>
                   <th className="pb-2 font-normal">状态</th>
                   <th className="pb-2 font-normal">生效期</th>
@@ -110,35 +110,35 @@ export default function Billing() {
               <tbody>
                 {subs.map((s) => (
                   <tr key={s.id} className="border-t" style={{ borderColor: C.border }}>
-                    <td className="py-2.5 font-mono text-[11.5px]" style={{ color: C.ink }}>
+                    <td className="py-2.5 font-mono text-[13.5px]" style={{ color: C.ink }}>
                       {s.tenantId.slice(0, 8)}…
                     </td>
                     <td className="py-2.5">
-                      <span className="text-[11px] px-2 py-0.5 rounded" style={{
+                      <span className="text-[13px] px-2 py-0.5 rounded" style={{
                         color: s.status === "active" ? "#2E5A4C" : "#8A6A1F",
                         background: s.status === "active" ? "#EAF2EE" : "#FBF4E4",
                       }}>
                         {s.status === "active" ? "生效中" : s.status}
                       </span>
                     </td>
-                    <td className="py-2.5 text-[12px]" style={{ color: C.mid }}>
+                    <td className="py-2.5 text-[14px]" style={{ color: C.mid }}>
                       {fmtDate(s.startDate)} ~ {fmtDate(s.endDate)}
                     </td>
-                    <td className="py-2.5 text-right text-[12px]" style={{ color: s.autoRenew ? C.primary : C.light }}>
+                    <td className="py-2.5 text-right text-[14px]" style={{ color: s.autoRenew ? C.primary : C.light }}>
                       {s.autoRenew ? "是" : "否"}
                     </td>
                   </tr>
                 ))}
                 {subs.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-10 text-center text-[12px]" style={{ color: C.light }}>
+                    <td colSpan={4} className="py-10 text-center text-[14px]" style={{ color: C.light }}>
                       {loading ? "加载中…" : "暂无订阅记录"}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
-            <div className="mt-3 p-2.5 rounded text-[11px] leading-relaxed" style={{ background: "#EAF2EE", color: C.mid }}>
+            <div className="mt-3 p-2.5 rounded text-[13px] leading-relaxed" style={{ background: "#EAF2EE", color: C.mid }}>
               计量埋点在 API 网关完成，按「调用次数 + Token + 增值模块加载」三维度入账；岐黄三境 3D 模块单独计量，未开通租户不产生费用。
             </div>
           </CardContent>
@@ -147,8 +147,8 @@ export default function Billing() {
         {/* 套餐体系 */}
         <Card className="border shadow-none" style={{ borderColor: C.border }}>
           <CardContent className="p-4">
-            <div className="text-[14px] font-medium mb-3" style={{ color: C.ink }}>
-              套餐体系 <span className="text-[12px] font-normal" style={{ color: C.light }}>（features_json 开关下发）</span>
+            <div className="text-[16px] font-medium mb-3" style={{ color: C.ink }}>
+              套餐体系 <span className="text-[14px] font-normal" style={{ color: C.light }}>（features_json 开关下发）</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
               {plans.map((p) => {
@@ -163,13 +163,13 @@ export default function Billing() {
                     }}
                   >
                     {isMain && (
-                      <span className="absolute -top-2 left-3 text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#C8A45D", color: "#fff" }}>
+                      <span className="absolute -top-2 left-3 text-[12px] px-1.5 py-0.5 rounded" style={{ background: "#C8A45D", color: "#fff" }}>
                         主力套餐
                       </span>
                     )}
-                    <div className="text-[14px] font-semibold" style={{ color: C.primary }}>{p.name}</div>
-                    <div className="text-[11px] mt-0.5 font-mono" style={{ color: C.light }}>{p.planName}</div>
-                    <div className="mt-2.5 space-y-1 text-[11.5px]">
+                    <div className="text-[16px] font-semibold" style={{ color: C.primary }}>{p.name}</div>
+                    <div className="text-[13px] mt-0.5 font-mono" style={{ color: C.light }}>{p.planName}</div>
+                    <div className="mt-2.5 space-y-1 text-[13.5px]">
                       {planFeatureLabels.map((f) => {
                         const on = p.features[f.key];
                         return (
@@ -188,12 +188,12 @@ export default function Billing() {
                 );
               })}
               {plans.length === 0 && (
-                <div className="col-span-2 py-10 text-center text-[12px]" style={{ color: C.light }}>
+                <div className="col-span-2 py-10 text-center text-[14px]" style={{ color: C.light }}>
                   {loading ? "加载中…" : "暂无套餐配置"}
                 </div>
               )}
             </div>
-            <div className="mt-3 text-[11px] leading-relaxed" style={{ color: C.light }}>
+            <div className="mt-3 text-[13px] leading-relaxed" style={{ color: C.light }}>
               套餐与 module_3d 开关写入租户 features_json，网关鉴权时随 Token / 签名响应下发，前端按开关渲染入口。价格与 QPS 由商务合同约定，不在此配置。
             </div>
           </CardContent>
@@ -204,24 +204,24 @@ export default function Billing() {
       <Card className="border shadow-none" style={{ borderColor: C.border }}>
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[14px] font-medium" style={{ color: C.ink }}>分场景计量</span>
-            <span className="text-[11px]" style={{ color: C.light }}>
+            <span className="text-[16px] font-medium" style={{ color: C.ink }}>分场景计量</span>
+            <span className="text-[13px]" style={{ color: C.light }}>
               来源 /billing/scene-usage · 网关按 scene_key 埋点
             </span>
           </div>
 
           {loading ? (
-            <div className="py-8 text-center text-[12px]" style={{ color: C.light }}>
+            <div className="py-8 text-center text-[14px]" style={{ color: C.light }}>
               <Loader2 className="w-4 h-4 mx-auto mb-2 animate-spin" /> 加载中…
             </div>
           ) : scenes.length === 0 ? (
-            <div className="py-8 text-center text-[12px]" style={{ color: C.light }}>
+            <div className="py-8 text-center text-[14px]" style={{ color: C.light }}>
               暂无分场景计量数据（网关尚未产生该周期的场景埋点）
             </div>
           ) : (
-            <table className="w-full text-[13px]">
+            <table className="w-full text-[15px]">
               <thead>
-                <tr className="text-left text-[11px]" style={{ color: C.light }}>
+                <tr className="text-left text-[13px]" style={{ color: C.light }}>
                   {["场景", "调用量", "占比", "Token", "成本"].map((h) => (
                     <th key={h} className="pb-2 font-normal">{h}</th>
                   ))}
@@ -240,7 +240,7 @@ export default function Billing() {
                     <tr key={s.scene} className="border-t" style={{ borderColor: C.border }}>
                       <td className="py-2.5">
                         <span
-                          className="px-2 py-0.5 rounded text-[11px]"
+                          className="px-2 py-0.5 rounded text-[13px]"
                           style={{ background: m.bg, color: m.color }}
                         >
                           {m.label}
@@ -255,7 +255,7 @@ export default function Billing() {
                               style={{ width: `${pct}%`, background: m.color }}
                             />
                           </div>
-                          <span className="text-[11px]" style={{ color: C.light }}>{pct}%</span>
+                          <span className="text-[13px]" style={{ color: C.light }}>{pct}%</span>
                         </div>
                       </td>
                       <td style={{ color: C.mid }}>{wan(s.tokens)}</td>
@@ -273,14 +273,14 @@ export default function Billing() {
       <Card className="border shadow-none" style={{ borderColor: C.border }}>
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[14px] font-medium" style={{ color: C.ink }}>账单管理</span>
+            <span className="text-[16px] font-medium" style={{ color: C.ink }}>账单管理</span>
             <Button variant="outline" size="sm" style={{ borderColor: C.border, color: C.primary }} onClick={exportBillsCsv}>
               <Download className="w-3.5 h-3.5 mr-1" /> 导出对账单
             </Button>
           </div>
-          <table className="w-full text-[13px]">
+          <table className="w-full text-[15px]">
             <thead>
-              <tr className="text-left text-[11px]" style={{ color: C.light }}>
+              <tr className="text-left text-[13px]" style={{ color: C.light }}>
                 {["账单号", "套餐 / 租户", "账期", "调用量", "Token", "金额", "状态"].map((h) => (
                   <th key={h} className="pb-2 font-normal">{h}</th>
                 ))}
@@ -291,14 +291,14 @@ export default function Billing() {
                 const st = billStatus[(b.status || "").toUpperCase()];
                 return (
                   <tr key={b.id} className="border-t hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
-                    <td className="py-2.5 font-mono text-[12px]" style={{ color: C.mid }}>{String(b.id).slice(0, 12)}</td>
+                    <td className="py-2.5 font-mono text-[14px]" style={{ color: C.mid }}>{String(b.id).slice(0, 12)}</td>
                     <td className="py-2.5" style={{ color: C.ink }}>{b.tenant || "—"}</td>
                     <td className="py-2.5" style={{ color: C.mid }}>{b.period}</td>
                     <td className="py-2.5" style={{ color: C.mid }}>{wan(Number(b.calls))}</td>
                     <td className="py-2.5" style={{ color: C.mid }}>{wan(Number(b.tokens))}</td>
                     <td className="py-2.5 font-medium" style={{ color: C.ink }}>¥{b.amount.toLocaleString()}</td>
                     <td className="py-2.5">
-                      <span className={`text-[11px] px-2 py-0.5 rounded border ${st?.cls || "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                      <span className={`text-[13px] px-2 py-0.5 rounded border ${st?.cls || "bg-gray-100 text-gray-600 border-gray-200"}`}>
                         {st?.label || b.status}
                       </span>
                     </td>

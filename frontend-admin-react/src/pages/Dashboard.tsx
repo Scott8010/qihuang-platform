@@ -95,7 +95,7 @@ export default function Dashboard({ go }: { go: (p: string) => void }) {
   return (
     <div className="space-y-5">
       {loading && (
-        <div className="flex items-center gap-2 text-[13px]" style={{ color: C.light }}>
+        <div className="flex items-center gap-2 text-[15px]" style={{ color: C.light }}>
           <Loader2 className="w-4 h-4 animate-spin" /> 正在加载真实业务数据…
         </div>
       )}
@@ -107,14 +107,14 @@ export default function Dashboard({ go }: { go: (p: string) => void }) {
             <CardContent className="p-5">
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="text-[13px]" style={{ color: C.light }}>{k.label}</div>
-                  <div className="text-[26px] font-bold mt-1 tracking-tight" style={{ color: C.primary }}>{k.value}</div>
+                  <div className="text-[15px]" style={{ color: C.light }}>{k.label}</div>
+                  <div className="text-[28px] font-bold mt-1 tracking-tight" style={{ color: C.primary }}>{k.value}</div>
                 </div>
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: C.soft }}>
                   <k.icon className="w-5 h-5" style={{ color: C.primary }} />
                 </div>
               </div>
-              <div className="mt-2 flex items-center justify-between text-[12px]">
+              <div className="mt-2 flex items-center justify-between text-[14px]">
                 <span style={{ color: C.mid }}>{k.sub}</span>
                 {k.delta && <span style={{ color: C.accent }}>{k.delta}</span>}
               </div>
@@ -128,15 +128,15 @@ export default function Dashboard({ go }: { go: (p: string) => void }) {
         <Card className="col-span-2 border" style={{ borderColor: C.border }}>
           <CardHeader className="pb-0">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-[15px]" style={{ color: C.primary }}>近 30 天 API 调用趋势（分场景）</CardTitle>
-              <Button variant="outline" size="sm" onClick={() => go("billing")} className="text-[12px]">
+              <CardTitle className="text-[17px]" style={{ color: C.primary }}>近 30 天 API 调用趋势（分场景）</CardTitle>
+              <Button variant="outline" size="sm" onClick={() => go("billing")} className="text-[14px]">
                 计量详情 <ArrowRight className="w-3.5 h-3.5 ml-1" />
               </Button>
             </div>
           </CardHeader>
           <CardContent className="h-[280px] pt-4">
             {callTrend.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-[13px]" style={{ color: C.light }}>暂无调用数据</div>
+              <div className="h-full flex items-center justify-center text-[15px]" style={{ color: C.light }}>暂无调用数据</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={callTrend} margin={{ top: 5, right: 10, left: -18, bottom: 0 }}>
@@ -156,11 +156,11 @@ export default function Dashboard({ go }: { go: (p: string) => void }) {
         {/* 场景分布 + 增值模块 */}
         <Card className="border" style={{ borderColor: C.border }}>
           <CardHeader className="pb-0">
-            <CardTitle className="text-[15px]" style={{ color: C.primary }}>租户场景分布</CardTitle>
+            <CardTitle className="text-[17px]" style={{ color: C.primary }}>租户场景分布</CardTitle>
           </CardHeader>
           <CardContent className="h-[190px]">
             {sceneDist.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-[13px]" style={{ color: C.light }}>暂无租户分布数据</div>
+              <div className="h-full flex items-center justify-center text-[15px]" style={{ color: C.light }}>暂无租户分布数据</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -175,10 +175,10 @@ export default function Dashboard({ go }: { go: (p: string) => void }) {
           </CardContent>
           <div className="mx-5 mb-5 rounded-xl p-3.5" style={{ background: "#FBF4E4" }}>
             <div className="flex items-center justify-between">
-              <div className="text-[13px] font-medium" style={{ color: C.gold }}>岐黄三境 · 3D 增值模块</div>
-              <Badge variant="outline" className="text-[11px] border-amber-300" style={{ color: C.gold }}>加购项</Badge>
+              <div className="text-[15px] font-medium" style={{ color: C.gold }}>岐黄三境 · 3D 增值模块</div>
+              <Badge variant="outline" className="text-[13px] border-amber-300" style={{ color: C.gold }}>加购项</Badge>
             </div>
-            <div className="text-[12px] mt-1" style={{ color: C.mid }}>按真实 module_3d 开关统计</div>
+            <div className="text-[14px] mt-1" style={{ color: C.mid }}>按真实 module_3d 开关统计</div>
           </div>
         </Card>
       </div>
@@ -187,19 +187,19 @@ export default function Dashboard({ go }: { go: (p: string) => void }) {
         {/* 告警 */}
         <Card className="col-span-2 border" style={{ borderColor: C.border }}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-[15px]" style={{ color: C.primary }}>运行告警与预警</CardTitle>
+            <CardTitle className="text-[17px]" style={{ color: C.primary }}>运行告警与预警</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2.5">
             {alerts.length === 0 ? (
-              <div className="text-[13px]" style={{ color: C.light }}>暂无告警</div>
+              <div className="text-[15px]" style={{ color: C.light }}>暂无告警</div>
             ) : (
               alerts.map((a, i) => {
                 const Icon = levelIcon[a.level as keyof typeof levelIcon];
                 return (
                   <div key={i} className="flex items-start gap-3 rounded-lg px-3 py-2.5" style={{ background: C.bg }}>
                     <Icon className="w-4 h-4 mt-0.5 shrink-0" style={{ color: levelColor[a.level as keyof typeof levelColor] }} />
-                    <span className="text-[13px] flex-1" style={{ color: C.ink }}>{a.text}</span>
-                    <span className="text-[11px] shrink-0" style={{ color: C.light }}>{a.time}</span>
+                    <span className="text-[15px] flex-1" style={{ color: C.ink }}>{a.text}</span>
+                    <span className="text-[13px] shrink-0" style={{ color: C.light }}>{a.time}</span>
                   </div>
                 );
               })

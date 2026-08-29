@@ -38,14 +38,14 @@ const asObjArr = (v: unknown): Record<string, unknown>[] =>
 
 function FieldLabel({ text, hint }: { text: string; hint?: string }) {
   return (
-    <div className="text-[11.5px] font-medium mb-1 flex items-center gap-1.5" style={{ color: C.mid }}>
+    <div className="text-[13.5px] font-medium mb-1 flex items-center gap-1.5" style={{ color: C.mid }}>
       {text}
-      {hint && <span className="text-[10px] font-normal" style={{ color: C.light }}>{hint}</span>}
+      {hint && <span className="text-[12px] font-normal" style={{ color: C.light }}>{hint}</span>}
     </div>
   );
 }
 
-const inputCls = "w-full text-[12.5px] rounded-md border px-2.5 py-1.5 outline-none focus:border-[#2E5A4C] transition-colors bg-white";
+const inputCls = "w-full text-[14.5px] rounded-md border px-2.5 py-1.5 outline-none focus:border-[#2E5A4C] transition-colors bg-white";
 const inputStyle = { borderColor: C.border, color: C.ink } as const;
 
 /** 字符串列表编辑器（tips / ingredients / cautions / sales_points / aftercare…） */
@@ -72,7 +72,7 @@ function StrListEditor({
       <FieldLabel text={label} hint={hint} />
       <div className="flex flex-wrap gap-1 mb-1.5">
         {items.map((s, i) => (
-          <span key={`${s}-${i}`} className="inline-flex items-center gap-1 text-[11.5px] pl-2 pr-1 py-0.5 rounded-full"
+          <span key={`${s}-${i}`} className="inline-flex items-center gap-1 text-[13.5px] pl-2 pr-1 py-0.5 rounded-full"
             style={{ background: toneStyle.bg, color: toneStyle.color }}>
             {s}
             <button type="button" className="w-4 h-4 rounded-full flex items-center justify-center hover:bg-black/10"
@@ -81,7 +81,7 @@ function StrListEditor({
             </button>
           </span>
         ))}
-        {items.length === 0 && <span className="text-[11px]" style={{ color: C.light }}>（暂无，在下方输入后添加）</span>}
+        {items.length === 0 && <span className="text-[13px]" style={{ color: C.light }}>（暂无，在下方输入后添加）</span>}
       </div>
       <div className="flex gap-1.5">
         <input value={draft} onChange={(e) => setDraft(e.target.value)}
@@ -89,7 +89,7 @@ function StrListEditor({
           placeholder={`输入一条${label.replace(/（.*）/, "")}，回车添加`}
           className={inputCls} style={inputStyle} />
         <button type="button" onClick={add}
-          className="shrink-0 inline-flex items-center gap-1 text-[11.5px] px-2.5 rounded-md border transition-colors hover:opacity-80"
+          className="shrink-0 inline-flex items-center gap-1 text-[13.5px] px-2.5 rounded-md border transition-colors hover:opacity-80"
           style={{ borderColor: C.border, color: C.primary, background: C.soft }}>
           <Plus className="w-3 h-3" />添加
         </button>
@@ -121,7 +121,7 @@ function StepListEditor({
         {items.map((s, i) => (
           <div key={i} className="rounded-md border p-2 space-y-1.5" style={{ borderColor: C.border, background: "#FCFCFA" }}>
             <div className="flex items-center gap-2">
-              <span className="shrink-0 w-5 h-5 rounded-full text-[10.5px] font-bold flex items-center justify-center"
+              <span className="shrink-0 w-5 h-5 rounded-full text-[12.5px] font-bold flex items-center justify-center"
                 style={{ background: C.primary, color: "#fff" }}>{i + 1}</span>
               <input value={asStr(s.name)} onChange={(e) => patch(i, { name: e.target.value, step: i + 1 })}
                 placeholder={stepNameLabel} className={inputCls} style={inputStyle} />
@@ -146,7 +146,7 @@ function StepListEditor({
           </div>
         ))}
         <button type="button" onClick={() => onChange([...items, { step: items.length + 1, name: "", script: "" }])}
-          className="w-full inline-flex items-center justify-center gap-1 text-[12px] py-1.5 rounded-md border border-dashed transition-colors hover:bg-[#F8FAF9]"
+          className="w-full inline-flex items-center justify-center gap-1 text-[14px] py-1.5 rounded-md border border-dashed transition-colors hover:bg-[#F8FAF9]"
           style={{ borderColor: C.border, color: C.primary }}>
           <Plus className="w-3.5 h-3.5" />添加一步
         </button>
@@ -176,7 +176,7 @@ function ScriptEditor({ value, onChange }: { value: Record<string, unknown>; onC
           {SCRIPT_SCENES.map((s) => (
             <button key={s.value} type="button"
               onClick={() => onChange({ ...value, scene: s.value })}
-              className="text-[11.5px] px-2.5 py-1 rounded-full border transition-colors"
+              className="text-[13.5px] px-2.5 py-1 rounded-full border transition-colors"
               style={scene === s.value
                 ? { background: C.primary, color: "#fff", borderColor: C.primary }
                 : { background: "#fff", color: C.mid, borderColor: C.border }}>
@@ -207,12 +207,12 @@ function KnowledgeEditor({ value, onChange }: { value: Record<string, unknown>; 
         <FieldLabel text="课件形式" hint="按内容类型二选一" />
         <div className="flex gap-1.5">
           <button type="button" onClick={() => switchMode("sections")}
-            className="inline-flex items-center gap-1 text-[11.5px] px-2.5 py-1 rounded-full border transition-colors"
+            className="inline-flex items-center gap-1 text-[13.5px] px-2.5 py-1 rounded-full border transition-colors"
             style={mode === "sections" ? { background: C.primary, color: "#fff", borderColor: C.primary } : { background: "#fff", color: C.mid, borderColor: C.border }}>
             <FileText className="w-3 h-3" />章节课件（讲义式）
           </button>
           <button type="button" onClick={() => switchMode("points")}
-            className="inline-flex items-center gap-1 text-[11.5px] px-2.5 py-1 rounded-full border transition-colors"
+            className="inline-flex items-center gap-1 text-[13.5px] px-2.5 py-1 rounded-full border transition-colors"
             style={mode === "points" ? { background: C.primary, color: "#fff", borderColor: C.primary } : { background: "#fff", color: C.mid, borderColor: C.border }}>
             <MapPin className="w-3 h-3" />穴位课件（一穴一卡）
           </button>
@@ -245,7 +245,7 @@ function SectionsEditor({ value, onChange }: { value: Record<string, unknown>; o
           {items.map((s, i) => (
             <div key={i} className="rounded-md border p-2 space-y-1.5" style={{ borderColor: C.border, background: "#FCFCFA" }}>
               <div className="flex items-center gap-2">
-                <span className="shrink-0 w-5 h-5 rounded-full text-[10.5px] font-bold flex items-center justify-center"
+                <span className="shrink-0 w-5 h-5 rounded-full text-[12.5px] font-bold flex items-center justify-center"
                   style={{ background: C.primary, color: "#fff" }}>{i + 1}</span>
                 <input value={asStr(s.title)} onChange={(e) => patch(i, { title: e.target.value })}
                   placeholder="小标题，如：艾灸适用情况" className={inputCls} style={inputStyle} />
@@ -260,7 +260,7 @@ function SectionsEditor({ value, onChange }: { value: Record<string, unknown>; o
             </div>
           ))}
           <button type="button" onClick={() => onChange({ ...value, content: [...items, { title: "", body: "" }] })}
-            className="w-full inline-flex items-center justify-center gap-1 text-[12px] py-1.5 rounded-md border border-dashed transition-colors hover:bg-[#F8FAF9]"
+            className="w-full inline-flex items-center justify-center gap-1 text-[14px] py-1.5 rounded-md border border-dashed transition-colors hover:bg-[#F8FAF9]"
             style={{ borderColor: C.border, color: C.primary }}>
             <Plus className="w-3.5 h-3.5" />添加一节
           </button>
@@ -312,7 +312,7 @@ function PointsEditor({ value, onChange }: { value: Record<string, unknown>; onC
             </div>
           ))}
           <button type="button" onClick={() => onChange({ ...value, points: [...points, { name: "", meridian: "", location: "", effect: "", moxa_method: "", cautions: [], talk_script: "" }] })}
-            className="w-full inline-flex items-center justify-center gap-1 text-[12px] py-1.5 rounded-md border border-dashed transition-colors hover:bg-[#F8FAF9]"
+            className="w-full inline-flex items-center justify-center gap-1 text-[14px] py-1.5 rounded-md border border-dashed transition-colors hover:bg-[#F8FAF9]"
             style={{ borderColor: C.border, color: C.primary }}>
             <Plus className="w-3.5 h-3.5" />添加一个穴位
           </button>
@@ -421,14 +421,14 @@ function QuestionnaireEditor({ value, onChange }: { value: Record<string, unknow
         <div className="space-y-1.5">
           {fields.map((f, i) => (
             <div key={i} className="flex items-center gap-2 rounded-md border px-2 py-1.5" style={{ borderColor: C.border, background: "#FCFCFA" }}>
-              <span className="shrink-0 text-[10.5px] font-mono w-5 text-center" style={{ color: C.light }}>Q{i + 1}</span>
+              <span className="shrink-0 text-[12.5px] font-mono w-5 text-center" style={{ color: C.light }}>Q{i + 1}</span>
               <input value={asStr(f.label)} onChange={(e) => patchField(i, { label: e.target.value })}
                 placeholder="问题，如：您平时睡眠如何？" className={`${inputCls} flex-1`} style={inputStyle} />
               <select value={asStr(f.type, "text")} onChange={(e) => patchField(i, { type: e.target.value })}
-                className="text-[11.5px] rounded-md border px-1.5 py-1 outline-none bg-white shrink-0" style={{ borderColor: C.border, color: C.mid }}>
+                className="text-[13.5px] rounded-md border px-1.5 py-1 outline-none bg-white shrink-0" style={{ borderColor: C.border, color: C.mid }}>
                 {FIELD_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
-              <label className="shrink-0 inline-flex items-center gap-1 text-[11px] cursor-pointer" style={{ color: C.mid }}>
+              <label className="shrink-0 inline-flex items-center gap-1 text-[13px] cursor-pointer" style={{ color: C.mid }}>
                 <input type="checkbox" checked={!!f.required} onChange={(e) => patchField(i, { required: e.target.checked })} />
                 必填
               </label>
@@ -439,7 +439,7 @@ function QuestionnaireEditor({ value, onChange }: { value: Record<string, unknow
             </div>
           ))}
           <button type="button" onClick={() => setSchema({ fields: [...fields, { label: "", type: "text", required: false }] })}
-            className="w-full inline-flex items-center justify-center gap-1 text-[12px] py-1.5 rounded-md border border-dashed transition-colors hover:bg-[#F8FAF9]"
+            className="w-full inline-flex items-center justify-center gap-1 text-[14px] py-1.5 rounded-md border border-dashed transition-colors hover:bg-[#F8FAF9]"
             style={{ borderColor: C.border, color: C.primary }}>
             <Plus className="w-3.5 h-3.5" />添加一个问题
           </button>
@@ -465,18 +465,18 @@ function JsonFallbackEditor({ value, onChange }: { value: Record<string, unknown
   };
   return (
     <div className="space-y-2">
-      <div className="text-[11px] rounded-md px-2.5 py-1.5" style={{ background: "#FBF4E4", color: "#8A6A1F" }}>
+      <div className="text-[13px] rounded-md px-2.5 py-1.5" style={{ background: "#FBF4E4", color: "#8A6A1F" }}>
         此类型暂无表单编辑器，可先在左上角切换类型，或直接编辑 JSON（改完点「应用」）。
       </div>
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={10}
-        className="w-full text-[12px] font-mono rounded-md border p-2 outline-none resize-y"
+        className="w-full text-[14px] font-mono rounded-md border p-2 outline-none resize-y"
         style={{ borderColor: err ? "#B03A2E" : C.border, background: "#FCFCFA" }} />
       <div className="flex items-center gap-2">
         <button type="button" onClick={apply}
-          className="text-[11.5px] px-2.5 py-1 rounded-md" style={{ background: C.primary, color: "#fff" }}>
+          className="text-[13.5px] px-2.5 py-1 rounded-md" style={{ background: C.primary, color: "#fff" }}>
           应用 JSON
         </button>
-        {err && <span className="text-[11px]" style={{ color: "#B03A2E" }}>⚠ {err}</span>}
+        {err && <span className="text-[13px]" style={{ color: "#B03A2E" }}>⚠ {err}</span>}
       </div>
     </div>
   );
@@ -542,18 +542,18 @@ export function TextImporter({
     <div className="rounded-md border border-dashed p-2.5" style={{ borderColor: C.border, background: "#F8FAF9" }}>
       <div className="flex items-center gap-2 flex-wrap">
         <Upload className="w-3.5 h-3.5" style={{ color: C.accent }} />
-        <span className="text-[11.5px]" style={{ color: C.mid }}>
+        <span className="text-[13.5px]" style={{ color: C.mid }}>
           <b>从现成文档导入</b>：支持 .txt / .md / .docx（Word 文档），导入后可直接修改
         </span>
         <input ref={inputRef} type="file" accept=".txt,.md,.docx" className="hidden"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
         <button type="button" disabled={busy} onClick={() => inputRef.current?.click()}
-          className="ml-auto text-[11.5px] px-2.5 py-1 rounded-md inline-flex items-center gap-1 disabled:opacity-50"
+          className="ml-auto text-[13.5px] px-2.5 py-1 rounded-md inline-flex items-center gap-1 disabled:opacity-50"
           style={{ background: C.soft, color: C.primary }}>
           {busy ? "解析中…" : "选择文件"}
         </button>
       </div>
-      {note && <div className="text-[11px] mt-1.5" style={{ color: C.primary }}>{note}</div>}
+      {note && <div className="text-[13px] mt-1.5" style={{ color: C.primary }}>{note}</div>}
     </div>
   );
 }
