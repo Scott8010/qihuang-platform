@@ -44,12 +44,13 @@ def _patch_engine(monkeypatch, compliance_state="已通过"):
     import importlib
     sc_router_mod = importlib.import_module("qihuang_platform.agent.store_coach.router")
 
-    mock_customer = AsyncMock(return_value=("阿姨，您是想了解哪方面的调理呢？", "deepseek"))
+    mock_customer = AsyncMock(return_value=("阿姨，您是想了解哪方面的调理呢？", "deepseek", 30))
     monkeypatch.setattr(sc_router_mod, "customer_reply", mock_customer)
     mock_eval = AsyncMock(return_value=(
         '{"evaluation":{"completeness":80,"professional":85,"affinity":75,"compliance":90},'
         '"score":82.5,"feedback":"开场不错，建议多问一句睡眠情况。","summary":"整体合格"}',
         "deepseek",
+        40,
     ))
     monkeypatch.setattr(sc_router_mod, "evaluate", mock_eval)
 
@@ -199,6 +200,7 @@ def test_evaluate_not_qualified_low_score(sc_client, monkeypatch):
         '{"evaluation":{"completeness":40,"professional":45,"affinity":50,"compliance":60},'
         '"score":47.5,"feedback":"知识点薄弱","summary":"需加强"}',
         "deepseek",
+        40,
     ))
     monkeypatch.setattr(sc_router_mod, "evaluate", mock_eval)
     sid = _create_session(sc_client)

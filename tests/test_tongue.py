@@ -49,7 +49,7 @@ def test_tongue_registered_and_active():
 
 # ════════════════ engine fail-closed ════════════════
 def test_tongue_pending_when_no_image():
-    data = engine.analyze_tongue("")
+    data, _ = engine.analyze_tongue("")
     assert data["mode"] == "image_pending"
     assert data["provided"] is False
     assert data["tongue"] is None
@@ -59,7 +59,7 @@ def test_tongue_pending_when_no_image():
 def test_tongue_pending_when_no_vision_env(monkeypatch):
     for k in ("GEO_VISION_API_BASE", "GEO_VISION_API_KEY", "GEO_VISION_MODEL"):
         monkeypatch.delenv(k, raising=False)
-    data = engine.analyze_tongue("data:image/jpeg;base64,AAAA")
+    data, _ = engine.analyze_tongue("data:image/jpeg;base64,AAAA")
     assert data["mode"] == "image_pending"          # fail-closed：不造假
     assert data["provided"] is True
     assert data["tongue"] is None
@@ -75,10 +75,10 @@ def test_tongue_vision_success_normalize(monkeypatch):
     def fake_vision(base, key, model, image_ref, prompt):
         assert image_ref.startswith("data:")
         assert "tongue_body" in prompt and "petechiae" in prompt
-        return _SAMPLE_TONGUE_JSON
+        return _SAMPLE_TONGUE_JSON, 50
 
     monkeypatch.setattr(engine, "vision_chat_json", fake_vision)
-    data = engine.analyze_tongue("data:image/jpeg;base64,AAAA")
+    data, _ = engine.analyze_tongue("data:image/jpeg;base64,AAAA")
     assert data["mode"] == "vision"
     assert data["engine"] == "qwen-vl-plus"
     assert data["vision_model"] == "qwen-vl-plus"
@@ -112,11 +112,11 @@ def test_tongue_vision_with_face_image(monkeypatch):
 
     def fake_vision(base, key, model, image_ref, prompt):
         if "舌象" in prompt:
-            return _SAMPLE_TONGUE_JSON
-        return json.dumps({"complexion": "萎黄", "lustre": "少泽", "note": ""}, ensure_ascii=False)
+            return _SAMPLE_TONGUE_JSON, 50
+        return (json.dumps({"complexion": "萎黄", "lustre": "少泽", "note": ""}, ensure_ascii=False), 20)
 
     monkeypatch.setattr(engine, "vision_chat_json", fake_vision)
-    data = engine.analyze_tongue(
+    data, _ = engine.analyze_tongue(
         "data:image/jpeg;base64,AAAA", face_image="data:image/jpeg;base64,BBBB"
     )
     assert data["mode"] == "vision"
@@ -132,7 +132,7 @@ def test_tongue_vision_error_fallback(monkeypatch):
         raise RuntimeError("timeout")
 
     monkeypatch.setattr(engine, "vision_chat_json", boom)
-    data = engine.analyze_tongue("data:image/jpeg;base64,AAAA")
+    data, _ = engine.analyze_tongue("data:image/jpeg;base64,AAAA")
     assert data["mode"] == "image_error"
     assert data["tongue"] is None
     assert "解析失败" in data["note"]
@@ -144,16 +144,16 @@ def test_tongue_enum_alias_normalize(monkeypatch):
     monkeypatch.setenv("GEO_VISION_API_KEY", "sk-test")
 
     def fake_vision(base, key, model, image_ref, prompt):
-        return json.dumps({
+        return (json.dumps({
             "tongue_body": {"color": "淡红", "shape": "正常", "petechiae": "无瘀斑",
                             "texture": "无老嫩", "deviation": "无歪斜"},
             "coating": {"color": "白苔", "thickness": "厚苔", "quality": "有腻苔",
                         "corrosion": "无腐苔", "peeling": "无剥脱"},
             "labels": [], "syndrome_hints": [],
-        }, ensure_ascii=False)
+        }, ensure_ascii=False), 50)
 
     monkeypatch.setattr(engine, "vision_chat_json", fake_vision)
-    data = engine.analyze_tongue("data:image/jpeg;base64,AAAA")
+    data, _ = engine.analyze_tongue("data:image/jpeg;base64,AAAA")
     t = data["tongue"]
     assert t["coating"]["color"] == "白"
     assert t["coating"]["thickness"] == "厚"
@@ -268,9 +268,9 @@ def test_tongue_route_200_with_authorized(monkeypatch):
     app.dependency_overrides[require_agent_in_plan("tongue")] = lambda: {"sub": "u-test"}
 
     def fake_analyze(image_ref, face_image=None, profile=None):
-        return {"engine": "qwen-vl-plus", "mode": "vision",
-                "tongue": {"tongue_body": {"color": "淡红"}, "coating": {}},
-                "face": None, "combined_syndrome": []}
+        return ({"engine": "qwen-vl-plus", "mode": "vision",
+                 "tongue": {"tongue_body": {"color": "淡红"}, "coating": {}},
+                 "face": None, "combined_syndrome": []}, 0)
 
     monkeypatch.setattr(engine, "analyze_tongue", fake_analyze)
     with TestClient(app) as c:

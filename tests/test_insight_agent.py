@@ -49,7 +49,7 @@ def _patch_engine(monkeypatch, raw=None):
             '"suggestions":[{"action":"加强门店引流活动","reason":"客流是当前主要短板","priority":"高"}],'
             '"missing_data":["复购率"]}'
         )
-    mock_diagnose = AsyncMock(return_value=(raw, "deepseek"))
+    mock_diagnose = AsyncMock(return_value=(raw, "deepseek", 50))
     monkeypatch.setattr(ins_router_mod, "diagnose", mock_diagnose)
     return mock_diagnose
 

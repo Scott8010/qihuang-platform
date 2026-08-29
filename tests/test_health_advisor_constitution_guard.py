@@ -79,7 +79,7 @@ async def test_health_assistant_chat_endpoint_mocked():
     fake_req.state.tenant_id = "t1"
     fake_user = {"tenant_id": "t1", "user_id": "u1"}
 
-    with patch("qihuang_platform.agent.refine_llm._chat_once", new=AsyncMock(return_value="失眠多是心神不宁，建议睡前少看手机、泡泡脚。")), \
+    with patch("qihuang_platform.agent.refine_llm._chat_once", new=AsyncMock(return_value=("失眠多是心神不宁，建议睡前少看手机、泡泡脚。", 25))), \
          patch("qihuang_platform.agent.health_assistant.metering.check_quota", return_value=True), \
          patch("qihuang_platform.agent.health_assistant.router._plan_per_user_limit", return_value=None):
         # 直接调用端点函数（跳过 Depends 鉴权层）

@@ -16,7 +16,7 @@ def fake_llm(monkeypatch):
     ha_router = importlib.import_module("qihuang_platform.agent.health_assistant.router")
 
     async def _fake_text_reply(user_msg, history, system, max_tokens):
-        return "我是健康助手（mock）：" + user_msg[:20], "deepseek"
+        return "我是健康助手（mock）：" + user_msg[:20], "deepseek", len(user_msg)
     monkeypatch.setattr(ha_router, "_text_reply", _fake_text_reply)
     monkeypatch.setattr("qihuang_platform.agent.openai_compat.check_quota", lambda tenant_id: True)
     yield

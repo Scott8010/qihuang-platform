@@ -42,7 +42,7 @@ def _patch_engine(monkeypatch):
     """
     import importlib
     cw_router_mod = importlib.import_module("qihuang_platform.agent.content_writer.router")
-    mock_generate = AsyncMock(return_value=("夏季养心，宜静心少虑，饮菊花枸杞茶以清补。", "deepseek"))
+    mock_generate = AsyncMock(return_value=("夏季养心，宜静心少虑，饮菊花枸杞茶以清补。", "deepseek", 50))
     monkeypatch.setattr(cw_router_mod, "generate", mock_generate)
     return mock_generate
 

@@ -175,20 +175,19 @@ def seed_plans(session):
         pdata_copy = dict(pdata)
         plan_name = pdata_copy.pop("plan_name")
         display_name = pdata_copy.pop("display_name")
-        description = pdata_copy.pop("description")
+        description = pdata_copy.pop("description", None)  # Plan 模型无 description 列，仅取出避免传给构造器
         default_agents = (pdata.get("features_json") or {}).get("agents", [])
         existing = session.query(Plan).filter_by(plan_name=plan_name).first()
         if existing:
-            # 同步价格/名称/描述：老板调价后 re-seed 即生效，无需手动 UPDATE（#474 延伸）
+            # 同步价格/名称：老板调价后 re-seed 即生效，无需手动 UPDATE（#474 延伸）
             if existing.price_cents != pdata_copy.get("price_cents"):
                 existing.price_cents = pdata_copy["price_cents"]
                 session.flush()
             if existing.display_name != display_name:
                 existing.display_name = display_name
                 session.flush()
-            if existing.description != description:
-                existing.description = description
-                session.flush()
+            # 注：Plan 模型当前无 description 列，描述同步暂跳过（避免 AttributeError）；
+            # 如后续需要持久化描述，应在 models.Plan 增加 description 列并补迁移。
             # 幂等合并：已存在套餐补 agents 字段；若已有 agents，则与内置默认做并集，
             # 保证新增内置能力能纳入已播种的套餐（不覆盖运营端已定制的额外组合）。
             # 必须用 dict() 副本，否则原地改 existing.features_json 同对象引用，

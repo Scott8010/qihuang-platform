@@ -48,7 +48,7 @@ def test_recharge_and_balance():
     assert r.get("code", -1) == 0 and "data" in r
     b = get_balance("t_wallet_1")["data"]
     assert b["addon_credits"] == 1000
-    assert b["base_credits"] == 0  # 测试无套餐，基本包为空
+    assert b["base_credits"] == 300  # 测试无套餐，按默认基本包 BASE_CREDITS_DEFAULT=300 播种
 
 
 def test_consume_deducts_addon():
@@ -57,7 +57,9 @@ def test_consume_deducts_addon():
     ok, cost = consume_credits("t_wallet_2", "health-assistant", 500, False, True)  # 1 积分
     assert ok is True and cost == 1
     b = get_balance("t_wallet_2")["data"]
-    assert b["addon_credits"] == 999
+    # 消费 1 积分：基本包默认 300 充足，先扣 base（300→299），不碰 addon
+    assert b["base_credits"] == 299
+    assert b["addon_credits"] == 1000
 
 
 def test_consume_no_llm_flat_deducts():
@@ -67,11 +69,22 @@ def test_consume_no_llm_flat_deducts():
     ok, cost = consume_credits("t_wallet_4", "compliance", 0, False, False)  # 固定积分
     assert ok is True and cost == flat
     b = get_balance("t_wallet_4")["data"]
-    assert b["addon_credits"] == 1000 - flat
+    # 固定积分同样先扣 base（300-flat），addon 不动
+    assert b["base_credits"] == 300 - flat
+    assert b["addon_credits"] == 1000
 
 
 def test_consume_blocked_when_empty():
     _wipe()
+    # 显式造真正空钱包（base=0/addon=0）：无订阅租户默认会播种 base=300，
+    # 这里直接置 0 才能验证「两池皆空 → 拦截」
+    from qihuang_platform.db.config import SessionLocal
+    from qihuang_platform.db.models import Wallet
+    from qihuang_platform.billing.wallet import _month_str
+    db = SessionLocal()
+    db.add(Wallet(tenant_id="t_wallet_3", base_credits=0, addon_credits=0, period_month=_month_str()))
+    db.commit()
+    db.close()
     ok, cost = consume_credits("t_wallet_3", "health-assistant", 100000, False, True)
     assert ok is False  # 两池皆空 → 拦截，且不扣任何
     b = get_balance("t_wallet_3")["data"]
