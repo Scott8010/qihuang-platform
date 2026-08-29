@@ -75,7 +75,7 @@ DEFAULT_PLANS = [
             "priority_support": True,
             "custom_skin": True,
         },
-        "description": "企业级全功能，含3D穴位+名医智能体+品牌定制+专属支持",
+        "description": "企业级全功能，含3D穴位+名医智能体+客户成功+专属支持",
     },
 ]
 

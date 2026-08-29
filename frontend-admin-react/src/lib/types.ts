@@ -223,7 +223,7 @@ export const planFeatureLabels: { key: keyof PlanFeatures; label: string }[] = [
   { key: "module_agent", label: "智能体能力" },
   { key: "report_export", label: "报告导出" },
   { key: "priority_support", label: "优先支持" },
-  { key: "custom_skin", label: "品牌定制" },
+  { key: "custom_skin", label: "客户成功" },
 ];
 
 /** 首页任务卡片 — 由真实待办信号（待审知识 / 逾期账单 / 系统告警）派生，不使用预设文案 */
