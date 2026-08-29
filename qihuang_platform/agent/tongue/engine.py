@@ -159,7 +159,7 @@ def analyze_tongue(
             "engine": None, "mode": "image_pending", "provided": False,
             "note": "未提供舌象图片，无法分析。",
             "tongue": None, "face": None, "combined_syndrome": [],
-        }
+        }, 0
 
     base = os.environ.get(f"{env_prefix}_API_BASE") or os.environ.get(f"{fallback_prefix}_API_BASE", "")
     key = os.environ.get(f"{env_prefix}_API_KEY") or os.environ.get(f"{fallback_prefix}_API_KEY", "")
@@ -170,17 +170,19 @@ def analyze_tongue(
             "note": f"图片已接收，但未配置视觉模型（{env_prefix}_API_BASE/KEY），"
                     "当前无法完成舌象结构化分析（fail-closed，不返回假数据）。",
             "tongue": None, "face": None, "combined_syndrome": [],
-        }
+        }, 0
 
     try:
-        content = vision_chat_json(base, key, model, image_ref, TONGUE_VISION_PROMPT)
+        content, tok = vision_chat_json(base, key, model, image_ref, TONGUE_VISION_PROMPT)
         tongue = _normalize_tongue(content)
+        tongue_tokens = tok
 
         face = None
         if face_image:
             try:
-                fcontent = vision_chat_json(base, key, model, face_image, FACE_VISION_PROMPT)
+                fcontent, ftok = vision_chat_json(base, key, model, face_image, FACE_VISION_PROMPT)
                 face = _normalize_face(fcontent)
+                tongue_tokens += ftok or 0
             except Exception:
                 face = None  # 面色图为可选增强，失败不阻断舌象主结果
 
@@ -198,10 +200,10 @@ def analyze_tongue(
             "face": face,
             "combined_syndrome": combined,
             "note": "舌象健康特征分析（去医疗化，仅供健康评估参考，不构成诊断）。",
-        }
+        }, tongue_tokens
     except Exception as e:  # 任意异常均安全回退（不造假）
         return {
             "engine": None, "mode": "image_error", "provided": True,
             "note": f"视觉模型解析失败（{e}），舌象分析不可用。",
             "tongue": None, "face": None, "combined_syndrome": [],
-        }
+        }, 0

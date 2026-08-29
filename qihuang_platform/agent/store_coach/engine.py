@@ -64,11 +64,14 @@ async def _chat_once(
     *,
     temperature: float = 0.7,
     max_tokens: int = 800,
-) -> Optional[str]:
-    """单次调用某引擎的 chat/completions，失败返回 None（交由上层 fallback）。"""
+) -> Tuple[Optional[str], int]:
+    """单次调用某引擎的 chat/completions，失败返回 (None, 0)（交由上层 fallback）。
+
+    返回 (文本, 本次消耗 token)；token 取自响应 usage.total_tokens（#586 真扣费用）。
+    """
     api_key = os.environ.get(provider["env"])
     if not api_key:
-        return None
+        return None, 0
     url = provider["base_url"].rstrip("/") + "/chat/completions"
     payload = {
         "model": provider["model"],
@@ -88,10 +91,13 @@ async def _chat_once(
             )
             resp.raise_for_status()
             data = resp.json()
-            return data["choices"][0]["message"]["content"].strip()
+            content = data["choices"][0]["message"]["content"].strip()
+            usage = data.get("usage") or {}
+            tokens = int((usage.get("total_tokens") or 0) or 0)
+            return content, tokens
     except Exception as e:  # noqa: BLE001 - 任一引擎失败都降级到下一个
         logger.warning("[store_coach] %s 调用失败: %s", provider["name"], e)
-        return None
+        return None, 0
 
 
 async def _generate(
@@ -100,13 +106,13 @@ async def _generate(
     *,
     temperature: float,
     max_tokens: int,
-) -> Tuple[Optional[str], Optional[str]]:
-    """依次尝试 4 引擎生成，返回 (文本, 命中引擎key)。全失败返回 (None, None)。"""
+) -> Tuple[Optional[str], Optional[str], int]:
+    """依次尝试 4 引擎生成，返回 (文本, 命中引擎key, 消耗token)。全失败返回 (None, None, 0)。"""
     for provider in _PROVIDERS:
-        text = await _chat_once(provider, system, user, temperature=temperature, max_tokens=max_tokens)
+        text, tok = await _chat_once(provider, system, user, temperature=temperature, max_tokens=max_tokens)
         if text and text.strip():
-            return text.strip(), provider["key"]
-    return None, None
+            return text.strip(), provider["key"], tok
+    return None, None, 0
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -160,8 +166,8 @@ async def customer_reply(
     customer_profile: str,
     history: List[dict],
     material_text: Optional[str] = None,
-) -> Tuple[Optional[str], Optional[str]]:
-    """AI 扮演顾客接话/开场。返回 (顾客回应, 引擎key)。"""
+) -> Tuple[Optional[str], Optional[str], int]:
+    """AI 扮演顾客接话/开场。返回 (顾客回应, 引擎key, 消耗token)。"""
     profile = customer_profile or _SCENE_PROFILES.get(scene, _SCENE_PROFILES["reception"])
     user = build_customer_user_prompt(scene, topic, profile, history, material_text)
     return await _generate(
@@ -199,8 +205,8 @@ async def evaluate(
     history: List[dict],
     staff_answer: str,
     material_text: Optional[str] = None,
-) -> Tuple[Optional[str], Optional[str]]:
-    """四维话术评估 + 课件知识掌握度。返回 (JSON文本, 引擎key)。
+) -> Tuple[Optional[str], Optional[str], int]:
+    """四维话术评估 + 课件知识掌握度。返回 (JSON文本, 引擎key, 消耗token)。
 
     课件知识掌握度（V2 店务培训）：若提供课件文本，额外评估店员话术对课件
     知识点的覆盖与准确程度（mastery: 掌握/薄弱/未涉及 + 命中知识点列表）。

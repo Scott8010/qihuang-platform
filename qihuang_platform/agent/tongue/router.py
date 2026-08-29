@@ -40,10 +40,11 @@ async def tongue_analyze(
     fail-closed：视觉模型未配置或调用失败时返回 mode=image_pending/image_error，绝不返回假数据。
     """
     tenant_id = getattr(request.state, "tenant_id", None) or user.get("tenant_id")
-    data = engine.analyze_tongue(
+    data, tokens = engine.analyze_tongue(
         req.image,
         face_image=req.face_image,
         profile=req.profile,
     )
-    charge_agent(tenant_id, "tongue", uses_llm=True)
+    # 多模态：真实视觉 token（含图片 token）来自 vision_chat_json usage；未配置视觉则 tokens=0（未真调 LLM）
+    charge_agent(tenant_id, "tongue", uses_llm=True, token_used=tokens, is_multimodal=True, endpoint="/api/v1/agent/tongue/analyze")
     return success(data=data)

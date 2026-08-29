@@ -141,8 +141,9 @@ async def generate_content(
     try:
         variants: List[Dict[str, str]] = []
         used_model: Optional[str] = None
+        total_tokens: int = 0
         for i in range(1, req.variants + 1):
-            text, model = await generate(
+            text, model, tokens = await generate(
                 _SYSTEM_PROMPT,
                 _build_user_prompt(req, i),
                 temperature=0.8,
@@ -151,6 +152,7 @@ async def generate_content(
             if text:
                 variants.append({"index": i, "text": text, "model": model})
                 used_model = used_model or model
+                total_tokens += tokens
             else:
                 variants.append({"index": i, "text": "（AI 文案生成服务暂不可用，请稍后重试）", "model": None})
 
@@ -164,9 +166,10 @@ async def generate_content(
             trace_id=trace_id,
             action="generate",
             variants=req.variants,
+            token_used=total_tokens,
         )
 
-        charge_agent(tenant_id, "content-writer", uses_llm=True)
+        charge_agent(tenant_id, "content-writer", uses_llm=True, token_used=total_tokens, endpoint="/api/v1/agent/content-writer/generate")
         return success(data={
             "topic": req.topic,
             "content_type": req.content_type,

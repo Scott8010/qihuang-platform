@@ -158,7 +158,7 @@ async def create_store_coach_session(
         # 初始化：AI 顾客开场（可选——真实对练由店员先开口；此处生成开场白作为示例引导）
         trace_id = uuid.uuid4().hex
         start = time.monotonic()
-        opening, model = await customer_reply(
+        opening, model, opening_tokens = await customer_reply(
             scene=req.scene,
             topic=req.topic,
             customer_profile=req.customer_profile or "",
@@ -172,10 +172,10 @@ async def create_store_coach_session(
         await record_call(
             tenant_id=tenant_id, user_id=user_id,
             code=0 if opening else -1, latency_ms=latency_ms, trace_id=trace_id,
-            action="sessions", scene=req.scene,
+            action="sessions", scene=req.scene, token_used=opening_tokens,
         )
 
-        charge_agent(tenant_id, "store-coach", uses_llm=True)
+        charge_agent(tenant_id, "store-coach", uses_llm=True, token_used=opening_tokens, endpoint="/api/v1/agent/store-coach/sessions")
         return success(data={
             "session_id": session.id,
             "scene": session.scene,
@@ -226,7 +226,7 @@ async def store_coach_evaluate(
         compliance = await _compliance_check(req.answer, tenant_id)
 
         # AI 顾客接话（课件上下文：顾客围绕课件知识点提问）
-        reply, reply_model = await customer_reply(
+        reply, reply_model, reply_tokens = await customer_reply(
             scene=session.scene,
             topic=session.topic,
             customer_profile=session.customer_profile or "",
@@ -235,7 +235,7 @@ async def store_coach_evaluate(
         )
 
         # 四维话术评估 + 课件知识掌握度（V2）
-        eval_raw, eval_model = await evaluate(
+        eval_raw, eval_model, eval_tokens = await evaluate(
             scene=session.scene,
             topic=session.topic,
             customer_profile=session.customer_profile or "",
@@ -289,9 +289,10 @@ async def store_coach_evaluate(
             tenant_id=tenant_id, user_id=user_id,
             code=0 if reply else -1, latency_ms=latency_ms, trace_id=trace_id,
             action="evaluate", scene=session.scene, compliance_ok=compliance["ok"],
+            token_used=reply_tokens + eval_tokens,
         )
 
-        charge_agent(tenant_id, "store-coach", uses_llm=True)
+        charge_agent(tenant_id, "store-coach", uses_llm=True, token_used=reply_tokens + eval_tokens, endpoint="/api/v1/agent/store-coach/evaluate")
         return success(data={
             "customer_reply": reply or "（AI 顾客暂不可用）",
             "reply_model": reply_model,

@@ -175,11 +175,14 @@ def _parse_classics_json(raw: str) -> Optional[Dict[str, Any]]:
     return data
 
 
-async def _chat_once(provider: Dict[str, str], system: str, user: str, max_tokens: int = 1500) -> Optional[str]:
-    """单次调用某引擎的 chat/completions，失败返回 None。"""
+async def _chat_once(provider: Dict[str, str], system: str, user: str, max_tokens: int = 1500) -> Tuple[Optional[str], int]:
+    """单次调用某引擎的 chat/completions，失败返回 (None, 0)。
+
+    返回 (文本, 本次消耗 token)；token 取自响应 usage.total_tokens（#586 真扣费用）。
+    """
     api_key = os.environ.get(provider["env"])
     if not api_key:
-        return None
+        return None, 0
     url = provider["base_url"].rstrip("/") + "/chat/completions"
     payload = {
         "model": provider["model"],
@@ -199,10 +202,13 @@ async def _chat_once(provider: Dict[str, str], system: str, user: str, max_token
             )
             resp.raise_for_status()
             data = resp.json()
-            return data["choices"][0]["message"]["content"].strip()
+            content = data["choices"][0]["message"]["content"].strip()
+            usage = data.get("usage") or {}
+            tokens = int((usage.get("total_tokens") or 0) or 0)
+            return content, tokens
     except Exception as e:  # noqa: BLE001 - 任一引擎失败都降级到下一个
         logger.warning("%s 提炼调用失败: %s", provider["name"], e)
-        return None
+        return None, 0
 
 
 _REFINE_PROMPT_ZH = """你是一位中医知识图谱的审校助手，负责把待审核知识条目整理成可直接用于人工审核的结构化中文摘要。
@@ -312,7 +318,7 @@ async def _refine_literature(content: Dict[str, Any]) -> Dict[str, Any]:
     user = (_REFINE_PROMPT_EN if is_english else _REFINE_PROMPT_ZH) + f"\n\n【原文】\n{source[:3500]}"
 
     for provider in _PROVIDERS:
-        raw = await _chat_once(provider, system, user, max_tokens=1500)
+        raw, _tok = await _chat_once(provider, system, user, max_tokens=1500)
         if not raw:
             continue
         parsed = _parse_refined_json(raw)
@@ -378,7 +384,7 @@ async def _refine_classics(content: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     for provider in _PROVIDERS:
-        raw = await _chat_once(provider, system, user, max_tokens=1500)
+        raw, _tok = await _chat_once(provider, system, user, max_tokens=1500)
         if not raw:
             continue
         parsed = _parse_classics_json(raw)

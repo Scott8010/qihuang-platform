@@ -171,21 +171,34 @@ def charge_agent(
     token_used: int = 0,
     is_multimodal: bool = False,
     uses_llm: Optional[bool] = None,
+    user_id: Optional[str] = None,
+    endpoint: Optional[str] = None,
+    trace_id: Optional[str] = None,
+    prompt_text: Optional[str] = None,
 ) -> None:
     """Agent 业务成功调用后统一扣积分（B2 落地点，旁路非阻断，绝不影响主响应）。
 
-    在各 agent 路由成功返回前调用；底层走 compute_credits + consume_credits。
-    rule 类(geo/fortune) uses_llm=False → 每次固定 2 积分起步价；LLM 类按 token 计。
+    委托 billing.charge.charge_call：计算真实积分 + 真实金额 + 真扣钱包 + 写持久化 CallLog
+    （懒加载 import 避免与 charge 模块循环依赖）。
+    各 agent 路由已在此处统一接入（#586/#587 一处改全链路生效）：
+      - LLM 类 content-writer/insight/store-coach/health-assistant/tongue 传真实 token_used
+      - proxy 类 coach/health-advisor 传 prompt_text 兜底估算
+      - 规则类 geo/fortune/compliance 走固定起步价（uses_llm=False → 每次 2 积分）
     """
     if not tenant_id:
         return  # 无租户上下文（如未注入 request.state.tenant_id）时不扣费、不建空钱包
     try:
-        consume_credits(
+        from qihuang_platform.billing.charge import charge_call
+        charge_call(
             tenant_id=tenant_id,
             agent_key=agent_key,
             token_used=token_used,
             is_multimodal=is_multimodal,
             uses_llm=uses_llm,
+            user_id=user_id,
+            endpoint=endpoint,
+            trace_id=trace_id,
+            prompt_text=prompt_text,
         )
     except Exception as e:  # noqa: BLE001
         logger.warning("[wallet] charge_agent 失败(旁路): %s", e)
@@ -227,10 +240,27 @@ def charge_addon_subscription(tenant_id: str, agent_key: str, fee_cents: int) ->
     """单加 agent 开通：首月订阅费从积分池扣除（先赠后充）。
 
     1 积分 = ¥0.05 → 积分 = 分 / 5（文本 ¥59=5900 分=1180 积分；多模态 ¥99=9900 分=1980 积分）。
-    返回是否扣费成功（余额不足时订阅仍建立、首月扣费失败，供运营对账）。
+    返回是否扣费成功（余额不足 → 原子不放行返回 False，调用方据此拒开通 402，不建订阅、不递延对账）。
+
+    B3 修复：扣费成功后写持久化 DB CallLog（固定积分订阅费，与 charge_call 对齐），
+    否则单加订阅只扣钱不记账，admin 用量聚合与对账漏掉这笔，等于「计量不扣费」的变体。
     """
     credits = max(1, round(fee_cents / 5))
-    return deduct_fixed(tenant_id, credits, reason=f"agent_addon:{agent_key}")
+    ok = deduct_fixed(tenant_id, credits, reason=f"agent_addon:{agent_key}")
+    if ok:
+        # 懒加载 import 避免与 charge 模块循环依赖（charge.py 顶层 import 了本模块的 consume_credits）
+        from qihuang_platform.billing.charge import _write_call_log, CENTS_PER_CREDIT
+        _write_call_log(
+            tenant_id=tenant_id,
+            agent_key=agent_key,
+            tokens_used=0,
+            cost_cents=credits * CENTS_PER_CREDIT,
+            user_id=None,
+            endpoint=f"/api/v1/agent/{agent_key}/addon_subscribe",
+            trace_id=None,
+            status_code=200,
+        )
+    return ok
 
 
 def get_available_balance(tenant_id: str, *, db_session=None) -> int:

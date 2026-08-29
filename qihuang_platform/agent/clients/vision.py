@@ -18,6 +18,7 @@ import mimetypes
 import os
 import re
 import urllib.request
+from typing import Tuple
 
 
 def to_image_url(ref: str) -> str:
@@ -50,8 +51,11 @@ def to_image_url(ref: str) -> str:
     return ref
 
 
-def vision_chat_json(base: str, key: str, model: str, image_ref: str, prompt: str) -> str:
-    """调用 OpenAI 兼容视觉端点，返回模型文本（期望 JSON 或描述文本）。"""
+def vision_chat_json(base: str, key: str, model: str, image_ref: str, prompt: str) -> Tuple[str, int]:
+    """调用 OpenAI 兼容视觉端点，返回 (模型文本, 消耗token)。
+
+    token 取自响应 usage.total_tokens（含图片 token，#586 真扣费用）。
+    """
     url = f"{base.rstrip('/')}/chat/completions"
     payload = {
         "model": model,
@@ -72,7 +76,10 @@ def vision_chat_json(base: str, key: str, model: str, image_ref: str, prompt: st
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
         out = json.loads(resp.read().decode("utf-8"))
-    return out["choices"][0]["message"]["content"]
+    content = out["choices"][0]["message"]["content"]
+    usage = out.get("usage") or {}
+    tokens = int((usage.get("total_tokens") or 0) or 0)
+    return content, tokens
 
 
 def normalize_vision_json(content: str) -> dict:

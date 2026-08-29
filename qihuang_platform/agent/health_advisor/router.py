@@ -44,7 +44,8 @@ async def consult(
         return error("QUOTA_EXCEEDED", "本月健康顾问调用配额已用完，请升级套餐或次月恢复。")
     try:
         resp = await _advisor.consult(req, tenant_id)
-        charge_agent(tenant_id, "health-advisor", uses_llm=True)  # B2: 成功调用后扣积分
+        # proxy 类（8601 推理，不外吐 usage）→ 用提问文本兜底估算 token，保证真扣非零（#586）
+        charge_agent(tenant_id, "health-advisor", uses_llm=True, prompt_text=req.question, endpoint="/api/v1/agent/health-advisor/consult")
         return success(resp.model_dump())
     except Exception as e:  # noqa: BLE001
         return error("INTERNAL_ERROR", str(e))

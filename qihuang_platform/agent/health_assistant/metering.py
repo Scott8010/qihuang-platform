@@ -20,9 +20,12 @@ from datetime import datetime, timezone
 from typing import Optional, Tuple
 
 from qihuang_platform.gateway.metering import CallLog, metering_store
+from qihuang_platform.billing.pricing_config import compute_credits
 
 AGENT_KEY = "health-assistant"
 MODULE = "agent"
+# 1 积分 = ¥0.05 = 5 分
+_CENTS_PER_CREDIT = 5
 
 logger = logging.getLogger("health_assistant.metering")
 
@@ -112,6 +115,9 @@ async def record_call(
     聚合计费；extra.agent_key 标记增值 Agent 模块。
     """
     try:
+        # 真实金额：起步价 + LLM token 叠加（1 积分 = 5 分），供看板展示
+        cost_credits = compute_credits(AGENT_KEY, token_used, is_multimodal, True)
+        cost_cents = cost_credits * _CENTS_PER_CREDIT
         await metering_store.log(CallLog(
             id=uuid.uuid4().hex,
             trace_id=trace_id,
@@ -121,8 +127,8 @@ async def record_call(
             user_id=end_user_id,
             status_code=status_code,
             latency_ms=round(latency_ms, 1),
-            tokens_used=token_used,    # #474 接入后由上游 LLM 链路传真实 token
-            cost_cents=0,     # 单价待 #474 定价，计费成功才计
+            tokens_used=token_used,    # 上游 LLM 链路回传真实 token（#586）
+            cost_cents=cost_cents,     # 真实金额（#586 计费成功才计）
             module=MODULE,
             extra={
                 "agent_key": AGENT_KEY,
@@ -133,15 +139,18 @@ async def record_call(
     except Exception as e:  # noqa: BLE001
         logger.warning("[ha-metering] record_call 失败: %s", e)
 
-    # ── #474 计费中台：成功调用后扣积分（旁路非阻断）──
+    # ── #586 计费中台：成功调用后真扣积分 + 写持久化 CallLog（旁路非阻断）──
     try:
-        from qihuang_platform.billing.wallet import consume_credits
-        consume_credits(
+        from qihuang_platform.billing.charge import charge_call
+        charge_call(
             tenant_id=tenant_id,
             agent_key=AGENT_KEY,
             token_used=token_used,
             is_multimodal=is_multimodal,
             uses_llm=True,
+            user_id=end_user_id,
+            endpoint=endpoint,
+            trace_id=trace_id,
         )
     except Exception as e:  # noqa: BLE001
         logger.warning("[ha-metering] 积分扣减失败(旁路): %s", e)

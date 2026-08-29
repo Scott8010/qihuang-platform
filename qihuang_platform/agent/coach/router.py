@@ -104,7 +104,8 @@ async def create_coach_session(
         )
         db.add(session)
         db.commit()
-        charge_agent(tenant_id, "coach", uses_llm=True)
+        # proxy 类（8601 推理，不外吐 usage）→ 用主题文本兜底估算 token，保证真扣非零（#586）
+        charge_agent(tenant_id, "coach", uses_llm=True, prompt_text=req.topic, endpoint="/api/v1/agent/coach/sessions")
         return success(data={
             "session_id": session.id,
             "topic": session.topic,
@@ -169,6 +170,9 @@ async def coach_evaluate(
         session.score = score
         session.feedback = feedback
         db.commit()
+
+        # 提交作答也走了 8601 推理链 → 用作答文本兜底估算真扣（#586；此前漏接扣费）
+        charge_agent(tenant_id, "coach", uses_llm=True, prompt_text=req.answer, endpoint="/api/v1/agent/coach/evaluate")
 
         return success(data={
             "evaluation": evaluation,

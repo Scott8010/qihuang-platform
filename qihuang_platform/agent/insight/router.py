@@ -123,7 +123,7 @@ async def insight_diagnose(
     trace_id = uuid.uuid4().hex
     start = time.monotonic()
     try:
-        raw, model = await diagnose(
+        raw, model, tokens = await diagnose(
             _SYSTEM_PROMPT,
             _build_user_prompt(req),
             temperature=0.4,
@@ -155,9 +155,10 @@ async def insight_diagnose(
             tenant_id=tenant_id, user_id=user_id, store_id=req.store_id,
             code=0, latency_ms=latency_ms, trace_id=trace_id,
             action="diagnose", metric_count=len(req.metrics),
+            token_used=tokens,
         )
 
-        charge_agent(tenant_id, "insight", uses_llm=True)
+        charge_agent(tenant_id, "insight", uses_llm=True, token_used=tokens, endpoint="/api/v1/agent/insight/diagnose")
         return success(data={
             "diagnosis": parsed,
             "model": model,

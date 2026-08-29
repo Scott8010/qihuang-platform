@@ -14,9 +14,12 @@ import uuid
 from typing import Optional
 
 from qihuang_platform.gateway.metering import CallLog, metering_store
+from qihuang_platform.billing.pricing_config import compute_credits
 
 AGENT_KEY = "content-writer"
 MODULE = "agent"
+# 1 积分 = ¥0.05 = 5 分
+_CENTS_PER_CREDIT = 5
 
 logger = logging.getLogger("content_writer.metering")
 
@@ -56,9 +59,13 @@ async def record_call(
     status_code: int = 200,
     action: str = "generate",
     variants: int = 1,
+    token_used: int = 0,
 ) -> None:
     """记录一次 content-writer 调用（业务级计费埋点）。仅业务成功执行后调用。"""
     try:
+        # 真实金额：LLM token 计量（1 积分 = 5 分），供看板展示（#586）
+        cost_credits = compute_credits(AGENT_KEY, token_used, False, True)
+        cost_cents = cost_credits * _CENTS_PER_CREDIT
         await metering_store.log(CallLog(
             id=uuid.uuid4().hex,
             trace_id=trace_id,
@@ -68,8 +75,8 @@ async def record_call(
             user_id=user_id,
             status_code=status_code,
             latency_ms=round(latency_ms, 1),
-            tokens_used=0,
-            cost_cents=0,
+            tokens_used=token_used,
+            cost_cents=cost_cents,
             module=MODULE,
             extra={
                 "agent_key": AGENT_KEY,

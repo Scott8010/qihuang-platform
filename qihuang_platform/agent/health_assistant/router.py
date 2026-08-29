@@ -183,8 +183,8 @@ async def _text_reply(
     history: List[Dict[str, str]],
     system: str,
     max_tokens: int,
-) -> tuple[str, str]:
-    """纯文本链路：deepseek 自由问答（承接原 health-advisor/chat 逻辑）。"""
+) -> tuple[str, str, int]:
+    """纯文本链路：deepseek 自由问答（承接原 health-advisor/chat 逻辑）。返回 (回复, 引擎key, 消耗token)。"""
     from qihuang_platform.agent.refine_llm import _PROVIDERS, _chat_once
     provider = next((p for p in _PROVIDERS if p["key"] == "deepseek"), _PROVIDERS[0])
     convo = list(history or [])
@@ -195,19 +195,19 @@ async def _text_reply(
         f"{'用户' if m.get('role') == 'user' else '助手' if m.get('role') == 'assistant' else '系统'}: {m.get('content', '')}"
         for m in convo
     )
-    raw = await _chat_once(provider, system, ctx, max_tokens=max_tokens)
+    raw, tok = await _chat_once(provider, system, ctx, max_tokens=max_tokens)
     reply = (raw or "").strip()
     if not reply:
         raise RuntimeError("模型未返回内容")
-    return reply, provider["key"]
+    return reply, provider["key"], tok
 
 
 async def _vision_reply(
     image_ref: str,
     user_msg: str,
     system: str,
-) -> tuple[str, str]:
-    """多模态链路：共享视觉网关（GEO_VISION_*，qwen-vl-plus）。
+) -> tuple[str, str, int]:
+    """多模态链路：共享视觉网关（GEO_VISION_*，qwen-vl-plus）。返回 (回复, 引擎key, 消耗token)。
 
     未配置视觉模型 → 降级文本并如实标注（不造假）；视觉调用失败 → 同样降级。
     """
@@ -230,21 +230,23 @@ async def _vision_reply(
             "（我收到了您的图片，但当前视觉模型尚未配置，只能先按文字回答：）\n"
             + question,
             "text-fallback",
+            0,
         )
     try:
         # vision_chat_json 为同步实现（urllib），放线程池避免阻塞事件循环
-        raw = await asyncio.to_thread(
+        raw, tok = await asyncio.to_thread(
             vision_chat_json, base, key, model, image_ref, vision_prompt)
         reply = (raw or "").strip()
         if not reply:
             raise RuntimeError("视觉模型未返回内容")
-        return reply, model
+        return reply, model, tok
     except Exception as e:  # noqa: BLE001
         logger.warning("[ha] 视觉链路失败，降级文本: %s", e)
         return (
             "（很抱歉，图片识别暂时不可用，我先按文字回答：）\n"
             + question,
             "text-fallback",
+            0,
         )
 
 
@@ -269,9 +271,9 @@ async def handle_chat(
     trace_id = uuid.uuid4().hex
 
     if image:
-        reply, model = await _vision_reply(image, user_msg, system)
+        reply, model, tokens = await _vision_reply(image, user_msg, system)
     else:
-        reply, model = await _text_reply(user_msg, history, system, max_tokens)
+        reply, model, tokens = await _text_reply(user_msg, history, system, max_tokens)
 
     # 会话内记忆落盘（文本轮与多模态轮都记文本侧）
     if session_id and user_msg:
@@ -280,7 +282,7 @@ async def handle_chat(
         convo.append({"role": "assistant", "content": reply})
         _persist_session(session_id, convo)
 
-    # 配额计数 + 业务埋点
+    # 配额计数 + 业务埋点（真扣费：把 LLM 真实 token / 多模态标记带入）
     record_user_call(tenant_id, end_user_id)
     await record_call(
         tenant_id=tenant_id,
@@ -289,6 +291,8 @@ async def handle_chat(
         partial=False,
         latency_ms=(time.time() - t0) * 1000,
         trace_id=trace_id,
+        token_used=tokens,
+        is_multimodal=bool(image),
     )
     return reply, model, bool(image)
 
