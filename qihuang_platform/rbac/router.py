@@ -12,6 +12,7 @@ from qihuang_platform.rbac.service import RBACService, validate_password
 from qihuang_platform.gateway.deps import get_current_user, get_current_admin
 from qihuang_platform.gateway.response import success, error
 from qihuang_platform.db.models import seed_preset_data, Plan, Subscription, UserRole, Role
+from qihuang_platform.billing.pricing_config import RECHARGE_PACKS, AGENT_ADDON_PRICE
 
 rbac_router = APIRouter(prefix="/admin/v1", tags=["RBAC管理"])
 
@@ -579,8 +580,9 @@ async def list_plans(
     user: dict = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    """管理端：查询所有套餐及功能开关"""
-    plans = db.query(Plan).all()
+    """管理端：查询所有套餐及功能开关
+    套餐按 price_cents 升序：trial(¥99)→standard(¥299)→professional(¥599)→enterprise(¥999)，对齐页面 2×2 布局（上=轻量 / 下=旗舰）"""
+    plans = db.query(Plan).order_by(Plan.price_cents.asc()).all()
     return success([{
         "id": p.id,
         "plan_name": p.plan_name,
@@ -593,6 +595,26 @@ async def list_plans(
         "status": p.status,
         "features_json": p.features_json or {},
     } for p in plans])
+
+
+@rbac_router.get("/billing/price-book")
+def api_price_book(_admin: dict = Depends(get_current_admin)):
+    """计费价目表（#474 单一真源）— 收费中心渲染用，不在此硬编码。
+
+    返回：叠加包（RECHARGE_PACKS，永久有效）+ 单加 agent 月费（AGENT_ADDON_PRICE）。
+    调价只改 pricing_config.py，前端自动跟进。
+    """
+    return success({
+        "recharge_packs": [
+            {"key": k, "label": v["label"], "yuan": v["yuan"], "credits": v["credits"]}
+            for k, v in RECHARGE_PACKS.items()
+        ],
+        "agent_addon": {
+            "text_monthly_yuan": AGENT_ADDON_PRICE["text"],
+            "multimodal_monthly_yuan": AGENT_ADDON_PRICE["multimodal"],
+            "note": "客户单独开通某 agent 的月度订阅入口（开门费，不含赠送积分）；调用仍按 token 吞积分池，先赠后充。",
+        },
+    })
 
 
 # ========== 权限检查 ==========

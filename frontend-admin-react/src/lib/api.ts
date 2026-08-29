@@ -8,6 +8,7 @@ import type {
   AlertItem, TodoReviewItem, BillItem, PlanItem, SubscriptionItem, SceneUsageItem,
   OrgItem, TenantUserItem, PermissionItem, PlatformUser,
   SensitiveWordItem, ServiceItem, LlmProviderItem, AuditLogItem, DashboardData,
+  PriceBook,
 } from "./types";
 
 // ═══ 基础 ═══
@@ -529,6 +530,27 @@ export async function fetchPlans(): Promise<PlanItem[]> {
       };
     });
   } catch { return []; }
+}
+
+/** GET /admin/v1/billing/price-book — 计费价目（#474 单一真源）：叠加包 + 单加 agent 月费 */
+export async function fetchPriceBook(): Promise<PriceBook | null> {
+  try {
+    const r = await get<{ code: number; data: any }>("/admin/v1/billing/price-book");
+    if (r?.code !== 0 || !r.data) return null;
+    return {
+      rechargePacks: (r.data.recharge_packs || []).map((p: any) => ({
+        key: p.key || "",
+        label: p.label || "",
+        yuan: p.yuan ?? 0,
+        credits: p.credits ?? 0,
+      })),
+      agentAddon: {
+        textMonthlyYuan: r.data.agent_addon?.text_monthly_yuan ?? 59,
+        multimodalMonthlyYuan: r.data.agent_addon?.multimodal_monthly_yuan ?? 99,
+        note: r.data.agent_addon?.note || "",
+      },
+    };
+  } catch (e) { console.error("fetchPriceBook error", e); return null; }
 }
 
 // ═══ 套餐升级（租户订阅变更）═══

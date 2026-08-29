@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Download, Sparkles, Check, Minus, Loader2 } from "lucide-react";
+import { BarChart3, Download, Check, Minus, Loader2 } from "lucide-react";
 import { C, billStatus, planFeatureLabels, sceneMap } from "@/lib/types";
-import type { PlanItem, BillItem, SubscriptionItem, SceneUsageItem } from "@/lib/types";
-import { fetchBillingStats, fetchPlans, fetchBills, fetchSubscriptions, fetchSceneUsage } from "@/lib/api";
+import type { PlanItem, BillItem, SubscriptionItem, SceneUsageItem, PriceBook } from "@/lib/types";
+import { fetchBillingStats, fetchPlans, fetchBills, fetchSubscriptions, fetchSceneUsage, fetchPriceBook } from "@/lib/api";
 import { CodeCopy } from "@/components/ui/code-copy";
 
 /* ═══════════════════════════════════════════
@@ -34,6 +34,7 @@ export default function Billing() {
   const [bills, setBills] = useState<BillItem[]>([]);
   const [subs, setSubs] = useState<SubscriptionItem[]>([]);
   const [scenes, setScenes] = useState<SceneUsageItem[]>([]);
+  const [priceBook, setPriceBook] = useState<PriceBook | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -43,6 +44,7 @@ export default function Billing() {
       fetchBills().then(setBills),
       fetchSubscriptions().then(setSubs),
       fetchSceneUsage().then(setScenes),
+      fetchPriceBook().then(setPriceBook),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -140,7 +142,7 @@ export default function Billing() {
               </tbody>
             </table>
             <div className="mt-3 p-2.5 rounded text-[13px] leading-relaxed" style={{ background: "#EAF2EE", color: C.mid }}>
-              计量埋点在 API 网关完成，按「调用次数 + Token + 增值模块加载」三维度入账；岐黄三境 3D 模块单独计量，未开通租户不产生费用。
+              计量埋点在 API 网关完成，按「调用次数 + Token」双维度入账；3D 经络穴位为套餐内含能力（专业版 / 企业版随套餐授权开通），非单独加项。
             </div>
           </CardContent>
         </Card>
@@ -179,11 +181,9 @@ export default function Billing() {
                         return (
                           <div key={f.key} className="flex items-center gap-1.5" style={{ color: on ? C.mid : C.light }}>
                             {on
-                              ? (f.key === "module_3d"
-                                  ? <Sparkles className="w-3 h-3 shrink-0" style={{ color: C.gold }} />
-                                  : <Check className="w-3 h-3 shrink-0" style={{ color: C.primary }} />)
+                              ? <Check className="w-3 h-3 shrink-0" style={{ color: C.primary }} />
                               : <Minus className="w-3 h-3 shrink-0" style={{ color: "#ccc" }} />}
-                            <span style={on && f.key === "module_3d" ? { color: C.gold } : undefined}>{f.label}</span>
+                            <span>{f.label}</span>
                           </div>
                         );
                       })}
@@ -202,6 +202,72 @@ export default function Billing() {
             </div>
             <div className="mt-3 text-[13px] leading-relaxed" style={{ color: C.light }}>
               套餐与 module_3d 开关写入租户 features_json，网关鉴权时随 Token / 签名响应下发，前端按开关渲染入口。价格与 QPS 由商务合同约定，不在此配置。
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 充值叠加包 + 单加 Agent 月费（价目来自 /admin/v1/billing/price-book，#474 单一真源） */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* 充值叠加包 */}
+        <Card className="border shadow-none" style={{ borderColor: C.border }}>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <BarChart3 className="w-4 h-4" style={{ color: C.primary }} />
+              <span className="text-[16px] font-medium" style={{ color: C.ink }}>充值叠加包</span>
+              <span className="text-[13px] font-normal" style={{ color: C.light }}>（永久有效 · 不清零）</span>
+            </div>
+            <table className="w-full text-[14px]">
+              <thead>
+                <tr className="text-left text-[12.5px]" style={{ color: C.light }}>
+                  <th className="pb-2 font-normal">套餐</th>
+                  <th className="pb-2 font-normal text-right">人民币</th>
+                  <th className="pb-2 font-normal text-right">得积分</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(priceBook?.rechargePacks || []).map((pk) => (
+                  <tr key={pk.key} className="border-t" style={{ borderColor: C.border }}>
+                    <td className="py-2" style={{ color: C.ink }}>{pk.label}</td>
+                    <td className="py-2 text-right" style={{ color: C.ink }}>¥{pk.yuan}</td>
+                    <td className="py-2 text-right" style={{ color: C.mid }}>{pk.credits.toLocaleString()}</td>
+                  </tr>
+                ))}
+                {(!priceBook || priceBook.rechargePacks.length === 0) && (
+                  <tr>
+                    <td colSpan={3} className="py-6 text-center text-[13px]" style={{ color: C.light }}>
+                      {loading ? "加载中…" : "暂无叠加包配置"}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            <div className="mt-3 text-[12.5px] leading-relaxed" style={{ color: C.light }}>
+              消耗顺序：先扣套餐当月赠送积分 → 用尽再扣叠加包积分；两池皆空 → 不放行。量大单价自然递降。
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 单加 Agent 月费 */}
+        <Card className="border shadow-none" style={{ borderColor: C.border }}>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <BarChart3 className="w-4 h-4" style={{ color: C.primary }} />
+              <span className="text-[16px] font-medium" style={{ color: C.ink }}>单加 Agent 月费</span>
+              <span className="text-[13px] font-normal" style={{ color: C.light }}>（开门订阅费）</span>
+            </div>
+            <div className="space-y-1 text-[14px]">
+              <div className="flex items-center justify-between py-2 border-t" style={{ borderColor: C.border }}>
+                <span style={{ color: C.mid }}>文本类 Agent</span>
+                <span className="font-medium" style={{ color: C.ink }}>¥{priceBook?.agentAddon.textMonthlyYuan ?? 59}/月</span>
+              </div>
+              <div className="flex items-center justify-between py-2 border-t" style={{ borderColor: C.border }}>
+                <span style={{ color: C.mid }}>多模态类 Agent</span>
+                <span className="font-medium" style={{ color: C.ink }}>¥{priceBook?.agentAddon.multimodalMonthlyYuan ?? 99}/月</span>
+              </div>
+            </div>
+            <div className="mt-3 text-[12.5px] leading-relaxed" style={{ color: C.light }}>
+              {priceBook?.agentAddon.note || "客户单独开通某 agent 的月度订阅；调用仍按 token 吞积分池，先赠后充。"}
             </div>
           </CardContent>
         </Card>

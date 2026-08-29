@@ -56,6 +56,36 @@ def _now():
     return datetime.now(timezone.utc)
 
 
+# 审计动作→人类可读中文映射（8/30#3 新增：避免告警页直淋原词如 TENANT_ONBOARD）
+ACTION_DISPLAY = {
+    "TENANT_ONBOARD": "开通租户",
+    "CREATE_TENANT": "创建租户",
+    "TENANT_SUSPEND": "暂停租户",
+    "TENANT_CLOSE": "注销租户",
+    "UPDATE_TENANT": "更新租户",
+    "USER_LOGIN": "登录",
+    "USER_LOGOUT": "退出登录",
+    "CREATE_USER": "创建用户",
+    "UPDATE_USER": "更新用户",
+    "DELETE_USER": "删除用户",
+    "CREATE_KEY": "创建 API Key",
+    "REVOKE_KEY": "吊销 API Key",
+    "PLAN_UPGRADE": "升级套餐",
+    "PLAN_DOWNGRADE": "降级套餐",
+    "SUBSCRIPTION_RENEW": "续订",
+    "SUBSCRIPTION_EXPIRE": "订阅到期",
+    "BILL_ISSUE": "生成账单",
+    "BILL_PAID": "账单已付",
+    "BILL_VOID": "账单作废",
+    "KG_REVIEW_APPROVED": "知识审核通过",
+    "KG_REVIEW_REJECTED": "知识审核驳回",
+    "KG_REVIEW_PENDING": "提交知识审核",
+    "KG_VERSION_ROLLBACK": "回滚知识版本",
+    "PLUGIN_TOGGLE": "切换插件",
+    "CAPS_UPDATE": "更新套餐能力",
+}
+
+
 # ═══════════════════════════════════════════
 # 1. 套餐管理
 # ═══════════════════════════════════════════
@@ -1696,15 +1726,57 @@ async def admin_dashboard(admin: dict = Depends(get_current_admin)):
         # KG统计
         kg_pending = db.query(KgReviewItem).filter(KgReviewItem.status == "pending").count()
 
-        # 最近操作
+        # 最近操作（8/30 升级：联表 user/tenant 取出人类可读名，避免 UUID 直淋页面）
         recent_ops = []
         logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(5).all()
+        # 一次性把涉及的 user / tenant / plan 拉出来防 N+1
+        log_user_ids = {l.user_id for l in logs if l.user_id}
+        tenant_target_ids = {l.target_id for l in logs if l.target_type == "TENANT" and l.target_id}
+        user_target_ids = {l.target_id for l in logs if l.target_type == "USER" and l.target_id}
+        plan_target_ids = {l.target_id for l in logs if l.target_type == "PLAN" and l.target_id}
+
+        users_map = {}
+        if log_user_ids or user_target_ids:
+            users_map = {u.id: u for u in db.query(User).filter(User.id.in_(log_user_ids | user_target_ids)).all()}
+        tenants_map = {}
+        if tenant_target_ids:
+            tenants_map = {t.id: t for t in db.query(Tenant).filter(Tenant.id.in_(tenant_target_ids)).all()}
+        plans_map = {}
+        if plan_target_ids:
+            plans_map = {p.id: p for p in db.query(Plan).filter(Plan.id.in_(plan_target_ids)).all()}
+
+        def _user_disp(uid: str) -> str:
+            if not uid:
+                return "系统"
+            u = users_map.get(uid)
+            return (u.display_name or u.username) if u else uid[:8]
+
+        def _target_disp(action_zh: str, log) -> str:
+            tt = log.target_type or ""
+            tid = log.target_id or ""
+            if tt == "TENANT" and tid:
+                t = tenants_map.get(tid)
+                name = (t.display_name or t.name) if t else None
+                return f"租户「{name or tid[:8]}」"
+            if tt == "USER" and tid:
+                u = users_map.get(tid)
+                name = (u.display_name or u.username) if u else None
+                return f"用户「{name or tid[:8]}」"
+            if tt == "PLAN" and tid:
+                p = plans_map.get(tid)
+                return f"套餐「{(p.display_name if p else tid[:8])}」"
+            if tt == "BILL" and tid:
+                return f"账单 #{tid[-6:]}"
+            return ""
+
         for log in logs:
+            action_zh = ACTION_DISPLAY.get(log.action or "", log.action or "")
             recent_ops.append({
                 "time": log.created_at.strftime("%H:%M") if log.created_at else "",
-                "user": log.user_id or "系统",
-                "action": log.action or "",
-                "target": log.target_id or "",
+                "user": _user_disp(log.user_id),
+                "action": action_zh,
+                "target": _target_disp(action_zh, log),
+                "target_short_id": (log.target_id or "")[-4:],
             })
 
         # 近7天调用趋势

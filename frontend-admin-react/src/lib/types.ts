@@ -176,6 +176,23 @@ export interface PlanItem {
   status: string;        // active / disabled
 }
 
+/** 对应 GET /admin/v1/billing/price-book → 计费价目（#474 单一真源，前端不写死） */
+export interface RechargePack {
+  key: string;          // pack_50 / pack_100 / pack_200 / pack_500
+  label: string;        // 标准充值包 / ...
+  yuan: number;         // 人民币（元）
+  credits: number;      // 得积分
+}
+export interface AgentAddonPrice {
+  textMonthlyYuan: number;        // 文本类 agent 月费
+  multimodalMonthlyYuan: number;  // 多模态类 agent 月费
+  note: string;
+}
+export interface PriceBook {
+  rechargePacks: RechargePack[];
+  agentAddon: AgentAddonPrice;
+}
+
 /** 对应 GET /admin/v1/tenants-extended → data.items[]（套餐升级页用） */
 export interface TenantPlanItem {
   id: string;
