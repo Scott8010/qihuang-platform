@@ -265,12 +265,31 @@ async def create_api_key(
     req: CreateAPIKeyRequest,
     user: dict = Depends(get_current_admin),
 ):
-    """签发新 API Key（需要管理员）。双写: 内存 + 数据库。"""
-    import uuid
+    """签发新 API Key（需要管理员）。
 
-    # 查找 plan_id
+    修复 #594：
+    - 签发前先校验 tenant_id 在 Tenant 表存在（fail-fast），避免外键失败被静默吞成「假成功」；
+    - 双写顺序改为「先写数据库（真值源）成功后再注册内存鉴权表」，杜绝「内存有、DB 无」导致列表看不到；
+    - DB 写入异常显式返回错误，不再 except 静默吞。
+    """
+    import uuid
     from qihuang_platform.db.config import SessionLocal
-    from qihuang_platform.db.models import Plan, ApiKey as DBApiKey
+    from qihuang_platform.db.models import Plan, ApiKey as DBApiKey, Tenant
+
+    # 1) 校验租户存在（fail-fast）
+    db_t = SessionLocal()
+    try:
+        tenant = db_t.query(Tenant).filter_by(id=req.tenant_id).first()
+        if not tenant:
+            return error(
+                "TENANT_NOT_FOUND",
+                message=f"租户不存在：{req.tenant_id}。请到「租户管理」复制正确的 tenant_id，或先完成开户后再签发。",
+                http_status=404,
+            )
+    finally:
+        db_t.close()
+
+    # 2) 查找 plan_id
     db_plan = SessionLocal()
     try:
         plan = db_plan.query(Plan).filter_by(plan_name=req.plan).first()
@@ -281,14 +300,8 @@ async def create_api_key(
     app_key = f"ak_{uuid.uuid4().hex[:16]}"
     app_secret = f"sk_{uuid.uuid4().hex[:32]}"
 
-    key_info = register_api_key(
-        app_key=app_key,
-        app_secret=app_secret,
-        tenant_id=req.tenant_id,
-        plan=req.plan,
-    )
-
-    # 双写: 同时写入数据库
+    # 3) 先写数据库（真值源），成功后再注册内存鉴权表
+    key_info = None
     db = SessionLocal()
     try:
         db_key = DBApiKey(
@@ -301,8 +314,20 @@ async def create_api_key(
         )
         db.add(db_key)
         db.commit()
-    except Exception:
+        # 写库成功后再注册内存鉴权（双写顺序修正：DB 为先）
+        key_info = register_api_key(
+            app_key=app_key,
+            app_secret=app_secret,
+            tenant_id=req.tenant_id,
+            plan=req.plan,
+        )
+    except Exception as e:
         db.rollback()
+        return error(
+            "INTERNAL_ERROR",
+            message=f"密钥落库失败：{e}",
+            http_status=500,
+        )
     finally:
         db.close()
 
@@ -311,7 +336,7 @@ async def create_api_key(
         "app_secret": app_secret,
         "tenant_id": req.tenant_id,
         "plan": req.plan,
-        "status": key_info["status"],
+        "status": key_info["status"] if key_info else "active",
     })
 
 

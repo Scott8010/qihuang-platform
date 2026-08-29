@@ -3,10 +3,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, KeyRound, Copy, RefreshCw, Ban, Loader2, FileDown } from "lucide-react";
 import { C, keyStatus } from "@/lib/types";
-import type { ApiKey } from "@/lib/types";
-import { fetchApiKeys, createApiKey, rotateApiKey, revokeApiKey } from "@/lib/api";
+import type { ApiKey, Tenant } from "@/lib/types";
+import { fetchApiKeys, fetchTenants, createApiKey, rotateApiKey, revokeApiKey } from "@/lib/api";
 import { toast } from "sonner";
-import { Input } from "@/components/ui/input";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -58,6 +60,9 @@ export default function ApiKeys() {
   const [tenantInput, setTenantInput] = useState('');
   const [issuing, setIssuing] = useState(false);
   const [issued, setIssued] = useState<{ app_key: string; app_secret: string } | null>(null);
+  // 租户下拉（修复 #593：从下拉选 tenant_id，避免手填 uuid 出错导致「假成功」）
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [tenantsLoading, setTenantsLoading] = useState(false);
   // 轮换 / 吊销 二次确认
   const [confirm, setConfirm] = useState<{ type: 'rotate' | 'revoke'; key?: ApiKey } | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
@@ -69,6 +74,16 @@ export default function ApiKeys() {
       .then((d) => setList(d))
       .finally(() => setLoading(false));
   }, []);
+
+  // 打开签发弹窗时加载租户列表（每次打开都刷新，确保新开的客户立即可选）
+  useEffect(() => {
+    if (issueOpen) {
+      setTenantsLoading(true);
+      fetchTenants()
+        .then((ts) => setTenants(ts))
+        .finally(() => setTenantsLoading(false));
+    }
+  }, [issueOpen]);
 
   const copy = (v: string, label: string) => {
     navigator.clipboard?.writeText(v);
@@ -278,9 +293,22 @@ export default function ApiKeys() {
             </div>
           ) : (
             <div className='space-y-2'>
-              <div className='text-[12px]' style={{ color: C.mid }}>租户ID（tenant_id）*</div>
-              <Input value={tenantInput} onChange={(e) => setTenantInput(e.target.value)} placeholder='如 tenant_default' className='h-8 text-sm' />
-              <div className='text-[11px]' style={{ color: C.light }}>套餐默认 standard，可填 enterprise / free 等。</div>
+              <div className='text-[12px]' style={{ color: C.mid }}>租户 *（从下拉选择，避免手填 uuid 出错）</div>
+              <Select value={tenantInput} onValueChange={(v) => setTenantInput(v)}>
+                <SelectTrigger className='h-8 text-sm w-full'>
+                  <SelectValue placeholder={tenantsLoading ? '加载租户中…' : '选择租户'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {tenants.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name || t.id}（{t.id.slice(0, 8)}…）
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className='text-[11px]' style={{ color: C.light }}>
+                已选 tenant_id：{tenantInput || '—'}；套餐默认 standard，可在开户时配置。
+              </div>
             </div>
           )}
           <DialogFooter>

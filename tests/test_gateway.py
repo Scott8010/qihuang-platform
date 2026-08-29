@@ -237,6 +237,15 @@ class TestAPIKeyManagement:
         }, headers=user_headers)
         assert resp.status_code == 403
 
+    def test_create_key_tenant_not_found(self, client, admin_headers):
+        """修复 #594：租户不存在时必须失败（code != 0），不能静默吞成「假成功」"""
+        resp = client.post("/admin/v1/api-keys/", json={
+            "tenant_id": "no_such_tenant_xyz", "plan": "standard",
+        }, headers=admin_headers)
+        data = resp.json()
+        assert data["code"] != 0, "租户不存在应返回错误码而非假成功"
+        assert "租户不存在" in (data.get("message") or "")
+
 
 # ═══════════════════════════════════════════════════════════
 # 开发辅助 /dev/*
