@@ -585,6 +585,12 @@ async def list_plans(
         "id": p.id,
         "plan_name": p.plan_name,
         "display_name": p.display_name,
+        "scene_type": p.scene_type,
+        "qps": p.qps,
+        "month_calls": p.month_calls,
+        "month_tokens": p.month_tokens,
+        "price_cents": p.price_cents,
+        "status": p.status,
         "features_json": p.features_json or {},
     } for p in plans])
 
