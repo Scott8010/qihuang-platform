@@ -103,6 +103,8 @@ export default function Billing() {
   const [upgradeTarget, setUpgradeTarget] = useState<PlanItem | null>(null);
   const [rechargeTarget, setRechargeTarget] = useState<RechargePack | null>(null);
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
+  // 单加 Agent 二次确认弹窗
+  const [agentAddConfirmOpen, setAgentAddConfirmOpen] = useState(false);
 
   // 操作结果提示
   const [notice, setNotice] = useState<{ type: "ok" | "err"; text: string } | null>(null);
@@ -205,6 +207,12 @@ export default function Billing() {
     { label: "本月 LLM 成本", value: `¥${stats.cost.toLocaleString()}`, sub: "按 total_cost_cents 折算" },
     { label: "账单应收合计", value: `¥${receivable.toLocaleString()}`, sub: `${bills.length} 张账单` },
   ];
+
+  // 单加 Agent 确认弹窗费用摘要（口径与后端一致：多模态¥99 / 文本¥59）
+  const addedKeys = [...selectedAgents];
+  const addedText = addedKeys.filter((k) => !MULTIMODAL_AGENTS.has(k)).length;
+  const addedMm = addedKeys.filter((k) => MULTIMODAL_AGENTS.has(k)).length;
+  const addedTotalYuan = addedKeys.reduce((s, k) => s + agentFeeYuan(k), 0);
 
   return (
     <div className="space-y-4">
@@ -477,7 +485,7 @@ export default function Billing() {
                 size="sm"
                 disabled={!targetTenantId || selectedAgents.size === 0}
                 style={{ background: C.primary, color: "#fff" }}
-                onClick={confirmAddAgent}
+                onClick={() => setAgentAddConfirmOpen(true)}
               >
                 确认加购（{selectedAgents.size}）
               </Button>
@@ -657,6 +665,30 @@ export default function Billing() {
               onClick={confirmRecharge}
             >
               确认充值
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ══ 单加 Agent 二次确认 ══ */}
+      <AlertDialog open={agentAddConfirmOpen} onOpenChange={(o) => { if (!o) setAgentAddConfirmOpen(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认加购 Agent？</AlertDialogTitle>
+            <AlertDialogDescription>
+              将为租户「<b>{targetTenant?.name || "—"}</b>」加购 {selectedAgents.size} 个 Agent
+              （文本类 {addedText} 个 ×¥59、多模态类 {addedMm} 个 ×¥99），
+              合计 <b>¥{addedTotalYuan}/月</b>。
+              <br />首月费用将从该租户积分钱包扣除（余额不足将开通失败），后续按月自动续扣。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              style={{ background: C.primary }}
+              onClick={() => { setAgentAddConfirmOpen(false); confirmAddAgent(); }}
+            >
+              确认加购并扣费
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
