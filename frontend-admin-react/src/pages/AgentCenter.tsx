@@ -430,7 +430,7 @@ export default function AgentCenter() {
                         <tbody>
                           {dash.recent.map((m: any, i: number) => (
                             <tr key={i} className="border-t" style={{ borderColor: C.border }}>
-                              <td className="py-2 font-mono" style={{ color: C.mid }}>{m.material_key || m.key || m.id || "—"}</td>
+                              <td className="py-2 font-mono" style={{ color: C.mid }}>{m.material_key || m.key || "—"}</td>
                               <td className="py-2">
                                 <span className="text-[13px] px-1.5 py-0.5 rounded" style={{
                                   background: (stateColor[m.state] ? stateColor[m.state] : C.mid) + "22",

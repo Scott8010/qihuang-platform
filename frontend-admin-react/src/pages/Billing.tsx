@@ -20,7 +20,6 @@ import {
   fetchBillingStats, fetchPlans, fetchBills, fetchSubscriptions, fetchSceneUsage, fetchPriceBook,
   fetchTenantExtended, upgradeSubscription, rechargePack, fetchAgents, addAgentAddon,
 } from "@/lib/api";
-import { CodeCopy } from "@/components/ui/code-copy";
 
 /* ═══════════════════════════════════════════
    计费与套餐 — 真实接口驱动（价目展示 + 直接充值入口）
@@ -241,7 +240,7 @@ export default function Billing() {
             <SelectContent>
               {tenants.map((t) => (
                 <SelectItem key={t.id} value={t.id}>
-                  {t.name} · {t.id.slice(0, 8)}
+                  {t.name}
                 </SelectItem>
               ))}
               {tenants.length === 0 && (
@@ -281,7 +280,7 @@ export default function Billing() {
                 {subs.map((s) => (
                   <tr key={s.id} className="border-t" style={{ borderColor: C.border }}>
                     <td className="py-2.5" style={{ color: C.ink }}>
-                      <CodeCopy value={s.tenantId} short />
+                      <span title={s.tenantId}>{tenants.find((x) => x.id === s.tenantId)?.name || "（未识别租户）"}</span>
                     </td>
                     <td className="py-2.5">
                       <span className="text-[13px] px-2 py-0.5 rounded" style={{
@@ -560,11 +559,11 @@ export default function Billing() {
               </tr>
             </thead>
             <tbody>
-              {bills.slice(0, 20).map((b) => {
+              {bills.slice(0, 20).map((b, bi) => {
                 const st = billStatus[(b.status || "").toUpperCase()];
                 return (
                   <tr key={b.id} className="border-t hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
-                    <td className="py-2.5 font-mono text-[14px]" style={{ color: C.mid }}>{String(b.id).slice(0, 12)}</td>
+                    <td className="py-2.5 font-mono text-[14px]" style={{ color: C.mid }} title={String(b.id)}>#{bi + 1}</td>
                     <td className="py-2.5" style={{ color: C.ink }}>{b.tenant || "—"}</td>
                     <td className="py-2.5" style={{ color: C.mid }}>{b.period}</td>
                     <td className="py-2.5" style={{ color: C.mid }}>{wan(Number(b.calls))}</td>

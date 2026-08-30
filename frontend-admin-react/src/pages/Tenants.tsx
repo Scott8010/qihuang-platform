@@ -456,7 +456,7 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
                     <tr key={t.id} className="border-b last:border-0 hover:bg-[#F8FAF9] transition-colors" style={{ borderColor: C.border }}>
                       <td className="px-5 py-3.5 align-middle">
                         <div className="font-medium whitespace-nowrap truncate" style={{ color: C.ink, maxWidth: 260 }} title={t.name}>{t.name}</div>
-                        <div className="text-[13px] font-mono truncate" style={{ color: C.light, maxWidth: 260 }} title={`${t.name} · ${t.id}`}>{t.code || t.id}</div>
+                        <div className="text-[13px] font-mono truncate" style={{ color: C.light, maxWidth: 260 }} title={`${t.name} · ${t.id}`}>{t.code || "—"}</div>
                       </td>
                       <td className="px-3 py-3.5 align-middle">
                         <span className="inline-block px-2.5 py-1 rounded text-[13px] font-medium whitespace-nowrap" style={{ color: sceneMap[t.scene].color, background: sceneMap[t.scene].bg }}>
@@ -518,7 +518,7 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
           <DialogHeader>
             <DialogTitle style={{ color: "#B03A2E" }}>删除租户</DialogTitle>
             <DialogDescription className="text-xs">
-              将软删除 <b>{delTenant?.name}</b>（{delTenant?.id}），操作不可撤销，相关机构与用户将一并进入停用态。
+              将软删除 <b>{delTenant?.name}</b>，操作不可撤销，相关机构与用户将一并进入停用态。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

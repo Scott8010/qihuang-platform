@@ -97,7 +97,7 @@ export default function TenantDetail({ tenant, onBack, go }: { tenant: Tenant; o
       {/* 概要条 */}
       <div className="grid grid-cols-5 gap-3 text-[15px]">
         {[
-          { l: "租户 ID", v: t.id || "—", code: true },
+          { l: "租户", v: t.name || "—", code: false },
           { l: "套餐", v: `${t.plan} · 到期 ${t.expires || "—"}` },
           { l: "机构 / 用户", v: `${orgs.length || t.orgs} / ${(users.length || t.users).toLocaleString()}` },
           {
@@ -141,10 +141,10 @@ export default function TenantDetail({ tenant, onBack, go }: { tenant: Tenant; o
                     </tr>
                   </thead>
                   <tbody>
-                    {subs.map((s) => (
+                    {subs.map((s, si) => (
                       <tr key={s.id} className="border-t" style={{ borderColor: C.border }}>
-                        <td className="py-2.5"><CodeCopy value={s.id} className="text-[14px]" /></td>
-                        <td className="py-2.5">{s.planId ? <CodeCopy value={s.planId} className="text-[14px]" /> : "—"}</td>
+                        <td className="py-2.5" title={s.id}>订阅 #{si + 1}</td>
+                        <td className="py-2.5">{s.planId ? (plans.find((p) => p.id === s.planId)?.name || "—") : "—"}</td>
                         <td className="py-2.5">
                           <Badge variant="outline" className={userStatusCls(s.status)}>{s.status || "—"}</Badge>
                         </td>
@@ -187,11 +187,11 @@ export default function TenantDetail({ tenant, onBack, go }: { tenant: Tenant; o
                     </tr>
                   </thead>
                   <tbody>
-                    {orgs.map((o) => (
+                    {orgs.map((o, oi) => (
                       <tr key={o.id} className="border-t hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
-                        <td className="py-2.5"><CodeCopy value={o.id} className="text-[14px]" /></td>
+                        <td className="py-2.5" title={o.id}>#{oi + 1}</td>
                         <td className="py-2.5 font-medium">{o.name}</td>
-                        <td className="py-2.5" style={{ color: C.mid }}>{o.parentId ? <CodeCopy value={o.parentId} className="text-[14px]" /> : "—"}</td>
+                        <td className="py-2.5" style={{ color: C.mid }} title={o.parentId || undefined}>{o.parentId ? (o.parentId === t.id ? t.name : orgs.find((x) => x.id === o.parentId)?.name || "—") : "—"}</td>
                         <td className="py-2.5">{o.userCount}</td>
                         <td className="py-2.5">
                           <Badge variant="outline" className={userStatusCls(o.status)}>{o.status || "—"}</Badge>
@@ -224,7 +224,7 @@ export default function TenantDetail({ tenant, onBack, go }: { tenant: Tenant; o
                       <tr key={u.id} className="border-t hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
                         <td className="py-2.5">
                           <div className="font-medium">{u.displayName}</div>
-                          <div className="text-[13px] font-mono whitespace-nowrap" style={{ color: C.light }}>{u.username || u.id}</div>
+                          <div className="text-[13px] font-mono whitespace-nowrap" style={{ color: C.light }}>{u.username || "—"}</div>
                         </td>
                         <td className="py-2.5" style={{ color: C.mid }}>{u.phone || "—"}</td>
                         <td className="py-2.5" style={{ color: C.mid }}>{u.email || "—"}</td>
@@ -303,11 +303,11 @@ export default function TenantDetail({ tenant, onBack, go }: { tenant: Tenant; o
                     </tr>
                   </thead>
                   <tbody>
-                    {bills.map((b) => {
+                    {bills.map((b, bi) => {
                       const s = billStatus[b.status] || { label: b.status, cls: "bg-gray-100 text-gray-600 border-gray-200" };
                       return (
                         <tr key={b.id} className="border-t" style={{ borderColor: C.border }}>
-                          <td className="py-2.5"><CodeCopy value={b.id} className="text-[14px]" /></td>
+                          <td className="py-2.5" title={b.id}>#{bi + 1}</td>
                           <td className="py-2.5">{b.period}</td>
                           <td className="py-2.5">{Number(b.calls).toLocaleString()}</td>
                           <td className="py-2.5">{Number(b.tokens).toLocaleString()}</td>

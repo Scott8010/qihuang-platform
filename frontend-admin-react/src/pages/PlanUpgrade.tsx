@@ -115,7 +115,7 @@ export default function PlanUpgrade() {
                   <tr key={t.id} className="border-b last:border-0 hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
                     <td className="px-5 py-3.5">
                       <div className="font-medium" style={{ color: C.ink }}>{t.name}</div>
-                      <div className="text-[13px]" style={{ color: C.light }}>{t.id}</div>
+                      <div className="text-[13px]" style={{ color: C.light }}>—</div>
                     </td>
                     <td className="px-3 py-3.5">
                       <span

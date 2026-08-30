@@ -404,7 +404,7 @@ function TemplateMeta({ tpl }: { tpl: CapabilityTemplate }) {
       <span style={{ color: C.light }}>创建</span>
       <span style={{ color: C.ink }}>{(tpl.created_at || "").replace("T", " ").slice(0, 19) || "—"}</span>
       <span style={{ color: C.light }}>ID</span>
-      <span className="font-mono text-[13px] break-all" style={{ color: C.mid }}>{tpl.id}</span>
+      <span className="font-mono text-[13px] break-all" style={{ color: C.mid }}>—</span>
     </div>
   );
 }
@@ -426,7 +426,7 @@ function TemplateRow({ t, onView, onSubmit }: {
     <tr className="border-b last:border-0 hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
       <td className="px-4 py-3">
         <div className="font-medium" style={{ color: C.ink }}>{t.name}</div>
-        <div className="text-[13px] font-mono" style={{ color: C.light }}>{t.id.slice(0, 12)}…</div>
+        <div className="text-[13px] font-mono" style={{ color: C.light }}>—</div>
       </td>
       <td className="px-3 py-3">
         <span className="text-[13px] px-2 py-0.5 rounded" style={{ background: C.soft, color: C.primary }}>
@@ -726,7 +726,7 @@ export default function CapabilityCenter() {
                 </tr>
               </thead>
               <tbody>
-                {submissions.map((s) => {
+                {submissions.map((s, si) => {
                   const tpl = templates.find((t) => t.id === s.template_id);
                   const st = s.status === "PENDING" ? { label: "待审核", color: "#8A6A1F", bg: "#FBF4E4" }
                     : s.status === "APPROVED" ? { label: "已采纳", color: "#2E5A4C", bg: "#EAF2EE" }
@@ -734,8 +734,8 @@ export default function CapabilityCenter() {
                   return (
                     <tr key={s.id} className="border-b last:border-0 hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
                       <td className="px-4 py-3">
-                        <div className="font-medium" style={{ color: C.ink }}>{tpl?.name || s.template_id.slice(0, 12)}</div>
-                        <div className="text-[13px] font-mono" style={{ color: C.light }}>{s.id.slice(0, 12)}…</div>
+                        <div className="font-medium" style={{ color: C.ink }}>{tpl?.name || "—"}</div>
+                        <div className="text-[13px] font-mono" style={{ color: C.light }} title={s.id}>#{si + 1}</div>
                       </td>
                       <td className="px-3 py-3" style={{ color: C.mid }}>{s.submitter_org_id || "—"}</td>
                       <td className="px-3 py-3">
@@ -921,7 +921,6 @@ export default function CapabilityCenter() {
                           </div>
                           <div className="text-[13px]" style={{ color: C.light }}>
                             {(v.created_at || "").replace("T", " ").slice(0, 19) || "—"}
-                            {v.created_by ? ` · ${v.created_by.slice(0, 8)}` : ""}
                           </div>
                         </div>
                         <Button size="sm" variant="outline" className="h-7 text-[14px]" style={{ color: C.primary }}

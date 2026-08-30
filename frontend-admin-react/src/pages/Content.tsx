@@ -221,7 +221,7 @@ export default function Content() {
                 </tr>
               </thead>
               <tbody>
-                {reviews.map((r) => {
+                {reviews.map((r, ri) => {
                   const ts = typeStyle(r.type);
                   const busy = busyId === r.id;
                   const hasRefined = !!(r.content && r.content._refined && !r.content._refined.error);
@@ -232,7 +232,7 @@ export default function Content() {
                       style={{ borderColor: C.border }}
                       onClick={() => { if (!busy) setDetail(r); }}
                     >
-                      <td className="py-3 font-mono text-[14px]" style={{ color: C.mid }}>{r.id}</td>
+                      <td className="py-3 font-mono text-[14px]" style={{ color: C.mid }} title={r.id}>#{ri + 1}</td>
                       <td className="py-3">
                         <span className="text-[13px] px-2 py-0.5 rounded" style={ts}>{TYPE_LABEL[r.type] || r.type}</span>
                       </td>
@@ -508,7 +508,7 @@ function ReviewDetailDrawer({
               <div className="px-5 py-4 space-y-5">
                 {/* 1. 基础信息 */}
                 <Section title="基础信息">
-                  <Row label="编号" value={<span className="font-mono">{detail.id}</span>} />
+                  <Row label="编号" value={<span className="font-mono">—</span>} />
                   <Row label="类型" value={
                     <span className="text-[13px] px-2 py-0.5 rounded" style={typeStyle(detail.type)}>
                       {TYPE_LABEL[detail.type] || detail.type}
