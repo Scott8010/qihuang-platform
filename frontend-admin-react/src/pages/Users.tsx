@@ -89,12 +89,16 @@ export default function Users() {
   const [rowBusy, setRowBusy] = useState("");
 
   const load = useCallback(async () => {
-    const [us, rs] = await Promise.all([fetchUsers(), fetchRoles()]);
+    // 三个请求全部并行（之前 fetchTenantExtended 串在 Promise.all 后，tenantMap 晚到 → 新建弹窗 Select 看到 "加载租户中…" 占位）
+    const [us, rs, ts] = await Promise.all([
+      fetchUsers(),
+      fetchRoles(),
+      fetchTenantExtended(200),
+    ]);
     setUsers(us);
     setRoles(rs);
     // 构建 租户ID→名称 / 机构ID→名称 映射（让"归属"可见）
     try {
-      const ts = await fetchTenantExtended(200);
       const tmap = new Map<string, string>();
       tmap.set("tenant_default", "平台内部租户");
       ts.forEach((t) => t.id && tmap.set(t.id, t.name || t.id));
@@ -467,12 +471,18 @@ export default function Users() {
                   <SelectTrigger className="h-8 text-sm w-full">
                     <SelectValue placeholder="留空 = 平台内部租户(tenant_default)" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[320px]">
+                    {/* 始终保留首项「留空」——随时可点。即便租户列表还没拉到 / 没拉到任何客户租户，也能确认"不指定" */}
+                    <SelectItem value="">↪ 留空（归入平台内部租户）</SelectItem>
+                    {tenantOptions.length > 0 && <div className="my-1 h-px" style={{ background: C.border }} />}
                     {tenantOptions.map((t) => (
                       <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                     ))}
                     {tenantOptions.length === 0 && (
-                      <SelectItem value="__none" disabled>加载租户中…</SelectItem>
+                      /* 占位用普通 div banner，不参与 select-item，避免用户点了 SelectTrigger 看不到任何可选内容 */
+                      <div className="px-2 py-1.5 text-[13px]" style={{ color: C.light }}>
+                        {tenantMap.size <= 1 ? "客户租户加载中…" : "当前未配置可选客户租户"}
+                      </div>
                     )}
                   </SelectContent>
                 </Select>
