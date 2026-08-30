@@ -42,6 +42,38 @@ const MAIN_PLAN = "professional";   // 主力套餐高亮
 const MULTIMODAL_AGENTS = new Set(["tongue", "geo", "health-assistant", "health-advisor"]);
 const agentFeeYuan = (key: string) => (MULTIMODAL_AGENTS.has(key) ? 99 : 59);
 
+/** 复用：Agent 多选清单（套餐引导追加 & 单加 Agent 块共用） */
+function AgentChecklist({
+  agents, selected, onToggle, emptyText,
+}: {
+  agents: AgentCenterItem[];
+  selected: Set<string>;
+  onToggle: (key: string, on: boolean) => void;
+  emptyText?: string;
+}) {
+  if (agents.length === 0) {
+    return <div className="py-6 text-center text-[13px]" style={{ color: C.light }}>{emptyText || "加载 Agent 列表中…"}</div>;
+  }
+  return (
+    <div className="space-y-1.5 max-h-72 overflow-auto pr-1">
+      {agents.map((a) => {
+        const on = selected.has(a.agentKey);
+        return (
+          <label
+            key={a.agentKey}
+            className="flex items-center gap-2 p-2.5 rounded border cursor-pointer"
+            style={{ borderColor: on ? C.primary : C.border, background: on ? "#FBF4E4" : "#fff" }}
+          >
+            <Checkbox checked={on} onCheckedChange={(c) => onToggle(a.agentKey, !!c)} />
+            <span className="flex-1 text-[14px]" style={{ color: C.ink }}>{a.name}</span>
+            <span className="text-[12px]" style={{ color: C.light }}>¥{agentFeeYuan(a.agentKey)}/月</span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
 function wan(n: number) {
   if (!n) return "0";
   if (n >= 10000) return `${(n / 10000).toFixed(1)} 万`;
@@ -71,7 +103,6 @@ export default function Billing() {
   // 弹窗 / 选择状态
   const [upgradeTarget, setUpgradeTarget] = useState<PlanItem | null>(null);
   const [rechargeTarget, setRechargeTarget] = useState<RechargePack | null>(null);
-  const [agentDialogOpen, setAgentDialogOpen] = useState(false);
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
 
   // 操作结果提示
@@ -115,11 +146,28 @@ export default function Billing() {
   };
 
   // ── 写操作 ──
-  const confirmUpgrade = async () => {
+  const confirmPlanWithAgents = async () => {
     if (!upgradeTarget || !targetTenantId) return;
-    const r = await upgradeSubscription(targetTenantId, upgradeTarget.id);
+    const r1 = await upgradeSubscription(targetTenantId, upgradeTarget.id);
+    if (!r1.ok) {
+      setUpgradeTarget(null);
+      flash("err", `开通失败：${r1.msg}`);
+      return;
+    }
+    const keys = [...selectedAgents];
     setUpgradeTarget(null);
-    flash(r.ok ? "ok" : "err", r.ok ? `开通/升级已提交：${r.msg}` : `开通失败：${r.msg}`);
+    if (keys.length > 0) {
+      const r2 = await addAgentAddon(targetTenantId, keys);
+      setSelectedAgents(new Set());
+      flash(
+        r2.ok ? "ok" : "err",
+        r2.ok
+          ? `开通已提交；并加购 ${keys.length} 个 Agent 成功：${r2.msg}`
+          : `开通已提交，但 Agent 加购失败：${r2.msg}`,
+      );
+    } else {
+      flash("ok", `开通/升级已提交：${r1.msg}`);
+    }
   };
 
   const confirmRecharge = async () => {
@@ -138,12 +186,11 @@ export default function Billing() {
   };
 
   const confirmAddAgent = async () => {
-    if (!targetTenantId) return;
+    if (!targetTenantId) { flash("err", "请先在顶部选择操作租户"); return; }
     const keys = [...selectedAgents];
     if (keys.length === 0) { flash("err", "请至少勾选一个 Agent"); return; }
     const r = await addAgentAddon(targetTenantId, keys);
-    setAgentDialogOpen(false);
-    setSelectedAgents(new Set());
+    if (r.ok) setSelectedAgents(new Set());
     flash(r.ok ? "ok" : "err", r.ok ? `加购成功：${r.msg}` : `加购失败：${r.msg}`);
   };
 
@@ -394,35 +441,32 @@ export default function Billing() {
           </CardContent>
         </Card>
 
-        {/* 单加 Agent 月费 */}
+        {/* 单加 Agent 月费 — 直接可勾选加购（独立购买入口） */}
         <Card className="border shadow-none" style={{ borderColor: C.border }}>
           <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <BarChart3 className="w-4 h-4" style={{ color: C.primary }} />
-                <span className="text-[16px] font-medium" style={{ color: C.ink }}>单加 Agent 月费</span>
-                <span className="text-[13px] font-normal" style={{ color: C.light }}>（开门订阅费）</span>
-              </div>
+            <div className="flex items-center gap-2 mb-1">
+              <BarChart3 className="w-4 h-4" style={{ color: C.primary }} />
+              <span className="text-[16px] font-medium" style={{ color: C.ink }}>单加 Agent 月费</span>
+              <span className="text-[13px] font-normal" style={{ color: C.light }}>（开门订阅费 · 可勾选加购）</span>
+            </div>
+            <div className="text-[13px] mb-3" style={{ color: C.mid }}>
+              文本类 ¥{priceBook?.agentAddon.textMonthlyYuan ?? 59}/月 · 多模态类 ¥{priceBook?.agentAddon.multimodalMonthlyYuan ?? 99}/月
+            </div>
+            <AgentChecklist agents={agents} selected={selectedAgents} onToggle={toggleAgent} />
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-[12.5px]" style={{ color: C.light }}>
+                {targetTenantId ? `将加购到租户「${targetTenant?.name || "—"}」` : "请先在顶部选择操作租户"}
+              </span>
               <Button
                 size="sm"
-                disabled={!targetTenantId}
+                disabled={!targetTenantId || selectedAgents.size === 0}
                 style={{ background: C.primary, color: "#fff" }}
-                onClick={() => { setSelectedAgents(new Set()); setAgentDialogOpen(true); }}
+                onClick={confirmAddAgent}
               >
-                加购 Agent
+                确认加购（{selectedAgents.size}）
               </Button>
             </div>
-            <div className="space-y-1 text-[14px]">
-              <div className="flex items-center justify-between py-2 border-t" style={{ borderColor: C.border }}>
-                <span style={{ color: C.mid }}>文本类 Agent</span>
-                <span className="font-medium" style={{ color: C.ink }}>¥{priceBook?.agentAddon.textMonthlyYuan ?? 59}/月</span>
-              </div>
-              <div className="flex items-center justify-between py-2 border-t" style={{ borderColor: C.border }}>
-                <span style={{ color: C.mid }}>多模态类 Agent</span>
-                <span className="font-medium" style={{ color: C.ink }}>¥{priceBook?.agentAddon.multimodalMonthlyYuan ?? 99}/月</span>
-              </div>
-            </div>
-            <div className="mt-3 text-[12.5px] leading-relaxed" style={{ color: C.light }}>
+            <div className="mt-2 text-[12.5px] leading-relaxed" style={{ color: C.light }}>
               {priceBook?.agentAddon.note || "客户单独开通某 agent 的月度订阅；调用仍按 token 吞积分池，先赠后充。"}
             </div>
           </CardContent>
@@ -548,27 +592,36 @@ export default function Billing() {
         </CardContent>
       </Card>
 
-      {/* ══ 套餐开通/升级 二次确认 ══ */}
-      <AlertDialog open={!!upgradeTarget} onOpenChange={(o) => { if (!o) setUpgradeTarget(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>确认开通 / 升级套餐？</AlertDialogTitle>
-            <AlertDialogDescription>
+      {/* ══ 套餐开通/升级 + 引导追加 Agent ══ */}
+      <Dialog open={!!upgradeTarget} onOpenChange={(o) => { if (!o) setUpgradeTarget(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>确认开通 / 升级套餐？</DialogTitle>
+            <DialogDescription>
               将为租户「<b>{targetTenant?.name || "—"}</b>」{upgradeTarget ? `开通 / 升级为「${upgradeTarget.name}」` : ""}，
               新套餐于<b>次月 1 号</b>生效（本月仍按原套餐计费）。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction
-              style={{ background: C.primary }}
-              onClick={confirmUpgrade}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="border-t pt-3" style={{ borderColor: C.border }}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[14px] font-medium" style={{ color: C.ink }}>顺手加几个 Agent？（可选）</span>
+              <span className="text-[12px]" style={{ color: C.light }}>本月即生效 · 从积分池扣首月费</span>
+            </div>
+            <AgentChecklist agents={agents} selected={selectedAgents} onToggle={toggleAgent} emptyText="加载 Agent 列表中…" />
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">取消</Button>
+            </DialogClose>
+            <Button
+              style={{ background: C.primary, color: "#fff" }}
+              onClick={confirmPlanWithAgents}
             >
-              确认开通
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              确认开通{selectedAgents.size > 0 ? ` + 加购 ${selectedAgents.size} 个 Agent` : ""}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ══ 叠加包充值 二次确认 ══ */}
       <AlertDialog open={!!rechargeTarget} onOpenChange={(o) => { if (!o) setRechargeTarget(null); }}>
@@ -593,47 +646,7 @@ export default function Billing() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ══ 单加 Agent 多选弹窗 ══ */}
-      <Dialog open={agentDialogOpen} onOpenChange={setAgentDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>加购 Agent（租户：{targetTenant?.name || "—"}）</DialogTitle>
-            <DialogDescription>
-              勾选要额外叠加的 Agent（套餐之外精准授权）。首月即从积分池扣月费（文本 ¥59 / 多模态 ¥99），余额不足将拒绝开通。
-            </DialogDescription>
-          </DialogHeader>
-          <div className="max-h-80 overflow-auto space-y-2 pr-1">
-            {agents.length === 0 && (
-              <div className="py-8 text-center text-[13px]" style={{ color: C.light }}>加载 Agent 列表中…</div>
-            )}
-            {agents.map((a) => (
-              <label
-                key={a.agentKey}
-                className="flex items-center gap-2 p-2.5 rounded border cursor-pointer"
-                style={{ borderColor: C.border, background: selectedAgents.has(a.agentKey) ? "#FBF4E4" : "#fff" }}
-              >
-                <Checkbox
-                  checked={selectedAgents.has(a.agentKey)}
-                  onCheckedChange={(c) => toggleAgent(a.agentKey, !!c)}
-                />
-                <span className="flex-1 text-[14px]" style={{ color: C.ink }}>{a.name}</span>
-                <span className="text-[12px]" style={{ color: C.light }}>¥{agentFeeYuan(a.agentKey)}/月</span>
-              </label>
-            ))}
-          </div>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">取消</Button>
-            </DialogClose>
-            <Button
-              style={{ background: C.primary, color: "#fff" }}
-              onClick={confirmAddAgent}
-            >
-              确认加购（{selectedAgents.size}）
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* 单加 Agent 选择已内联到上方卡片，不再用独立弹窗 */}
     </div>
   );
 }
