@@ -4,12 +4,77 @@ import { Badge } from "@/components/ui/badge";
 import { Cpu, ScrollText, CheckCircle2, AlertTriangle } from "lucide-react";
 import { C } from "@/lib/types";
 import { fetchServices, fetchLlmProviders, fetchAuditLogs } from "@/lib/api";
+import { fmtDateTime } from "@/lib/format";
 import type { ServiceItem, LlmProviderItem, AuditLogItem } from "@/lib/types";
 
 /* 全量真实数据驱动：
    - 服务健康 → GET /admin/v1/monitor/services
    - 审计日志 → GET /admin/v1/audit-logs
    - LLM 分模型计量：后端暂无端点，返回空 → 显示诚实空态（不再回落 mock） */
+
+/** 审计动作枚举 -> 中文标签。未命中映射则原样显示。 */
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  TENANT_ONBOARD: "租户入驻",
+  CREATE_TENANT: "创建租户",
+  DELETE_TENANT: "删除租户",
+  ORG_CREATE: "创建机构",
+  USER_CREATE: "创建用户",
+  USER_DISABLE: "停用用户",
+  ROLE_GRANT: "授予角色",
+  ROLE_REVOKE: "撤销角色",
+  API_KEY_CREATE: "签发 API Key",
+  API_KEY_ROTATE: "API Key 轮换",
+  API_KEY_REVOKE: "API Key 吊销",
+  KEY_READONLY: "Key 进入只读",
+  PLAN_CHANGE: "套餐变更",
+  PLAN_UPGRADE: "套餐升级",
+  PLAN_DOWNGRADE: "套餐降级",
+  KG_REVIEW_APPROVED: "图谱审核通过",
+  KG_REVIEW_REJECTED: "图谱审核驳回",
+  KG_REVIEW_PENDING: "图谱审核转审",
+  COMPLIANCE_BLOCK: "合规拦截",
+  CONTENT_DELETE: "内容下架",
+  CONTENT_EDIT: "内容编辑",
+};
+function labelOfAction(raw: string): string {
+  if (!raw) return "—";
+  return AUDIT_ACTION_LABELS[raw] || AUDIT_ACTION_LABELS[String(raw).toUpperCase()] || raw;
+}
+/** 动作语义分类 -> 颜色（success=通过、info=新建、warn=变更/轮换、danger=驳回/吊销）。 */
+function toneOfAction(raw: string): "success" | "info" | "warn" | "danger" | "neutral" {
+  const r = String(raw || "").toUpperCase();
+  if (/REJECT|FAIL|DISABLE|BLOCK|REVOKE|DELETE|REJECTED/.test(r)) return "danger";
+  if (/CREATE|GENERATE|REGISTER|ADD|ONBOARD/.test(r)) return "info";
+  if (/APPROVE|GRANT|ENABLE|PASS/.test(r)) return "success";
+  if (/ROTATE|READONLY|PENDING|UPDATE|CHANGE|UPGRADE|DOWNGRADE|EDIT/.test(r)) return "warn";
+  return "neutral";
+}
+const TONE_CLASS = {
+  success: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  info:    "bg-sky-50 text-sky-700 border-sky-200",
+  warn:    "bg-amber-50 text-amber-700 border-amber-200",
+  danger:  "bg-rose-50 text-rose-700 border-rose-200",
+  neutral: "bg-gray-50 text-gray-600 border-gray-200",
+} as const;
+/** 由 action 推导对象类型中文名（用于对象列「类型 #序号」展示）。 */
+function kindOfAction(raw: string): string {
+  const r = String(raw || "").toUpperCase();
+  if (r.includes("KG_REVIEW") || r.startsWith("KG_")) return "图谱审核单";
+  if (r.includes("TENANT")) return "租户";
+  if (r.includes("API_KEY") || r.includes("KEY") || r.includes("KEY_READONLY")) return "API Key";
+  if (r.includes("ORG")) return "机构";
+  if (r.includes("USER")) return "用户";
+  if (r.includes("ROLE")) return "角色";
+  if (r.includes("PLAN")) return "套餐";
+  if (r.includes("COMPLIANCE") || r.includes("CONTENT")) return "内容";
+  return "对象";
+}
+/** 操作人归一化：system/System/空 都收敛为「系统」。 */
+function fmtOp(raw: string): string {
+  if (!raw || raw === "—") return "—";
+  if (/^system$/i.test(raw)) return "系统";
+  return raw;
+}
 
 export default function Monitor() {
   const [services, setServices] = useState<ServiceItem[]>([]);
@@ -124,24 +189,23 @@ export default function Monitor() {
                 </tr>
               </thead>
               <tbody>
-                {auditLogs.map((a, i) => (
+                {auditLogs.map((a, i) => {
+                  const tone = toneOfAction(a.action);
+                  const targetText = a.target && a.target !== "—" ? `${kindOfAction(a.action)} #${i + 1}` : "—";
+                  return (
                   <tr key={i} className="border-t hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
-                    <td className="py-2.5 font-mono text-[14px]" style={{ color: C.mid }}>{a.time}</td>
-                    <td className="py-2.5">{a.op}</td>
+                    <td className="py-2.5 text-[14px]" style={{ color: C.mid }} title={a.time}>{fmtDateTime(a.time)}</td>
+                    <td className="py-2.5">{fmtOp(a.op)}</td>
                     <td className="py-2.5">
-                      <Badge variant="outline" className={`font-mono text-[13px] ${
-                        a.action.includes("approve") ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                        a.action.includes("create") ? "bg-sky-50 text-sky-700 border-sky-200" :
-                        a.action.includes("rotate") || a.action.includes("readonly") ? "bg-amber-50 text-amber-700 border-amber-200" :
-                        "bg-gray-50 text-gray-600 border-gray-200"
-                      }`}>
-                        {a.action}
+                      <Badge variant="outline" className={`text-[13px] ${TONE_CLASS[tone]}`}>
+                        {labelOfAction(a.action)}
                       </Badge>
                     </td>
-                    <td className="py-2.5 text-[14px]">{a.target}</td>
-                    <td className="py-2.5 font-mono text-[14px]" style={{ color: C.light }}>{a.ip}</td>
+                    <td className="py-2.5 text-[14px]" style={{ color: C.light }} title={a.target}>{targetText}</td>
+                    <td className="py-2.5 font-mono text-[14px]" style={{ color: C.light }}>{a.ip || "—"}</td>
                   </tr>
-                ))}
+                  );
+                })}
                 {auditLogs.length === 0 && (
                   <tr><td colSpan={5} className="py-10 text-center text-[15px]" style={{ color: C.light }}>{loading ? "加载中…" : "暂无审计日志"}</td></tr>
                 )}
