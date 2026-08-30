@@ -432,6 +432,7 @@ export async function fetchUserDetail(userId: string): Promise<PlatformUser | nu
 export async function createUser(body: {
   username: string; password: string;
   display_name?: string; phone?: string; email?: string;
+  tenant_id?: string; org_id?: string;
 }) {
   return mutate<{ id: string; username: string }>("POST", "/admin/v1/users", body);
 }

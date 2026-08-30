@@ -4,6 +4,7 @@ import {
   BookOpenCheck, Activity, Search, Bell, Sprout, ChevronDown, LogOut,
   Users as UsersIcon, Eye, EyeOff, Lock, Bot, CreditCard, Boxes,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { C } from "@/lib/types";
 import { login, logout, getToken, changePassword, getIdentity } from "@/lib/api";
 import Dashboard from "@/pages/Dashboard";
@@ -18,7 +19,7 @@ import AgentCenter from "@/pages/AgentCenter";
 import PlanUpgrade from "@/pages/PlanUpgrade";
 import CapabilityCenter from "@/pages/CapabilityCenter";
 
-const nav = [
+const nav: { id: string; label: string; icon: LucideIcon; desc?: string }[] = [
   { id: "dashboard", label: "工作台", icon: LayoutDashboard },
   { id: "agents", label: "Agent 中台", icon: Bot },
   { id: "tenants", label: "租户管理", icon: Building2 },
@@ -182,7 +183,10 @@ export default function App() {
                 }}
               >
                 <n.icon className="w-[18px] h-[18px]" style={{ color: active ? C.primary : C.light }} />
-                <span className="flex-1 text-left">{n.label}</span>
+                <span className="flex-1 text-left">
+                  <span className="block">{n.label}</span>
+                  {n.desc && <span className="block text-[12px] font-normal leading-tight" style={{ color: C.light }}>{n.desc}</span>}
+                </span>
               </button>
             );
           })}

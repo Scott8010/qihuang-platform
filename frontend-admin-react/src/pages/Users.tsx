@@ -8,6 +8,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
   Users as UsersIcon, Search, Plus, Loader2, Trash2, KeyRound,
   Pencil, ShieldCheck, Power, Copy, Check,
 } from "lucide-react";
@@ -16,10 +19,11 @@ import { C, userStatusMap } from "@/lib/types";
 import {
   fetchUsers, fetchRoles, createUser, updateUser, deleteUser,
   resetUserPassword, assignRole, revokeRole,
+  fetchTenantExtended, fetchTenantOrgs,
 } from "@/lib/api";
-import type { PlatformUser, RoleTpl } from "@/lib/types";
+import type { PlatformUser, RoleTpl, OrgItem } from "@/lib/types";
 
-const EMPTY_NEW = { username: '', password: '', display_name: '', phone: '', email: '' };
+const EMPTY_NEW = { username: '', password: '', display_name: '', phone: '', email: '', tenant_id: '', org_id: '' };
 
 function validatePassword(pwd: string): string | null {
   if (!pwd) return '密码不能为空';
@@ -62,6 +66,16 @@ export default function Users() {
   const [delUser, setDelUser] = useState<PlatformUser | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // 归属映射（让"所属租户/所属机构"可见）
+  const [tenantMap, setTenantMap] = useState<Map<string, string>>(new Map());
+  const [orgMap, setOrgMap] = useState<Map<string, string>>(new Map());
+  const [formOrgs, setFormOrgs] = useState<OrgItem[]>([]);
+  // 表单租户下拉（排除平台内部租户，留空即归入 tenant_default）
+  const tenantOptions = useMemo(
+    () => Array.from(tenantMap.entries()).filter(([id]) => id !== "tenant_default").map(([id, name]) => ({ id, name })),
+    [tenantMap],
+  );
+
   // 行级忙碌（启停）
   const [rowBusy, setRowBusy] = useState("");
 
@@ -69,10 +83,33 @@ export default function Users() {
     const [us, rs] = await Promise.all([fetchUsers(), fetchRoles()]);
     setUsers(us);
     setRoles(rs);
+    // 构建 租户ID→名称 / 机构ID→名称 映射（让"归属"可见）
+    try {
+      const ts = await fetchTenantExtended(200);
+      const tmap = new Map<string, string>();
+      tmap.set("tenant_default", "平台内部租户");
+      ts.forEach((t) => t.id && tmap.set(t.id, t.name || t.id));
+      setTenantMap(tmap);
+      const distinctTenants = Array.from(new Set(us.map((u) => u.tenantId).filter(Boolean)));
+      const orgLists = await Promise.all(distinctTenants.map((tid) => fetchTenantOrgs(tid)));
+      const omap = new Map<string, string>();
+      orgLists.forEach((list) => list.forEach((o) => o.id && omap.set(o.id, o.name || o.id)));
+      setOrgMap(omap);
+    } catch {
+      /* 映射构建失败不影响用户列表主流程 */
+    }
     setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // 新建表单：所选租户变化时级联拉取该租户的机构列表
+  useEffect(() => {
+    let alive = true;
+    if (!nu.tenant_id) { setFormOrgs([]); return; }
+    fetchTenantOrgs(nu.tenant_id).then((list) => { if (alive) setFormOrgs(list); });
+    return () => { alive = false; };
+  }, [nu.tenant_id]);
 
   const filtered = useMemo(() => {
     const k = kw.trim().toLowerCase();
@@ -109,6 +146,8 @@ export default function Users() {
       display_name: nu.display_name.trim() || undefined,
       phone: nu.phone.trim() || undefined,
       email: nu.email.trim() || undefined,
+      tenant_id: nu.tenant_id || undefined,
+      org_id: nu.org_id || undefined,
     });
     setCreating(false);
     if (r.ok) {
@@ -288,7 +327,7 @@ export default function Users() {
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ background: C.bg, color: C.mid }}>
-                    {["用户名", "姓名", "联系方式", "角色", "状态", "创建时间", "操作"].map((h) => (
+                    {["用户名", "姓名", "联系方式", "所属租户", "所属机构", "角色", "状态", "创建时间", "操作"].map((h) => (
                       <th key={h} className="text-left font-medium px-4 py-2.5 whitespace-nowrap text-xs">{h}</th>
                     ))}
                   </tr>
@@ -307,6 +346,16 @@ export default function Users() {
                         <td className="px-4 py-2.5 text-xs" style={{ color: C.mid }}>
                           {u.phone || u.email
                             ? <>{u.phone}{u.phone && u.email ? " · " : ""}{u.email}</>
+                            : <span style={{ color: C.light }}>—</span>}
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap text-xs" style={{ color: C.mid }} title={u.tenantId || ""}>
+                          {u.tenantId
+                            ? (tenantMap.get(u.tenantId) || "（未识别租户）")
+                            : <span style={{ color: C.light }}>—</span>}
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap text-xs" style={{ color: C.mid }} title={u.orgId || ""}>
+                          {u.orgId
+                            ? (orgMap.get(u.orgId) || "（未关联机构）")
                             : <span style={{ color: C.light }}>—</span>}
                         </td>
                         <td className="px-4 py-2.5">
@@ -379,6 +428,43 @@ export default function Users() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            {/* 归属租户 */}
+            <div>
+              <div className="text-xs mb-1" style={{ color: C.mid }}>归属租户</div>
+              <Select value={nu.tenant_id} onValueChange={(v) => setNu({ ...nu, tenant_id: v, org_id: "" })}>
+                <SelectTrigger className="h-8 text-sm w-full">
+                  <SelectValue placeholder="留空 = 平台内部租户(tenant_default)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tenantOptions.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  ))}
+                  {tenantOptions.length === 0 && (
+                    <SelectItem value="__none" disabled>加载租户中…</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              <div className="text-[13px] mt-1.5 leading-relaxed" style={{ color: C.light }}>
+                平台管理员可指定客户租户，账号即归入该租户；其他角色固定为本租户。留空则归入平台内部租户。
+              </div>
+            </div>
+            {/* 所属机构（级联于租户） */}
+            <div>
+              <div className="text-xs mb-1" style={{ color: C.mid }}>所属机构（选填）</div>
+              <Select value={nu.org_id} onValueChange={(v) => setNu({ ...nu, org_id: v })} disabled={!nu.tenant_id}>
+                <SelectTrigger className="h-8 text-sm w-full">
+                  <SelectValue placeholder={nu.tenant_id ? "选择机构（可留空）" : "请先选择归属租户"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {formOrgs.map((o) => (
+                    <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                  ))}
+                  {nu.tenant_id && formOrgs.length === 0 && (
+                    <SelectItem value="__none" disabled>该租户暂无机构</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
             {([
               ["username", "用户名 *", "字母开头，3-32 位"],
               ["password", "初始密码 *", "至少 8 位"],

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -128,6 +128,12 @@ export default function Billing() {
   const receivable = bills.reduce((a, b) => a + (b.amount || 0), 0);
   const sceneTotalCalls = scenes.reduce((a, s) => a + (s.calls || 0), 0);
 
+  // 租户订阅清单：受顶部"操作对象"选择器联动过滤
+  const subsView = useMemo(
+    () => (!targetTenantId ? subs : subs.filter((s) => s.tenantId === targetTenantId)),
+    [subs, targetTenantId],
+  );
+
   /** 导出账单为本地 CSV（对账单） */
   const exportBillsCsv = () => {
     const head = ["账单号", "套餐 / 租户", "账期", "调用量", "Token", "金额(元)", "状态"];
@@ -230,31 +236,36 @@ export default function Billing() {
 
       {/* 操作对象：目标租户（选租户直接充） */}
       <Card className="border shadow-none" style={{ borderColor: C.primary }}>
-        <CardContent className="p-4 flex items-center gap-3 flex-wrap">
-          <BarChart3 className="w-4 h-4" style={{ color: C.primary }} />
-          <span className="text-[15px] font-medium" style={{ color: C.ink }}>操作对象（充值给哪个租户）</span>
-          <Select value={targetTenantId} onValueChange={setTargetTenantId}>
-            <SelectTrigger className="w-[300px] h-9">
-              <SelectValue placeholder="选择目标租户…" />
-            </SelectTrigger>
-            <SelectContent>
-              {tenants.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.name}
-                </SelectItem>
-              ))}
-              {tenants.length === 0 && (
-                <SelectItem value="__none" disabled>加载租户中…</SelectItem>
-              )}
-            </SelectContent>
-          </Select>
-          {targetTenant ? (
-            <span className="text-[13px]" style={{ color: C.mid }}>
-              当前套餐：<b style={{ color: C.ink }}>{targetTenant.plan || "—"}</b>
-            </span>
-          ) : (
-            <span className="text-[13px]" style={{ color: C.light }}>未选择（下方按钮将不可用）</span>
-          )}
+        <CardContent className="p-4 space-y-2">
+          <div className="flex items-center gap-3 flex-wrap">
+            <BarChart3 className="w-4 h-4" style={{ color: C.primary }} />
+            <span className="text-[15px] font-medium" style={{ color: C.ink }}>操作对象（充值给哪个租户）</span>
+            <Select value={targetTenantId} onValueChange={setTargetTenantId}>
+              <SelectTrigger className="w-[300px] h-9">
+                <SelectValue placeholder="选择目标租户…" />
+              </SelectTrigger>
+              <SelectContent>
+                {tenants.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+                {tenants.length === 0 && (
+                  <SelectItem value="__none" disabled>加载租户中…</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+            {targetTenant ? (
+              <span className="text-[13px]" style={{ color: C.mid }}>
+                当前套餐：<b style={{ color: C.ink }}>{targetTenant.plan || "—"}</b>
+              </span>
+            ) : (
+              <span className="text-[13px]" style={{ color: C.light }}>未选择（下方按钮将不可用）</span>
+            )}
+          </div>
+          <div className="text-[12px] leading-relaxed" style={{ color: C.light }}>
+            此选择同时联动过滤下方「租户订阅」清单（仅显示该租户）；留空则显示全部租户订阅。
+          </div>
         </CardContent>
       </Card>
 
@@ -266,6 +277,12 @@ export default function Billing() {
             <div className="flex items-center gap-2 mb-3">
               <BarChart3 className="w-4 h-4" style={{ color: C.primary }} />
               <span className="text-[16px] font-medium" style={{ color: C.ink }}>租户订阅</span>
+              {targetTenantId && (
+                <span className="text-[12px] px-2 py-0.5 rounded" style={{ background: C.soft, color: C.primary }}>
+                  已筛选：{targetTenant?.name || targetTenantId}
+                  <button className="ml-1 underline" onClick={() => setTargetTenantId("")}>清除</button>
+                </span>
+              )}
             </div>
             <table className="w-full text-[15px]">
               <thead>
@@ -277,7 +294,7 @@ export default function Billing() {
                 </tr>
               </thead>
               <tbody>
-                {subs.map((s) => (
+                {subsView.map((s) => (
                   <tr key={s.id} className="border-t" style={{ borderColor: C.border }}>
                     <td className="py-2.5" style={{ color: C.ink }}>
                       <span title={s.tenantId}>{tenants.find((x) => x.id === s.tenantId)?.name || "（未识别租户）"}</span>
@@ -298,10 +315,10 @@ export default function Billing() {
                     </td>
                   </tr>
                 ))}
-                {subs.length === 0 && (
+                {subsView.length === 0 && (
                   <tr>
                     <td colSpan={4} className="py-10 text-center text-[14px]" style={{ color: C.light }}>
-                      {loading ? "加载中…" : "暂无订阅记录"}
+                      {loading ? "加载中…" : targetTenantId ? "该租户暂无订阅记录" : "暂无订阅记录"}
                     </td>
                   </tr>
                 )}
