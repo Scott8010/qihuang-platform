@@ -19,11 +19,11 @@ import { C, userStatusMap } from "@/lib/types";
 import {
   fetchUsers, fetchRoles, createUser, updateUser, deleteUser,
   resetUserPassword, assignRole, revokeRole,
-  fetchTenantExtended, fetchTenantOrgs,
+  fetchTenantExtended, fetchTenantOrgs, getIdentity,
 } from "@/lib/api";
 import type { PlatformUser, RoleTpl, OrgItem } from "@/lib/types";
 
-const EMPTY_NEW = { username: '', password: '', display_name: '', phone: '', email: '', tenant_id: '', org_id: '' };
+const EMPTY_NEW = { username: '', password: '', display_name: '', phone: '', email: '', tenant_id: '', org_id: '', role_code: '' };
 
 function validatePassword(pwd: string): string | null {
   if (!pwd) return '密码不能为空';
@@ -70,6 +70,15 @@ export default function Users() {
   const [tenantMap, setTenantMap] = useState<Map<string, string>>(new Map());
   const [orgMap, setOrgMap] = useState<Map<string, string>>(new Map());
   const [formOrgs, setFormOrgs] = useState<OrgItem[]>([]);
+  const [formRoles, setFormRoles] = useState<RoleTpl[]>([]);
+
+  // 当前管理员身份：是否平台超级管理员 + 本租户
+  const identity = getIdentity();
+  const isSuper = !!identity?.roles?.includes("super_admin");
+  const myTenantId = identity?.tenant_id || "";
+  // 有效目标租户：super_admin 跟随表单所选，其他角色固定为本租户（不可跨租户）
+  const effTenantId = isSuper ? nu.tenant_id : myTenantId;
+
   // 表单租户下拉（排除平台内部租户，留空即归入 tenant_default）
   const tenantOptions = useMemo(
     () => Array.from(tenantMap.entries()).filter(([id]) => id !== "tenant_default").map(([id, name]) => ({ id, name })),
@@ -103,13 +112,21 @@ export default function Users() {
 
   useEffect(() => { load(); }, [load]);
 
-  // 新建表单：所选租户变化时级联拉取该租户的机构列表
+  // 新建表单：有效租户变化时级联拉取该租户的机构列表
   useEffect(() => {
     let alive = true;
-    if (!nu.tenant_id) { setFormOrgs([]); return; }
-    fetchTenantOrgs(nu.tenant_id).then((list) => { if (alive) setFormOrgs(list); });
+    if (!effTenantId) { setFormOrgs([]); return; }
+    fetchTenantOrgs(effTenantId).then((list) => { if (alive) setFormOrgs(list); });
     return () => { alive = false; };
-  }, [nu.tenant_id]);
+  }, [effTenantId]);
+
+  // 新建表单：有效租户变化时级联拉取该租户可授予的角色
+  useEffect(() => {
+    let alive = true;
+    if (!effTenantId) { setFormRoles([]); return; }
+    fetchRoles(effTenantId).then((list) => { if (alive) setFormRoles(list); });
+    return () => { alive = false; };
+  }, [effTenantId]);
 
   const filtered = useMemo(() => {
     const k = kw.trim().toLowerCase();
@@ -139,6 +156,8 @@ export default function Users() {
       toast.error(perr);
       return;
     }
+    // 非超级管理员：账号强制归入本租户，不允许跨租户
+    const targetTenant = isSuper ? (nu.tenant_id || undefined) : (myTenantId || undefined);
     setCreating(true);
     const r = await createUser({
       username: nu.username.trim(),
@@ -146,12 +165,24 @@ export default function Users() {
       display_name: nu.display_name.trim() || undefined,
       phone: nu.phone.trim() || undefined,
       email: nu.email.trim() || undefined,
-      tenant_id: nu.tenant_id || undefined,
+      tenant_id: targetTenant,
       org_id: nu.org_id || undefined,
     });
     setCreating(false);
     if (r.ok) {
-      toast.success(`用户 ${nu.username} 已创建，默认角色：健康用户`);
+      const newId = r.data?.id;
+      // 若指定了初始角色：授予选中角色并摘掉默认 health_user
+      if (newId && nu.role_code) {
+        const a = await assignRole(newId, nu.role_code);
+        if (a.ok) {
+          await revokeRole(newId, "health_user");
+          toast.success(`用户 ${nu.username} 已创建，初始角色：${nu.role_code}`);
+        } else {
+          toast.warning(`用户已创建，但初始角色授予失败：${a.msg || "未知错误"}（可稍后在角色分配中手动授予）`);
+        }
+      } else {
+        toast.success(`用户 ${nu.username} 已创建，默认角色：健康用户`);
+      }
       setCreateOpen(false);
       setNu({ ...EMPTY_NEW });
       load();
@@ -424,46 +455,77 @@ export default function Users() {
           <DialogHeader>
             <DialogTitle style={{ color: C.ink }}>新建用户</DialogTitle>
             <DialogDescription className="text-xs">
-              创建后系统自动授予「健康用户」默认角色，可在角色分配中调整。
+              创建后系统默认授予「健康用户」角色，可在下方直接指定初始角色（创建后即时生效），也可稍后在角色分配中调整。
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            {/* 归属租户 */}
-            <div>
-              <div className="text-xs mb-1" style={{ color: C.mid }}>归属租户</div>
-              <Select value={nu.tenant_id} onValueChange={(v) => setNu({ ...nu, tenant_id: v, org_id: "" })}>
-                <SelectTrigger className="h-8 text-sm w-full">
-                  <SelectValue placeholder="留空 = 平台内部租户(tenant_default)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {tenantOptions.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                  ))}
-                  {tenantOptions.length === 0 && (
-                    <SelectItem value="__none" disabled>加载租户中…</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-              <div className="text-[13px] mt-1.5 leading-relaxed" style={{ color: C.light }}>
-                平台管理员可指定客户租户，账号即归入该租户；其他角色固定为本租户。留空则归入平台内部租户。
+            {/* 归属租户：仅超级管理员可跨租户选择，其他角色固定本租户（只读） */}
+            {isSuper ? (
+              <div>
+                <div className="text-xs mb-1" style={{ color: C.mid }}>归属租户</div>
+                <Select value={nu.tenant_id} onValueChange={(v) => setNu({ ...nu, tenant_id: v, org_id: "", role_code: "" })}>
+                  <SelectTrigger className="h-8 text-sm w-full">
+                    <SelectValue placeholder="留空 = 平台内部租户(tenant_default)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tenantOptions.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                    {tenantOptions.length === 0 && (
+                      <SelectItem value="__none" disabled>加载租户中…</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                <div className="text-[13px] mt-1.5 leading-relaxed" style={{ color: C.light }}>
+                  平台管理员可指定客户租户，账号即归入该租户；留空则归入平台内部租户。
+                </div>
               </div>
-            </div>
-            {/* 所属机构（级联于租户） */}
+            ) : (
+              <div>
+                <div className="text-xs mb-1" style={{ color: C.mid }}>归属租户</div>
+                <div className="h-8 px-3 flex items-center rounded-md border text-sm"
+                  style={{ borderColor: C.border, color: C.mid, background: C.bg }}>
+                  {tenantMap.get(myTenantId) || "本租户"}（仅平台管理员可跨租户分配）
+                </div>
+              </div>
+            )}
+            {/* 所属机构（级联于有效租户） */}
             <div>
               <div className="text-xs mb-1" style={{ color: C.mid }}>所属机构（选填）</div>
-              <Select value={nu.org_id} onValueChange={(v) => setNu({ ...nu, org_id: v })} disabled={!nu.tenant_id}>
+              <Select value={nu.org_id} onValueChange={(v) => setNu({ ...nu, org_id: v })} disabled={!effTenantId}>
                 <SelectTrigger className="h-8 text-sm w-full">
-                  <SelectValue placeholder={nu.tenant_id ? "选择机构（可留空）" : "请先选择归属租户"} />
+                  <SelectValue placeholder={effTenantId ? "选择机构（可留空）" : "该租户暂无可选机构"} />
                 </SelectTrigger>
                 <SelectContent>
                   {formOrgs.map((o) => (
                     <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
                   ))}
-                  {nu.tenant_id && formOrgs.length === 0 && (
+                  {effTenantId && formOrgs.length === 0 && (
                     <SelectItem value="__none" disabled>该租户暂无机构</SelectItem>
                   )}
                 </SelectContent>
               </Select>
+            </div>
+            {/* 初始角色（级联于有效租户，建后授予并摘掉默认健康用户） */}
+            <div>
+              <div className="text-xs mb-1" style={{ color: C.mid }}>初始角色（选填）</div>
+              <Select value={nu.role_code} onValueChange={(v) => setNu({ ...nu, role_code: v === "__none" ? "" : v })}
+                disabled={!effTenantId || formRoles.length === 0}>
+                <SelectTrigger className="h-8 text-sm w-full">
+                  <SelectValue placeholder={!effTenantId ? "请先确定归属租户" : (formRoles.length === 0 ? "该租户暂无可授予角色" : "选填，留空则默认健康用户")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {formRoles.map((r) => (
+                    <SelectItem key={r.id} value={r.code}>{r.name}（{r.code}）</SelectItem>
+                  ))}
+                  {effTenantId && formRoles.length === 0 && (
+                    <SelectItem value="__none" disabled>该租户暂无可授予角色</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              <div className="text-[13px] mt-1.5 leading-relaxed" style={{ color: C.light }}>
+                选定角色将在创建后自动授予，并移除系统默认「健康用户」角色；留空则保留默认角色。
+              </div>
             </div>
             {([
               ["username", "用户名 *", "字母开头，3-32 位"],

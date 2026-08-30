@@ -322,9 +322,12 @@ export async function deleteTenant(tenantId: string) {
 
 // ═══ 角色 ═══
 
-export async function fetchRoles(): Promise<RoleTpl[]> {
+export async function fetchRoles(tenantId?: string): Promise<RoleTpl[]> {
   try {
-    const r = await get<{ code: number; data: any[] }>("/admin/v1/roles");
+    const url = tenantId
+      ? `/admin/v1/roles?tenant_id=${encodeURIComponent(tenantId)}`
+      : "/admin/v1/roles";
+    const r = await get<{ code: number; data: any[] }>(url);
     if (r?.code !== 0 || !r.data) return [];
     return (r.data || []).map((r2: any) => ({
       id: r2.id || "",
