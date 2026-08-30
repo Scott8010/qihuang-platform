@@ -1,21 +1,46 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { BarChart3, Download, Check, Minus, Loader2 } from "lucide-react";
 import { C, billStatus, planFeatureLabels, sceneMap } from "@/lib/types";
-import type { PlanItem, BillItem, SubscriptionItem, SceneUsageItem, PriceBook } from "@/lib/types";
-import { fetchBillingStats, fetchPlans, fetchBills, fetchSubscriptions, fetchSceneUsage, fetchPriceBook } from "@/lib/api";
+import type {
+  PlanItem, BillItem, SubscriptionItem, SceneUsageItem, PriceBook,
+  TenantPlanItem, AgentCenterItem, RechargePack,
+} from "@/lib/types";
+import {
+  fetchBillingStats, fetchPlans, fetchBills, fetchSubscriptions, fetchSceneUsage, fetchPriceBook,
+  fetchTenantExtended, upgradeSubscription, rechargePack, fetchAgents, addAgentAddon,
+} from "@/lib/api";
 import { CodeCopy } from "@/components/ui/code-copy";
 
 /* ═══════════════════════════════════════════
-   计费与套餐 — 真实接口驱动
+   计费与套餐 — 真实接口驱动（价目展示 + 直接充值入口）
    KPI    → GET /admin/v1/billing/usage
-   套餐   → GET /admin/v1/plans（仅特性开关，后端无价格/QPS）
+   套餐   → GET /admin/v1/plans
    账单   → GET /admin/v1/billing/bills
    订阅   → GET /admin/v1/subscriptions
+   价目   → GET /admin/v1/billing/price-book
+   租户   → GET /admin/v1/tenants-extended
+   Agent  → GET /admin/v1/agents
+   写操作 → 升级 /admin/v1/tenants/{id}/subscription/upgrade
+           充值 /billing/v1/wallet/recharge?tenant_id=&pack=
+           加购 /admin/v1/tenants/{id}/agent-addons
    ═══════════════════════════════════════════ */
 
 const MAIN_PLAN = "professional";   // 主力套餐高亮
+
+/** 多模态类 Agent（后端口径，决定单加月费 ¥99，其余 ¥59） */
+const MULTIMODAL_AGENTS = new Set(["tongue", "geo", "health-assistant", "health-advisor"]);
+const agentFeeYuan = (key: string) => (MULTIMODAL_AGENTS.has(key) ? 99 : 59);
 
 function wan(n: number) {
   if (!n) return "0";
@@ -37,6 +62,25 @@ export default function Billing() {
   const [priceBook, setPriceBook] = useState<PriceBook | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // 充值操作所需的上下文
+  const [tenants, setTenants] = useState<TenantPlanItem[]>([]);
+  const [agents, setAgents] = useState<AgentCenterItem[]>([]);
+  const [targetTenantId, setTargetTenantId] = useState<string>("");
+  const targetTenant = tenants.find((t) => t.id === targetTenantId) || null;
+
+  // 弹窗 / 选择状态
+  const [upgradeTarget, setUpgradeTarget] = useState<PlanItem | null>(null);
+  const [rechargeTarget, setRechargeTarget] = useState<RechargePack | null>(null);
+  const [agentDialogOpen, setAgentDialogOpen] = useState(false);
+  const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
+
+  // 操作结果提示
+  const [notice, setNotice] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const flash = (type: "ok" | "err", text: string) => {
+    setNotice({ type, text });
+    window.setTimeout(() => setNotice(null), 4500);
+  };
+
   useEffect(() => {
     Promise.all([
       fetchBillingStats().then(setStats),
@@ -45,6 +89,8 @@ export default function Billing() {
       fetchSubscriptions().then(setSubs),
       fetchSceneUsage().then(setScenes),
       fetchPriceBook().then(setPriceBook),
+      fetchTenantExtended(50).then(setTenants),
+      fetchAgents().then(setAgents),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -68,6 +114,39 @@ export default function Billing() {
     URL.revokeObjectURL(url);
   };
 
+  // ── 写操作 ──
+  const confirmUpgrade = async () => {
+    if (!upgradeTarget || !targetTenantId) return;
+    const r = await upgradeSubscription(targetTenantId, upgradeTarget.id);
+    setUpgradeTarget(null);
+    flash(r.ok ? "ok" : "err", r.ok ? `开通/升级已提交：${r.msg}` : `开通失败：${r.msg}`);
+  };
+
+  const confirmRecharge = async () => {
+    if (!rechargeTarget || !targetTenantId) return;
+    const r = await rechargePack(targetTenantId, rechargeTarget.key);
+    setRechargeTarget(null);
+    flash(r.ok ? "ok" : "err", r.ok ? `充值成功：${r.msg}` : `充值失败：${r.msg}`);
+  };
+
+  const toggleAgent = (key: string, on: boolean) => {
+    setSelectedAgents((prev) => {
+      const n = new Set(prev);
+      if (on) n.add(key); else n.delete(key);
+      return n;
+    });
+  };
+
+  const confirmAddAgent = async () => {
+    if (!targetTenantId) return;
+    const keys = [...selectedAgents];
+    if (keys.length === 0) { flash("err", "请至少勾选一个 Agent"); return; }
+    const r = await addAgentAddon(targetTenantId, keys);
+    setAgentDialogOpen(false);
+    setSelectedAgents(new Set());
+    flash(r.ok ? "ok" : "err", r.ok ? `加购成功：${r.msg}` : `加购失败：${r.msg}`);
+  };
+
   const kpiCards = [
     { label: "本月总调用", value: `${wan(stats.totalCalls)} 次`, sub: "来自网关计量埋点" },
     { label: "本月 Token 消耗", value: wan(stats.totalTokens), sub: "共识四模型合计" },
@@ -77,6 +156,17 @@ export default function Billing() {
 
   return (
     <div className="space-y-4">
+      {/* 操作结果提示 */}
+      {notice && (
+        <div className="px-4 py-2.5 rounded-md text-[14px]" style={{
+          background: notice.type === "ok" ? "#EAF2EE" : "#FBECEC",
+          color: notice.type === "ok" ? "#2E5A4C" : "#9A3B3B",
+          border: `1px solid ${notice.type === "ok" ? "#C9E2D6" : "#F0CFCF"}`,
+        }}>
+          {notice.text}
+        </div>
+      )}
+
       {/* KPI 卡片 */}
       <div className="grid grid-cols-4 gap-4">
         {kpiCards.map((k) => (
@@ -91,6 +181,36 @@ export default function Billing() {
           </Card>
         ))}
       </div>
+
+      {/* 操作对象：目标租户（选租户直接充） */}
+      <Card className="border shadow-none" style={{ borderColor: C.primary }}>
+        <CardContent className="p-4 flex items-center gap-3 flex-wrap">
+          <BarChart3 className="w-4 h-4" style={{ color: C.primary }} />
+          <span className="text-[15px] font-medium" style={{ color: C.ink }}>操作对象（充值给哪个租户）</span>
+          <Select value={targetTenantId} onValueChange={setTargetTenantId}>
+            <SelectTrigger className="w-[300px] h-9">
+              <SelectValue placeholder="选择目标租户…" />
+            </SelectTrigger>
+            <SelectContent>
+              {tenants.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  {t.name} · {t.id.slice(0, 8)}
+                </SelectItem>
+              ))}
+              {tenants.length === 0 && (
+                <SelectItem value="__none" disabled>加载租户中…</SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+          {targetTenant ? (
+            <span className="text-[13px]" style={{ color: C.mid }}>
+              当前套餐：<b style={{ color: C.ink }}>{targetTenant.plan || "—"}</b>
+            </span>
+          ) : (
+            <span className="text-[13px]" style={{ color: C.light }}>未选择（下方按钮将不可用）</span>
+          )}
+        </CardContent>
+      </Card>
 
       {/* 订阅列表 + 套餐体系 */}
       <div className="grid grid-cols-2 gap-4">
@@ -156,10 +276,12 @@ export default function Billing() {
             <div className="grid grid-cols-2 gap-3">
               {plans.map((p) => {
                 const isMain = p.planName === MAIN_PLAN;
+                const isCurrent = targetTenant?.planId === p.id;
+                const disabled = !targetTenantId || isCurrent;
                 return (
                   <div
                     key={p.planName}
-                    className="rounded-lg border p-3.5 relative"
+                    className="rounded-lg border p-3.5 relative flex flex-col"
                     style={{
                       borderColor: isMain ? "#C8A45D" : C.border,
                       background: isMain ? "#FBF4E4" : "#fff",
@@ -190,6 +312,18 @@ export default function Billing() {
                     </div>
                     <div className="mt-2 text-[12.5px]" style={{ color: C.light }}>
                       月调用 {p.monthCalls.toLocaleString()} 次
+                    </div>
+                    <div className="mt-3 pt-3 border-t" style={{ borderColor: C.border }}>
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        disabled={disabled}
+                        variant={isCurrent ? "outline" : "default"}
+                        style={!isCurrent ? { background: C.primary, color: "#fff" } : { borderColor: C.border, color: C.light }}
+                        onClick={() => setUpgradeTarget(p)}
+                      >
+                        {isCurrent ? "当前套餐" : "开通 / 升级"}
+                      </Button>
                     </div>
                   </div>
                 );
@@ -223,6 +357,7 @@ export default function Billing() {
                   <th className="pb-2 font-normal">套餐</th>
                   <th className="pb-2 font-normal text-right">人民币</th>
                   <th className="pb-2 font-normal text-right">得积分</th>
+                  <th className="pb-2 font-normal text-right">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -231,11 +366,22 @@ export default function Billing() {
                     <td className="py-2" style={{ color: C.ink }}>{pk.label}</td>
                     <td className="py-2 text-right" style={{ color: C.ink }}>¥{pk.yuan}</td>
                     <td className="py-2 text-right" style={{ color: C.mid }}>{pk.credits.toLocaleString()}</td>
+                    <td className="py-2 text-right">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!targetTenantId}
+                        style={{ borderColor: C.primary, color: C.primary }}
+                        onClick={() => setRechargeTarget(pk)}
+                      >
+                        充值
+                      </Button>
+                    </td>
                   </tr>
                 ))}
                 {(!priceBook || priceBook.rechargePacks.length === 0) && (
                   <tr>
-                    <td colSpan={3} className="py-6 text-center text-[13px]" style={{ color: C.light }}>
+                    <td colSpan={4} className="py-6 text-center text-[13px]" style={{ color: C.light }}>
                       {loading ? "加载中…" : "暂无叠加包配置"}
                     </td>
                   </tr>
@@ -251,10 +397,20 @@ export default function Billing() {
         {/* 单加 Agent 月费 */}
         <Card className="border shadow-none" style={{ borderColor: C.border }}>
           <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <BarChart3 className="w-4 h-4" style={{ color: C.primary }} />
-              <span className="text-[16px] font-medium" style={{ color: C.ink }}>单加 Agent 月费</span>
-              <span className="text-[13px] font-normal" style={{ color: C.light }}>（开门订阅费）</span>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4" style={{ color: C.primary }} />
+                <span className="text-[16px] font-medium" style={{ color: C.ink }}>单加 Agent 月费</span>
+                <span className="text-[13px] font-normal" style={{ color: C.light }}>（开门订阅费）</span>
+              </div>
+              <Button
+                size="sm"
+                disabled={!targetTenantId}
+                style={{ background: C.primary, color: "#fff" }}
+                onClick={() => { setSelectedAgents(new Set()); setAgentDialogOpen(true); }}
+              >
+                加购 Agent
+              </Button>
             </div>
             <div className="space-y-1 text-[14px]">
               <div className="flex items-center justify-between py-2 border-t" style={{ borderColor: C.border }}>
@@ -391,6 +547,93 @@ export default function Billing() {
           </table>
         </CardContent>
       </Card>
+
+      {/* ══ 套餐开通/升级 二次确认 ══ */}
+      <AlertDialog open={!!upgradeTarget} onOpenChange={(o) => { if (!o) setUpgradeTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认开通 / 升级套餐？</AlertDialogTitle>
+            <AlertDialogDescription>
+              将为租户「<b>{targetTenant?.name || "—"}</b>」{upgradeTarget ? `开通 / 升级为「${upgradeTarget.name}」` : ""}，
+              新套餐于<b>次月 1 号</b>生效（本月仍按原套餐计费）。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              style={{ background: C.primary }}
+              onClick={confirmUpgrade}
+            >
+              确认开通
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ══ 叠加包充值 二次确认 ══ */}
+      <AlertDialog open={!!rechargeTarget} onOpenChange={(o) => { if (!o) setRechargeTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认充值叠加包？</AlertDialogTitle>
+            <AlertDialogDescription>
+              将为租户「<b>{targetTenant?.name || "—"}</b>」充值
+              {rechargeTarget ? `「${rechargeTarget.label}」 ¥${rechargeTarget.yuan}（得 ${rechargeTarget.credits} 积分）` : ""}，
+              <b>永久有效、不清零</b>。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              style={{ background: C.primary }}
+              onClick={confirmRecharge}
+            >
+              确认充值
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ══ 单加 Agent 多选弹窗 ══ */}
+      <Dialog open={agentDialogOpen} onOpenChange={setAgentDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>加购 Agent（租户：{targetTenant?.name || "—"}）</DialogTitle>
+            <DialogDescription>
+              勾选要额外叠加的 Agent（套餐之外精准授权）。首月即从积分池扣月费（文本 ¥59 / 多模态 ¥99），余额不足将拒绝开通。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-80 overflow-auto space-y-2 pr-1">
+            {agents.length === 0 && (
+              <div className="py-8 text-center text-[13px]" style={{ color: C.light }}>加载 Agent 列表中…</div>
+            )}
+            {agents.map((a) => (
+              <label
+                key={a.agentKey}
+                className="flex items-center gap-2 p-2.5 rounded border cursor-pointer"
+                style={{ borderColor: C.border, background: selectedAgents.has(a.agentKey) ? "#FBF4E4" : "#fff" }}
+              >
+                <Checkbox
+                  checked={selectedAgents.has(a.agentKey)}
+                  onCheckedChange={(c) => toggleAgent(a.agentKey, !!c)}
+                />
+                <span className="flex-1 text-[14px]" style={{ color: C.ink }}>{a.name}</span>
+                <span className="text-[12px]" style={{ color: C.light }}>¥{agentFeeYuan(a.agentKey)}/月</span>
+              </label>
+            ))}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">取消</Button>
+            </DialogClose>
+            <Button
+              style={{ background: C.primary, color: "#fff" }}
+              onClick={confirmAddAgent}
+            >
+              确认加购（{selectedAgents.size}）
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

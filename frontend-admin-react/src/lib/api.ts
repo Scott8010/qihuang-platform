@@ -8,7 +8,7 @@ import type {
   AlertItem, TodoReviewItem, BillItem, PlanItem, SubscriptionItem, SceneUsageItem,
   OrgItem, TenantUserItem, PermissionItem, PlatformUser,
   SensitiveWordItem, ServiceItem, LlmProviderItem, AuditLogItem, DashboardData,
-  PriceBook,
+  PriceBook, AgentCenterItem,
 } from "./types";
 
 // ═══ 基础 ═══
@@ -551,6 +551,38 @@ export async function fetchPriceBook(): Promise<PriceBook | null> {
       },
     };
   } catch (e) { console.error("fetchPriceBook error", e); return null; }
+}
+
+// ═══ 充值 / 加购（admin 给指定租户直接下单，#474 计费）═══
+
+/** POST /billing/v1/wallet/recharge?tenant_id=&pack= — 叠加包充值（永久有效）
+ *  注意：后端该端点用 Query 参数，不是 JSON body；仅平台 admin 可调用。 */
+export async function rechargePack(tenantId: string, pack: string): Promise<MutateResult> {
+  return mutate("POST",
+    `/billing/v1/wallet/recharge?tenant_id=${encodeURIComponent(tenantId)}&pack=${encodeURIComponent(pack)}`);
+}
+
+/** GET /admin/v1/agents — Agent 中台能力资源池（单加叠加弹窗数据源） */
+export async function fetchAgents(): Promise<AgentCenterItem[]> {
+  try {
+    const r = await get<{ code: number; data: { agents?: any[] } }>("/admin/v1/agents");
+    const items = r?.data?.agents || [];
+    return items.map((a: any) => ({
+      agentKey: a.agent_key || a.key || "",
+      name: a.name || a.display_name || a.agent_key || "",
+      category: a.category || "general",
+      includedInPlans: Array.isArray(a.included_in_plans) ? a.included_in_plans : [],
+    }));
+  } catch (e) { console.error("fetchAgents error", e); return []; }
+}
+
+/** POST /admin/v1/tenants/{tenantId}/agent-addons — 叠加额外 Agent（套餐之外精准授权）
+ *  后端在套餐 agents 基础上合并；首月即从积分池扣月费（文本¥59/多模态¥99），余额不足返 402。 */
+export async function addAgentAddon(tenantId: string, addKeys: string[]): Promise<MutateResult> {
+  return mutate("POST", `/admin/v1/tenants/${encodeURIComponent(tenantId)}/agent-addons`, {
+    add: addKeys,
+    remove: [],
+  });
 }
 
 // ═══ 套餐升级（租户订阅变更）═══

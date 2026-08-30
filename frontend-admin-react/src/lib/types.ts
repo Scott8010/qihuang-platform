@@ -193,6 +193,14 @@ export interface PriceBook {
   agentAddon: AgentAddonPrice;
 }
 
+/** 对应 GET /admin/v1/agents → data.agents[]（Agent 中台能力资源池，单加叠加用） */
+export interface AgentCenterItem {
+  agentKey: string;          // 能力 key（如 compliance / geo / tongue）
+  name: string;              // 展示名
+  category: string;          // content / health / mystic / business / edu
+  includedInPlans: string[]; // 已纳入哪些套餐的「专家团」
+}
+
 /** 对应 GET /admin/v1/tenants-extended → data.items[]（套餐升级页用） */
 export interface TenantPlanItem {
   id: string;
