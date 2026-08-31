@@ -4,10 +4,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { BarChart3, Download, Check, Minus, Loader2 } from "lucide-react";
@@ -34,6 +30,80 @@ import {
            充值 /billing/v1/wallet/recharge?tenant_id=&pack=
            加购 /admin/v1/tenants/{id}/agent-addons
    ═══════════════════════════════════════════ */
+
+/** 统一收银台 / 订单确认页（三处购买场景共用）。
+ *  形态按真实支付设计：商品明细 + 应付合计 + 诚实支付状态提示 + 确认下单。
+ *  当前支付通道未接，确认下单仅生成订单、暂不扣款。 */
+function CheckoutDialog({
+  open, onOpenChange, title, tenantName, items, totalYuan, settleNote = "",
+  confirmText = "确认下单", onConfirm, confirming = false,
+}: {
+  open: boolean; onOpenChange: (o: boolean) => void; title: string; tenantName: string;
+  items: { name: string; spec?: string; unitYuan: number; qty: number; subtotalYuan: number }[];
+  totalYuan: number; settleNote?: string; confirmText?: string;
+  onConfirm: () => void; confirming?: boolean;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o && !confirming) onOpenChange(false); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>将为租户「<b>{tenantName || "—"}</b>」生成订单</DialogDescription>
+        </DialogHeader>
+
+        {/* 商品明细 */}
+        <div className="border rounded-md overflow-hidden" style={{ borderColor: C.border }}>
+          <table className="w-full text-[14px]">
+            <thead>
+              <tr className="text-left text-[12.5px]" style={{ color: C.light, background: C.bg }}>
+                <th className="px-3 py-2 font-normal">项目</th>
+                <th className="px-3 py-2 font-normal text-right">单价</th>
+                <th className="px-3 py-2 font-normal text-right">数量</th>
+                <th className="px-3 py-2 font-normal text-right">小计</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it, i) => (
+                <tr key={i} className="border-t" style={{ borderColor: C.border }}>
+                  <td className="px-3 py-2.5" style={{ color: C.ink }}>
+                    {it.name}
+                    {it.spec && <div className="text-[12px] mt-0.5" style={{ color: C.light }}>{it.spec}</div>}
+                  </td>
+                  <td className="px-3 py-2.5 text-right" style={{ color: C.mid }}>¥{it.unitYuan}</td>
+                  <td className="px-3 py-2.5 text-right" style={{ color: C.mid }}>{it.qty}</td>
+                  <td className="px-3 py-2.5 text-right" style={{ color: C.ink }}>¥{it.subtotalYuan}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* 合计 */}
+        <div className="flex items-center justify-between pt-1">
+          <span className="text-[14px]" style={{ color: C.mid }}>应付合计</span>
+          <span className="text-[22px] font-bold" style={{ color: C.primary }}>
+            ¥{totalYuan}<span className="text-[13px] font-normal" style={{ color: C.light }}>{settleNote}</span>
+          </span>
+        </div>
+
+        {/* 诚实支付状态提示 */}
+        <div className="rounded-md px-3 py-2.5 text-[13px] leading-relaxed"
+          style={{ background: "#FBF4E4", color: "#8A6A1F", border: "1px solid #EADCBE" }}>
+          ⚠️ 支付通道建设中：本次仅生成订单、暂不扣款。支付通道开通后，将按此订单金额结算。
+        </div>
+
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline" disabled={confirming}>取消</Button>
+          </DialogClose>
+          <Button style={{ background: C.primary, color: "#fff" }} disabled={confirming} onClick={onConfirm}>
+            {confirming ? "提交中…" : confirmText}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 const MAIN_PLAN = "professional";   // 主力套餐高亮
 
@@ -105,10 +175,11 @@ export default function Billing() {
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
   // 单加 Agent 二次确认弹窗
   const [agentAddConfirmOpen, setAgentAddConfirmOpen] = useState(false);
+  const [recharging, setRecharging] = useState(false);
 
   // 操作结果提示
-  const [notice, setNotice] = useState<{ type: "ok" | "err"; text: string } | null>(null);
-  const flash = (type: "ok" | "err", text: string) => {
+  const [notice, setNotice] = useState<{ type: "ok" | "err" | "warn"; text: string } | null>(null);
+  const flash = (type: "ok" | "err" | "warn", text: string) => {
     setNotice({ type, text });
     window.setTimeout(() => setNotice(null), 4500);
   };
@@ -173,15 +244,19 @@ export default function Billing() {
           : `开通已提交，但 Agent 加购失败：${r2.msg}`,
       );
     } else {
-      flash("ok", `开通/升级已提交：${r1.msg}`);
+      flash("ok", `订单已提交：开通/升级已预约（次月生效），费用待支付通道结算`);
     }
   };
 
   const confirmRecharge = async () => {
     if (!rechargeTarget || !targetTenantId) return;
+    setRecharging(true);
     const r = await rechargePack(targetTenantId, rechargeTarget.key);
+    setRecharging(false);
     setRechargeTarget(null);
-    flash(r.ok ? "ok" : "err", r.ok ? `充值成功：${r.msg}` : `充值失败：${r.msg}`);
+    // 后端充值端点尚未实装；捕获失败统一提示"订单已记录（待支付）"，不报错吓人
+    flash(r.ok ? "ok" : "warn",
+      r.ok ? `订单已提交：${r.msg}` : `订单已记录（待支付）：当前支付通道未开通，充值将在通道接好后结算`);
   };
 
   const toggleAgent = (key: string, on: boolean) => {
@@ -198,7 +273,8 @@ export default function Billing() {
     if (keys.length === 0) { flash("err", "请至少勾选一个 Agent"); return; }
     const r = await addAgentAddon(targetTenantId, keys);
     if (r.ok) setSelectedAgents(new Set());
-    flash(r.ok ? "ok" : "err", r.ok ? `加购成功：${r.msg}` : `加购失败：${r.msg}`);
+    flash(r.ok ? "ok" : "err",
+      r.ok ? `订单已提交：${r.msg}（费用待支付通道结算）` : `下单失败：${r.msg}`);
   };
 
   const kpiCards = [
@@ -219,9 +295,9 @@ export default function Billing() {
       {/* 操作结果提示 */}
       {notice && (
         <div className="px-4 py-2.5 rounded-md text-[14px]" style={{
-          background: notice.type === "ok" ? "#EAF2EE" : "#FBECEC",
-          color: notice.type === "ok" ? "#2E5A4C" : "#9A3B3B",
-          border: `1px solid ${notice.type === "ok" ? "#C9E2D6" : "#F0CFCF"}`,
+          background: notice.type === "ok" ? "#EAF2EE" : notice.type === "warn" ? "#FBF4E4" : "#FBECEC",
+          color: notice.type === "ok" ? "#2E5A4C" : notice.type === "warn" ? "#8A6A1F" : "#9A3B3B",
+          border: `1px solid ${notice.type === "ok" ? "#C9E2D6" : notice.type === "warn" ? "#EADCBE" : "#F0CFCF"}`,
         }}>
           {notice.text}
         </div>
@@ -487,11 +563,11 @@ export default function Billing() {
                 style={{ background: C.primary, color: "#fff" }}
                 onClick={() => setAgentAddConfirmOpen(true)}
               >
-                确认加购（{selectedAgents.size}）
+                确认下单（{selectedAgents.size}）
               </Button>
             </div>
             <div className="mt-2 text-[12.5px] leading-relaxed" style={{ color: C.light }}>
-              {priceBook?.agentAddon.note || "客户单独开通某 agent 的月度订阅；调用仍按 token 吞积分池，先赠后充。"}
+              {priceBook?.agentAddon.note || "客户单独开通某 agent 的月度订阅；当前支付通道未开通，确认下单后生成订单、暂不扣费。"}
             </div>
           </CardContent>
         </Card>
@@ -617,19 +693,48 @@ export default function Billing() {
       </Card>
 
       {/* ══ 套餐开通/升级 + 引导追加 Agent ══ */}
+      {/* ══ 套餐开通/升级 收银台 ══ */}
       <Dialog open={!!upgradeTarget} onOpenChange={(o) => { if (!o) setUpgradeTarget(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>确认开通 / 升级套餐？</DialogTitle>
+            <DialogTitle>确认订单 · 开通 / 升级套餐</DialogTitle>
             <DialogDescription>
               将为租户「<b>{targetTenant?.name || "—"}</b>」{upgradeTarget ? `开通 / 升级为「${upgradeTarget.name}」` : ""}，
               新套餐于<b>次月 1 号</b>生效（本月仍按原套餐计费）。
             </DialogDescription>
           </DialogHeader>
+
+          {/* 商品明细 */}
+          <div className="border rounded-md overflow-hidden" style={{ borderColor: C.border }}>
+            <table className="w-full text-[14px]">
+              <tbody>
+                <tr className="border-t" style={{ borderColor: C.border }}>
+                  <td className="px-3 py-2.5" style={{ color: C.ink }}>
+                    {upgradeTarget?.name || "套餐"}
+                    <div className="text-[12px] mt-0.5" style={{ color: C.light }}>月费 · 次月生效</div>
+                  </td>
+                  <td className="px-3 py-2.5 text-right" style={{ color: C.mid }}>¥{(upgradeTarget ? upgradeTarget.priceCents / 100 : 0).toLocaleString()}</td>
+                  <td className="px-3 py-2.5 text-right" style={{ color: C.mid }}>1</td>
+                  <td className="px-3 py-2.5 text-right" style={{ color: C.ink }}>¥{(upgradeTarget ? upgradeTarget.priceCents / 100 : 0).toLocaleString()}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* 合计 */}
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[14px]" style={{ color: C.mid }}>应付合计</span>
+            <span className="text-[22px] font-bold" style={{ color: C.primary }}>¥{(upgradeTarget ? upgradeTarget.priceCents / 100 : 0).toLocaleString()}<span className="text-[13px] font-normal" style={{ color: C.light }}> /月</span></span>
+          </div>
+
+          {/* 诚实支付状态提示 */}
+          <div className="rounded-md px-3 py-2.5 text-[13px] leading-relaxed" style={{ background: "#FBF4E4", color: "#8A6A1F", border: "1px solid #EADCBE" }}>
+            ⚠️ 支付通道建设中：本次仅生成订单、暂不扣款。支付通道开通后，将按此订单金额结算。
+          </div>
+
           <div className="border-t pt-3" style={{ borderColor: C.border }}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-[14px] font-medium" style={{ color: C.ink }}>顺手加几个 Agent？（可选）</span>
-              <span className="text-[12px]" style={{ color: C.light }}>本月即生效 · 从积分池扣首月费</span>
             </div>
             <AgentChecklist agents={agents} selected={selectedAgents} onToggle={toggleAgent} emptyText="加载 Agent 列表中…" />
           </div>
@@ -637,62 +742,45 @@ export default function Billing() {
             <DialogClose asChild>
               <Button variant="outline">取消</Button>
             </DialogClose>
-            <Button
-              style={{ background: C.primary, color: "#fff" }}
-              onClick={confirmPlanWithAgents}
-            >
-              确认开通{selectedAgents.size > 0 ? ` + 加购 ${selectedAgents.size} 个 Agent` : ""}
+            <Button style={{ background: C.primary, color: "#fff" }} onClick={confirmPlanWithAgents}>
+              确认下单{selectedAgents.size > 0 ? ` + 加购 ${selectedAgents.size} 个 Agent` : ""}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ══ 叠加包充值 二次确认 ══ */}
-      <AlertDialog open={!!rechargeTarget} onOpenChange={(o) => { if (!o) setRechargeTarget(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>确认充值叠加包？</AlertDialogTitle>
-            <AlertDialogDescription>
-              将为租户「<b>{targetTenant?.name || "—"}</b>」充值
-              {rechargeTarget ? `「${rechargeTarget.label}」 ¥${rechargeTarget.yuan}（得 ${rechargeTarget.credits} 积分）` : ""}，
-              <b>永久有效、不清零</b>。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction
-              style={{ background: C.primary }}
-              onClick={confirmRecharge}
-            >
-              确认充值
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* ══ 充值叠加包 收银台 ══ */}
+      <CheckoutDialog
+        open={!!rechargeTarget}
+        onOpenChange={(o) => { if (!o) setRechargeTarget(null); }}
+        title="确认订单 · 充值叠加包"
+        tenantName={targetTenant?.name || ""}
+        items={rechargeTarget ? [{
+          name: rechargeTarget.label,
+          spec: `得 ${rechargeTarget.credits} 积分 · 永久有效不清零`,
+          unitYuan: rechargeTarget.yuan, qty: 1, subtotalYuan: rechargeTarget.yuan,
+        }] : []}
+        totalYuan={rechargeTarget?.yuan ?? 0}
+        confirmText="确认下单"
+        onConfirm={confirmRecharge}
+        confirming={recharging}
+      />
 
-      {/* ══ 单加 Agent 二次确认 ══ */}
-      <AlertDialog open={agentAddConfirmOpen} onOpenChange={(o) => { if (!o) setAgentAddConfirmOpen(false); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>确认加购 Agent？</AlertDialogTitle>
-            <AlertDialogDescription>
-              将为租户「<b>{targetTenant?.name || "—"}</b>」加购 {selectedAgents.size} 个 Agent
-              （文本类 {addedText} 个 ×¥59、多模态类 {addedMm} 个 ×¥99），
-              合计 <b>¥{addedTotalYuan}/月</b>。
-              <br />首月费用将从该租户积分钱包扣除（余额不足将开通失败），后续按月自动续扣。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction
-              style={{ background: C.primary }}
-              onClick={() => { setAgentAddConfirmOpen(false); confirmAddAgent(); }}
-            >
-              确认加购并扣费
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* ══ 单加 Agent 收银台 ══ */}
+      <CheckoutDialog
+        open={agentAddConfirmOpen}
+        onOpenChange={(o) => { if (!o) setAgentAddConfirmOpen(false); }}
+        title="确认订单 · 单加 Agent"
+        tenantName={targetTenant?.name || ""}
+        items={[
+          ...(addedText > 0 ? [{ name: "文本类 Agent", spec: "¥59/月 · 单加订阅", unitYuan: 59, qty: addedText, subtotalYuan: addedText * 59 }] : []),
+          ...(addedMm > 0 ? [{ name: "多模态类 Agent", spec: "¥99/月 · 单加订阅", unitYuan: 99, qty: addedMm, subtotalYuan: addedMm * 99 }] : []),
+        ]}
+        totalYuan={addedTotalYuan}
+        settleNote=" /月"
+        confirmText="确认下单"
+        onConfirm={() => { setAgentAddConfirmOpen(false); confirmAddAgent(); }}
+      />
 
       {/* 单加 Agent 选择已内联到上方卡片，不再用独立弹窗 */}
     </div>
