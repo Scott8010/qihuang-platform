@@ -89,11 +89,12 @@ export default function Users() {
   const [rowBusy, setRowBusy] = useState("");
 
   const load = useCallback(async () => {
-    // 三个请求全部并行（之前 fetchTenantExtended 串在 Promise.all 后，tenantMap 晚到 → 新建弹窗 Select 看到 "加载租户中…" 占位）
+    // 三个请求全部并行；fetchTenantExtended 传 50（不是 200），避开后端每租户 6+ 条 N+1 SQL 拖死
+    // Billing/PlanUpgrade 也分别传 50/20，这里保持口径一致
     const [us, rs, ts] = await Promise.all([
       fetchUsers(),
       fetchRoles(),
-      fetchTenantExtended(200),
+      fetchTenantExtended(50),
     ]);
     setUsers(us);
     setRoles(rs);
@@ -131,6 +132,15 @@ export default function Users() {
     fetchRoles(effTenantId).then((list) => { if (alive) setFormRoles(list); });
     return () => { alive = false; };
   }, [effTenantId]);
+
+  // 手动重新拉客户租户映射（下拉占位 banner 提供「🔄 重新加载」按钮用，避开负载下的卡死）
+  const retryTenantMap = useCallback(async () => {
+    const ts = await fetchTenantExtended(50);
+    const tmap = new Map<string, string>();
+    tmap.set("tenant_default", "平台内部租户");
+    ts.forEach((t) => t.id && tmap.set(t.id, t.name || t.id));
+    setTenantMap(tmap);
+  }, []);
 
   const filtered = useMemo(() => {
     const k = kw.trim().toLowerCase();
@@ -479,9 +489,20 @@ export default function Users() {
                       <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                     ))}
                     {tenantOptions.length === 0 && (
-                      /* 占位用普通 div banner，不参与 select-item，避免用户点了 SelectTrigger 看不到任何可选内容 */
-                      <div className="px-2 py-1.5 text-[13px]" style={{ color: C.light }}>
-                        {tenantMap.size <= 1 ? "客户租户加载中…" : "当前未配置可选客户租户"}
+                      /* 占位用普通 div + 重新加载按钮，不参与 select-item；避免用户点了 SelectTrigger 看不到任何可选内容且无法自救 */
+                      <div className="px-2 py-2 text-[13px] flex items-center justify-between gap-2">
+                        <span style={{ color: C.light }}>
+                          {tenantMap.size <= 1 ? "客户租户加载中…（接口偶发慢，可手动重试）" : "当前未配置可选客户租户"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); retryTenantMap(); }}
+                          className="px-2 py-0.5 rounded border text-[12px] hover:bg-gray-50"
+                          style={{ borderColor: C.border, color: C.ink, background: "#fff" }}
+                          title="重新拉取客户租户"
+                        >
+                          ↻ 重新加载
+                        </button>
                       </div>
                     )}
                   </SelectContent>
