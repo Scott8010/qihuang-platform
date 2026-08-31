@@ -8,7 +8,7 @@ import {
 } from "recharts";
 import { Building2, Users, Zap, Banknote, ArrowRight, AlertTriangle, Clock, Info, Loader2 } from "lucide-react";
 import { C } from "@/lib/types";
-import { fetchDashboard, fetchBills } from "@/lib/api";
+import { fetchDashboard, fetchBills, fetchTenantExtended } from "@/lib/api";
 import type { CallTrendItem, SceneDistItem, AlertItem, TodoReviewItem, BillItem, DeckTask } from "@/lib/types";
 import TaskDeck from "@/components/TaskDeck";
 
@@ -32,10 +32,19 @@ export default function Dashboard({ go }: { go: (p: string) => void }) {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [reviews, setReviews] = useState<TodoReviewItem[]>([]);
   const [bills, setBills] = useState<BillItem[]>([]);
+  // 岐黄三境 3D 开通情况：从 fetchTenantExtended 取真实 module_3d 开关统计
+  const [m3d, setM3d] = useState<{ total: number; enabled: number; loading: boolean; hadData: boolean }>({ total: 0, enabled: 0, loading: true, hadData: false });
 
   useEffect(() => {
     let mounted = true;
     fetchBills().then((b) => { if (mounted) setBills(b); });
+    // 岐黄三境 3D 真实开通情况：与 dashboard 并行拉，避免再开一次慢查询
+    fetchTenantExtended(50).then((list) => {
+      if (!mounted) return;
+      const total = list.length;
+      const enabled = list.filter((t) => t.module3d).length;
+      setM3d({ total, enabled, loading: false, hadData: true });
+    }).catch(() => { if (mounted) setM3d((s) => ({ ...s, loading: false, hadData: true })); });
     fetchDashboard().then((d) => {
       if (!mounted) return;
       setReviews(d.reviews || []);
@@ -176,9 +185,28 @@ export default function Dashboard({ go }: { go: (p: string) => void }) {
           <div className="mx-5 mb-5 rounded-xl p-3.5" style={{ background: "#FBF4E4" }}>
             <div className="flex items-center justify-between">
               <div className="text-[15px] font-medium" style={{ color: C.gold }}>岐黄三境 · 3D 增值模块</div>
-              <Badge variant="outline" className="text-[13px] border-amber-300" style={{ color: C.gold }}>加购项</Badge>
+              {/* 套餐绑定（按 8/22 拍板，3D 走套餐门槛无单独加购开关） */}
+              <Badge variant="outline" className="text-[13px] border-amber-300" style={{ color: C.gold }}>套餐绑定</Badge>
             </div>
-            <div className="text-[14px] mt-1" style={{ color: C.mid }}>按真实 module_3d 开关统计</div>
+            {m3d.loading ? (
+              <div className="text-[14px] mt-1 flex items-center gap-1.5" style={{ color: C.mid }}>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                统计 3D 开通情况中…
+              </div>
+            ) : m3d.hadData && m3d.total === 0 ? (
+              <div className="text-[14px] mt-1" style={{ color: C.mid }}>
+                暂无租户数据，待接入 <code className="text-[12px] px-1 rounded" style={{ background: "rgba(0,0,0,.04)" }}>tenants-extended</code> 字段后显示。
+              </div>
+            ) : m3d.total > 0 && m3d.enabled === 0 ? (
+              <div className="text-[14px] mt-1" style={{ color: C.mid }}>
+                当前 <b>{m3d.total}</b> 家租户均未开通 3D 模块（需专业版/企业版套餐自动解锁）
+              </div>
+            ) : (
+              <div className="text-[14px] mt-1" style={{ color: C.mid }}>
+                已开通 <b style={{ color: C.gold }}>{m3d.enabled}</b> 家 / 共 <b>{m3d.total}</b> 家
+                （占比 <b>{m3d.total > 0 ? Math.round((m3d.enabled / m3d.total) * 100) : 0}%</b>）
+              </div>
+            )}
           </div>
         </Card>
       </div>
