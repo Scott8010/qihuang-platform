@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { C, userStatusMap } from "@/lib/types";
 import {
   fetchUsers, fetchRoles, createUser, updateUser, deleteUser,
-  resetUserPassword, assignRole, revokeRole,
+  resetUserPassword, assignRole, revokeRole, fetchUserDetail,
   fetchTenantExtended, fetchTenantOrgs, getIdentity,
 } from "@/lib/api";
 import type { PlatformUser, RoleTpl, OrgItem } from "@/lib/types";
@@ -34,6 +34,17 @@ function validatePassword(pwd: string): string | null {
   return null;
 }
 
+// 密码留空时，先发一个临时强密码给 createUser（后端要求非空），随后立即重置为系统生成密码
+function genTempPassword(): string {
+  const low = "abcdefghijkmnpqrstuvwxyz";
+  const up = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const num = "23456789";
+  const all = low + up + num;
+  let s = low[Math.floor(Math.random() * low.length)] + up[Math.floor(Math.random() * up.length)] + num[Math.floor(Math.random() * num.length)];
+  for (let i = 0; i < 9; i++) s += all[Math.floor(Math.random() * all.length)];
+  return s.split("").sort(() => Math.random() - 0.5).join("");
+}
+
 export default function Users() {
   const [users, setUsers] = useState<PlatformUser[]>([]);
   const [roles, setRoles] = useState<RoleTpl[]>([]);
@@ -45,6 +56,14 @@ export default function Users() {
   const [createOpen, setCreateOpen] = useState(false);
   const [nu, setNu] = useState({ ...EMPTY_NEW });
   const [creating, setCreating] = useState(false);
+  // 新建成功后弹出的「账号凭证」卡片（密码仅显示一次，供管理员转交）
+  const [createdCred, setCreatedCred] = useState<{ username: string; password: string; role: string; sendTo?: string } | null>(null);
+  // 新建：「由系统生成密码并发送」勾选 + 发送目标（手机号/邮箱）
+  const [genPwd, setGenPwd] = useState(false);
+  const [sendPhone, setSendPhone] = useState(false);
+  const [sendEmail, setSendEmail] = useState(false);
+  // 关闭新建弹窗时一并重置勾选态，避免残留
+  const resetCreateToggles = () => { setGenPwd(false); setSendPhone(false); setSendEmail(false); };
 
   // 编辑
   const [editUser, setEditUser] = useState<PlatformUser | null>(null);
@@ -165,17 +184,21 @@ export default function Users() {
       toast.error("用户名需 3-32 位，字母开头，仅含字母数字下划线");
       return;
     }
-    const perr = validatePassword(nu.password);
-    if (perr) {
-      toast.error(perr);
-      return;
+    // 密码可选：勾选「系统生成」→ 由系统生成随机强密码并回显；否则填了则校验强度
+    const useSystemPwd = genPwd;
+    const pwdProvided = useSystemPwd ? "" : (nu.password || "").trim();
+    if (pwdProvided) {
+      const perr = validatePassword(pwdProvided);
+      if (perr) { toast.error(perr); return; }
     }
     // 非超级管理员：账号强制归入本租户，不允许跨租户
     const targetTenant = isSuper ? (nu.tenant_id || undefined) : (myTenantId || undefined);
     setCreating(true);
+    // 后端 createUser 要求密码非空 → 留空时先发临时强密码，建成功后立即重置为系统生成密码
+    const tempPwd = pwdProvided || genTempPassword();
     const r = await createUser({
       username: nu.username.trim(),
-      password: nu.password,
+      password: tempPwd,
       display_name: nu.display_name.trim() || undefined,
       phone: nu.phone.trim() || undefined,
       email: nu.email.trim() || undefined,
@@ -183,26 +206,54 @@ export default function Users() {
       org_id: nu.org_id || undefined,
     });
     setCreating(false);
-    if (r.ok) {
-      const newId = r.data?.id;
-      // 若指定了初始角色：授予选中角色并摘掉默认 health_user
-      if (newId && nu.role_code) {
-        const a = await assignRole(newId, nu.role_code);
-        if (a.ok) {
-          await revokeRole(newId, "health_user");
-          toast.success(`用户 ${nu.username} 已创建，初始角色：${nu.role_code}`);
-        } else {
-          toast.warning(`用户已创建，但初始角色授予失败：${a.msg || "未知错误"}（可稍后在角色分配中手动授予）`);
-        }
-      } else {
-        toast.success(`用户 ${nu.username} 已创建，默认角色：健康用户`);
-      }
-      setCreateOpen(false);
-      setNu({ ...EMPTY_NEW });
-      load();
-    } else {
+    if (!r.ok) {
       toast.error(r.msg || "创建失败");
+      return;
     }
+    const newId = r.data?.id;
+    // 最终回显密码：用户自设的已知；留空则取系统生成的
+    let finalPwd = pwdProvided;
+    if (!pwdProvided && newId) {
+      const rp = await resetUserPassword(newId);
+      finalPwd = (rp.ok && rp.data?.new_password) ? rp.data.new_password : tempPwd;
+    }
+    // 初始角色：赋上后回查确认真生效，再摘默认 health_user（避免偶发"未分配"）
+    let roleLabel = "健康用户（默认）";
+    if (newId && nu.role_code) {
+      let assigned = false;
+      for (let attempt = 0; attempt < 2 && !assigned; attempt++) {
+        const a = await assignRole(newId, nu.role_code);
+        if (!a.ok) break;
+        const d = await fetchUserDetail(newId);
+        assigned = !!d?.roles?.some((x) => x.name === nu.role_code || x.id === nu.role_code);
+      }
+      if (assigned) {
+        await revokeRole(newId, "health_user");
+        roleLabel = nu.role_code;
+        toast.success(`用户 ${nu.username} 已创建，初始角色：${nu.role_code}`);
+      } else {
+        // 没赋上也保留默认角色，绝不变成"未分配"
+        toast.warning(`用户已创建，但初始角色「${nu.role_code}」授予失败（已保留默认健康用户），可稍后在角色分配中手动授予`);
+      }
+    } else {
+      toast.success(`用户 ${nu.username} 已创建，默认角色：健康用户`);
+    }
+    // 弹出「账号凭证」卡片：密码仅显示一次，供管理员妥善转交
+    const sendTargets: string[] = [];
+    if (useSystemPwd) {
+      if (sendPhone) sendTargets.push("手机号");
+      if (sendEmail) sendTargets.push("邮箱");
+    }
+    setCreatedCred({
+      username: nu.username.trim(),
+      password: finalPwd,
+      role: roleLabel,
+      sendTo: sendTargets.length ? sendTargets.join(" / ") : undefined,
+    });
+    setCreateOpen(false);
+    setNu({ ...EMPTY_NEW });
+    resetCreateToggles();
+    load();
   }
 
   // ── 编辑 ──
@@ -469,7 +520,7 @@ export default function Users() {
           <DialogHeader>
             <DialogTitle style={{ color: C.ink }}>新建用户</DialogTitle>
             <DialogDescription className="text-xs">
-              创建后系统默认授予「健康用户」角色，可在下方直接指定初始角色（创建后即时生效），也可稍后在角色分配中调整。
+              密码留空则由系统生成随机强密码，创建后弹出凭证卡片供你转交；可在下方指定初始角色（创建后即时生效），也可稍后在角色分配中调整。
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -558,9 +609,50 @@ export default function Users() {
                 选定角色将在创建后自动授予，并移除系统默认「健康用户」角色；留空则保留默认角色。
               </div>
             </div>
+            {/* 系统生成密码勾选：勾上 → 密码框变灰禁用，下方可勾选发送目标 */}
+            <div className="rounded-md border p-2.5" style={{ borderColor: C.border, background: C.bg }}>
+              <label className="flex items-start gap-2 cursor-pointer select-none">
+                <Checkbox
+                  checked={genPwd}
+                  onCheckedChange={(v) => {
+                    const checked = v === true;
+                    setGenPwd(checked);
+                    if (checked) {
+                      setNu({ ...nu, password: '' });
+                      if (nu.phone.trim()) setSendPhone(true);
+                      if (nu.email.trim()) setSendEmail(true);
+                    } else {
+                      setSendPhone(false);
+                      setSendEmail(false);
+                    }
+                  }}
+                  className="mt-0.5"
+                />
+                <div className="text-sm" style={{ color: C.ink }}>
+                  由系统生成密码，并发送至 <span className="font-medium">手机号 / 邮箱</span>
+                </div>
+              </label>
+              {genPwd && (
+                <>
+                  <div className="flex items-center gap-5 mt-2 ml-6">
+                    <label className="flex items-center gap-1.5 text-[13px] cursor-pointer" style={{ color: C.mid }}>
+                      <Checkbox checked={sendPhone} onCheckedChange={(v) => setSendPhone(v === true)} />
+                      手机号{nu.phone ? `（${nu.phone}）` : "（未填）"}
+                    </label>
+                    <label className="flex items-center gap-1.5 text-[13px] cursor-pointer" style={{ color: C.mid }}>
+                      <Checkbox checked={sendEmail} onCheckedChange={(v) => setSendEmail(v === true)} />
+                      邮箱{nu.email ? `（${nu.email}）` : "（未填）"}
+                    </label>
+                  </div>
+                  <div className="text-[12px] mt-1.5 ml-6 leading-relaxed" style={{ color: C.light }}>
+                    ⚠️ 短信 / 邮件自动发送通道尚未接入，勾选仅记录发送意向；创建后密码将在下方凭证卡中显示，请你手动转交。
+                  </div>
+                </>
+              )}
+            </div>
             {([
               ["username", "用户名 *", "字母开头，3-32 位"],
-              ["password", "初始密码 *", "至少 8 位"],
+              ["password", "初始密码（选填）", "至少 8 位，留空=系统生成"],
               ["display_name", "姓名", "选填"],
               ["phone", "手机号", "选填"],
               ["email", "邮箱", "选填"],
@@ -570,24 +662,87 @@ export default function Users() {
                 <Input
                   type={k === "password" ? "password" : "text"}
                   value={(nu as any)[k]}
-                  placeholder={ph}
+                  placeholder={k === "password" && genPwd ? "将由系统自动生成" : ph}
+                  disabled={k === "password" && genPwd}
                   onChange={(e) => setNu({ ...nu, [k]: e.target.value })}
                   className="h-8 text-sm"
+                  style={k === "password" && genPwd ? { background: C.bg, color: C.light, opacity: 0.65 } : undefined}
                 />
-                {k === 'password' && (
+                {k === 'password' && !genPwd && (
                   <div className='text-[13px] mt-1.5 leading-relaxed' style={{ color: C.light }}>
                     需 8-64 位，须同时包含大小写字母与数字；特殊字符可选。留空由系统生成随机强密码。
+                  </div>
+                )}
+                {k === 'password' && genPwd && (
+                  <div className='text-[13px] mt-1.5 leading-relaxed' style={{ color: C.light }}>
+                    已勾选「系统生成」，密码框已锁定，将由系统自动生成。
                   </div>
                 )}
               </div>
             ))}
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setCreateOpen(false)}>取消</Button>
+            <Button variant="outline" size="sm" onClick={() => { setCreateOpen(false); resetCreateToggles(); }}>取消</Button>
             <Button size="sm" className="text-white" style={{ background: C.primary }}
               disabled={creating} onClick={doCreate}>
               {creating && <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />}创建
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 新建成功 · 账号凭证卡片（密码仅显示一次，供管理员转交） */}
+      <Dialog open={!!createdCred} onOpenChange={(o) => { if (!o) setCreatedCred(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle style={{ color: C.ink }}>用户已创建 · 账号凭证</DialogTitle>
+            <DialogDescription className="text-xs">
+              请将以下账号密码妥善保存并转交用户。<b>此密码仅在此显示一次</b>，关闭后不可再查；
+              如需重发可到该用户的「重置密码」重新生成。当前未接短信/邮件自动发送，请勿相信任何"已发送"提示。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2.5">
+            <div>
+              <div className="text-xs mb-1" style={{ color: C.mid }}>用户名</div>
+              <div className="h-8 px-3 flex items-center rounded-md border text-sm font-mono"
+                style={{ borderColor: C.border, color: C.ink, background: C.bg }}>
+                {createdCred?.username}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs mb-1" style={{ color: C.mid }}>初始密码</div>
+              <div className="flex items-center gap-2">
+                <div className="h-8 px-3 flex-1 flex items-center rounded-md border text-sm font-mono"
+                  style={{ borderColor: C.border, color: C.ink, background: C.bg }}>
+                  {createdCred?.password}
+                </div>
+                <Button size="sm" variant="outline"
+                  onClick={() => { navigator.clipboard?.writeText(createdCred?.password || ""); setCopied(true); window.setTimeout(() => setCopied(false), 1500); }}
+                  title="复制密码">
+                  {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                </Button>
+              </div>
+            </div>
+            <div>
+              <div className="text-xs mb-1" style={{ color: C.mid }}>初始角色</div>
+              <div className="h-8 px-3 flex items-center rounded-md border text-sm"
+                style={{ borderColor: C.border, color: C.mid, background: C.bg }}>
+                {createdCred?.role}
+              </div>
+            </div>
+            {createdCred?.sendTo && (
+              <div>
+                <div className="text-xs mb-1" style={{ color: C.mid }}>发送目标</div>
+                <div className="h-8 px-3 flex items-center rounded-md border text-sm"
+                  style={{ borderColor: C.border, color: C.mid, background: C.bg }}>
+                  {createdCred.sendTo}（通道待接入，请手动转交）
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button size="sm" className="text-white" style={{ background: C.primary }}
+              onClick={() => setCreatedCred(null)}>我知道了，已转交</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
