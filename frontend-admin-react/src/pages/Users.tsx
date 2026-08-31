@@ -191,6 +191,21 @@ export default function Users() {
       const perr = validatePassword(pwdProvided);
       if (perr) { toast.error(perr); return; }
     }
+    // 勾选「系统生成密码」时，强制要求至少 1 个发送目标 + 对应字段不能空（短信/邮件通道未接入，更要兜住字段）
+    if (useSystemPwd) {
+      if (!sendPhone && !sendEmail) {
+        toast.error("已勾选「由系统生成密码」，请至少勾选 1 个发送目标（手机号 / 邮箱）");
+        return;
+      }
+      if (sendPhone && !nu.phone.trim()) {
+        toast.error("已勾选「发送至手机号」，请先在上方手机号字段填写");
+        return;
+      }
+      if (sendEmail && !nu.email.trim()) {
+        toast.error("已勾选「发送至邮箱」，请先在上方邮箱字段填写");
+        return;
+      }
+    }
     // 非超级管理员：账号强制归入本租户，不允许跨租户
     const targetTenant = isSuper ? (nu.tenant_id || undefined) : (myTenantId || undefined);
     setCreating(true);
@@ -516,7 +531,7 @@ export default function Users() {
 
       {/* 新建用户 */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle style={{ color: C.ink }}>新建用户</DialogTitle>
             <DialogDescription className="text-xs">
@@ -635,13 +650,17 @@ export default function Users() {
               {genPwd && (
                 <>
                   <div className="flex items-center gap-5 mt-2 ml-6">
-                    <label className="flex items-center gap-1.5 text-[13px] cursor-pointer" style={{ color: C.mid }}>
-                      <Checkbox checked={sendPhone} onCheckedChange={(v) => setSendPhone(v === true)} />
-                      手机号{nu.phone ? `（${nu.phone}）` : "（未填）"}
+                    <label className={"flex items-center gap-1.5 text-[13px] " + (nu.phone.trim() ? "cursor-pointer" : "cursor-not-allowed")}
+                      style={{ color: nu.phone.trim() ? C.mid : C.light }}
+                      title={nu.phone.trim() ? "勾选后系统将生成的密码发往该手机号" : "请先在上方填写手机号"}>
+                      <Checkbox checked={sendPhone} onCheckedChange={(v) => setSendPhone(v === true)} disabled={!nu.phone.trim()} />
+                      手机号{nu.phone.trim() ? `（${nu.phone.trim()}）` : "（上方未填，先去填）"}
                     </label>
-                    <label className="flex items-center gap-1.5 text-[13px] cursor-pointer" style={{ color: C.mid }}>
-                      <Checkbox checked={sendEmail} onCheckedChange={(v) => setSendEmail(v === true)} />
-                      邮箱{nu.email ? `（${nu.email}）` : "（未填）"}
+                    <label className={"flex items-center gap-1.5 text-[13px] " + (nu.email.trim() ? "cursor-pointer" : "cursor-not-allowed")}
+                      style={{ color: nu.email.trim() ? C.mid : C.light }}
+                      title={nu.email.trim() ? "勾选后系统将生成的密码发往该邮箱" : "请先在上方填写邮箱"}>
+                      <Checkbox checked={sendEmail} onCheckedChange={(v) => setSendEmail(v === true)} disabled={!nu.email.trim()} />
+                      邮箱{nu.email.trim() ? `（${nu.email.trim()}）` : "（上方未填，先去填）"}
                     </label>
                   </div>
                   <div className="text-[12px] mt-1.5 ml-6 leading-relaxed" style={{ color: C.light }}>
