@@ -198,11 +198,11 @@ export default function Users() {
         return;
       }
       if (sendPhone && !nu.phone.trim()) {
-        toast.error("已勾选「发送至手机号」，请先在上方手机号字段填写");
+        toast.error("已勾选「发送至手机号」，请先在下方手机号字段填写");
         return;
       }
       if (sendEmail && !nu.email.trim()) {
-        toast.error("已勾选「发送至邮箱」，请先在上方邮箱字段填写");
+        toast.error("已勾选「发送至邮箱」，请先在下方邮箱字段填写");
         return;
       }
     }
@@ -625,7 +625,7 @@ export default function Users() {
               </div>
             </div>
             {/* 系统生成密码勾选：勾上 → 密码框变灰禁用，下方可勾选发送目标 */}
-            <div className="rounded-md border p-2.5" style={{ borderColor: C.border, background: C.bg }}>
+            <div className="rounded-md border p-2.5 bg-emerald-100 border-emerald-300">
               <label className="flex items-start gap-2 cursor-pointer select-none">
                 <Checkbox
                   checked={genPwd}
@@ -652,15 +652,15 @@ export default function Users() {
                   <div className="flex items-center gap-5 mt-2 ml-6">
                     <label className={"flex items-center gap-1.5 text-[13px] " + (nu.phone.trim() ? "cursor-pointer" : "cursor-not-allowed")}
                       style={{ color: nu.phone.trim() ? C.mid : C.light }}
-                      title={nu.phone.trim() ? "勾选后系统将生成的密码发往该手机号" : "请先在上方填写手机号"}>
+                      title={nu.phone.trim() ? "勾选后系统将生成的密码发往该手机号" : "请先在下方填写手机号"}>
                       <Checkbox checked={sendPhone} onCheckedChange={(v) => setSendPhone(v === true)} disabled={!nu.phone.trim()} />
-                      手机号{nu.phone.trim() ? `（${nu.phone.trim()}）` : "（上方未填，先去填）"}
+                      手机号{nu.phone.trim() ? `（${nu.phone.trim()}）` : "（下方未填，先去填）"}
                     </label>
                     <label className={"flex items-center gap-1.5 text-[13px] " + (nu.email.trim() ? "cursor-pointer" : "cursor-not-allowed")}
                       style={{ color: nu.email.trim() ? C.mid : C.light }}
-                      title={nu.email.trim() ? "勾选后系统将生成的密码发往该邮箱" : "请先在上方填写邮箱"}>
+                      title={nu.email.trim() ? "勾选后系统将生成的密码发往该邮箱" : "请先在下方填写邮箱"}>
                       <Checkbox checked={sendEmail} onCheckedChange={(v) => setSendEmail(v === true)} disabled={!nu.email.trim()} />
-                      邮箱{nu.email.trim() ? `（${nu.email.trim()}）` : "（上方未填，先去填）"}
+                      邮箱{nu.email.trim() ? `（${nu.email.trim()}）` : "（下方未填，先去填）"}
                     </label>
                   </div>
                   <div className="text-[12px] mt-1.5 ml-6 leading-relaxed" style={{ color: C.light }}>
