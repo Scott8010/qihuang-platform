@@ -184,6 +184,19 @@ export default function Users() {
       toast.error("用户名需 3-32 位，字母开头，仅含字母数字下划线");
       return;
     }
+    // 通用必填：姓名、手机号、邮箱（老板要求三项都必填，不再选填）
+    if (!nu.display_name.trim()) {
+      toast.error("姓名不能为空，请先填写姓名");
+      return;
+    }
+    if (!nu.phone.trim()) {
+      toast.error("手机号不能为空，请先填写手机号");
+      return;
+    }
+    if (!nu.email.trim()) {
+      toast.error("邮箱不能为空，请先填写邮箱");
+      return;
+    }
     // 密码可选：勾选「系统生成」→ 由系统生成随机强密码并回显；否则填了则校验强度
     const useSystemPwd = genPwd;
     const pwdProvided = useSystemPwd ? "" : (nu.password || "").trim();
@@ -672,9 +685,9 @@ export default function Users() {
             {([
               ["username", "用户名 *", "字母开头，3-32 位"],
               ["password", "初始密码（选填）", "至少 8 位，留空=系统生成"],
-              ["display_name", "姓名", "选填"],
-              ["phone", "手机号", "选填"],
-              ["email", "邮箱", "选填"],
+              ["display_name", "姓名 *", "必填"],
+              ["phone", "手机号 *", "必填"],
+              ["email", "邮箱 *", "必填"],
             ] as const).map(([k, label, ph]) => (
               <div key={k}>
                 <div className="text-xs mb-1" style={{ color: C.mid }}>{label}</div>
