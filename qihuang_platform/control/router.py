@@ -442,6 +442,18 @@ async def set_tenant_agent_addons(
         extra["agent_addons"] = new_set
         t.extra = extra
 
+        # ── #B 结算中心：叠加去重防呆 ──
+        # 套餐自带 agents 是固定集合（plans.py features_json.agents），已含的不能再叠加收费/重复授权。
+        # 前端漏了也不怕：这里自动跳过，不建订阅、不扣费（套餐内数量不额外收费的铁律落地）。
+        _plan_agents: set = set()
+        _sub = db.query(Subscription).filter_by(tenant_id=tenant_id, status="active").first()
+        if _sub:
+            _p = db.query(Plan).filter_by(id=_sub.plan_id).first()
+            if _p and (_p.features_json or {}).get("agents"):
+                _plan_agents = set((_p.features_json or {}).get("agents") or [])
+        _skipped_plan = [k for k in newly_added if k in _plan_agents]
+        newly_added = [k for k in newly_added if k not in _plan_agents]
+
         # ── B3：单加 agent 月度订阅计费（老板 2026-08-25 拍板 文本¥59/多模态¥99）──
         # 不含赠送积分，开通走积分池、先赠后充；首月即扣，后续月度由计费中台定时续扣。
         # 2026-08-29 硬拦截：余额不足直接拒绝开通（HTTP 402），不建订阅、不递延对账。
@@ -474,10 +486,14 @@ async def set_tenant_agent_addons(
             ).update({"status": "cancelled"}, synchronize_session=False)
 
         db.commit()
+        msg = "租户级 Agent 叠加已更新（在套餐 agents 基础上生效）"
+        if _skipped_plan:
+            msg += f"；套餐已含 {_skipped_plan}，不重复计费"
         return success(data={
             "tenant_id": tenant_id,
             "agent_addons": new_set,
-        }, message="租户级 Agent 叠加已更新（在套餐 agents 基础上生效）")
+            "skipped_plan_agents": _skipped_plan,
+        }, message=msg)
     except Exception as e:
         db.rollback()
         return error("INTERNAL_ERROR", message=str(e))
@@ -2510,6 +2526,8 @@ async def list_tenants_extended(
                 "usedCalls": month_calls, "quotaCalls": quota,
                 "expires": expires,
                 "module_3d": module_3d,
+                # 结算中心：单加 agent 列表（套餐自带 agents 见套餐 features，不在此列）
+                "agent_addons": extra.get("agent_addons", []) or [],
                 "created_at": t.created_at.isoformat() if t.created_at else None,
             })
 
