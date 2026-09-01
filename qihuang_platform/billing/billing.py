@@ -126,6 +126,7 @@ def _get_period_usage(session, tenant_id: str, start: datetime, end: datetime) -
     返回 {total_calls, total_tokens, total_cost_cents}
     """
     # 调用次数（直接count行数）
+    # #B 修复：排除单加订阅费 CallLog（endpoint 含 addon_subscribe），它属订单/结算项，不是用量
     total_calls = (
         session.query(func.count(CallLog.id))
         .filter(
@@ -133,6 +134,7 @@ def _get_period_usage(session, tenant_id: str, start: datetime, end: datetime) -
                 CallLog.tenant_id == tenant_id,
                 CallLog.timestamp >= start,
                 CallLog.timestamp < end,
+                CallLog.endpoint.notlike("%addon_subscribe"),
             )
         )
         .scalar()
@@ -149,6 +151,7 @@ def _get_period_usage(session, tenant_id: str, start: datetime, end: datetime) -
                 CallLog.tenant_id == tenant_id,
                 CallLog.timestamp >= start,
                 CallLog.timestamp < end,
+                CallLog.endpoint.notlike("%addon_subscribe"),
             )
         )
         .one()
