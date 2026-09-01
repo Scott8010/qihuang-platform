@@ -16,6 +16,9 @@ from qihuang_platform.gateway.response import error
 
 security = HTTPBearer(auto_error=False)
 
+# 管理端角色白名单（#6 打通 tenant_admin/org_admin 进控制台；与 gateway/router.py:429 保持一致）
+ADMIN_ROLE_WHITELIST = {"super_admin", "tenant_admin", "org_admin", "admin"}
+
 
 # ========== JWT Token 鉴权 ==========
 
@@ -23,7 +26,12 @@ async def get_current_user(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> dict:
-    """从 Bearer Token 提取当前用户信息（/api/v1/*, /admin/v1/*）"""
+    """从 Bearer Token 提取当前用户信息（/api/v1/*, /admin/v1/*）
+
+    #5 全局租户隔离：token 内的 tenant_id 由 JWT 签名保证可信；任何借
+    X-Tenant-Id 头切换租户上下文的行为，仅 super_admin 允许（运营/排障用），
+    其余角色跨租户一律 403 拒绝。无 X-Tenant-Id 时使用 token 自带租户。
+    """
     if not credentials:
         raise HTTPException(status_code=401, detail=error("UNAUTHORIZED", "缺少认证Token"))
 
@@ -35,12 +43,58 @@ async def get_current_user(
     if not user:
         raise HTTPException(status_code=401, detail=error("TOKEN_INVALID", "用户不存在"))
 
+    roles = payload.get("roles", []) or []
+    token_tenant = payload.get("tenant_id")
+    is_super = "super_admin" in roles
+
+    header_tenant = request.headers.get("X-Tenant-Id")
+    if header_tenant:
+        if header_tenant != token_tenant and not is_super:
+            raise HTTPException(
+                status_code=403,
+                detail=error("FORBIDDEN", "禁止跨租户访问（租户上下文不匹配）"),
+            )
+        effective_tenant = header_tenant
+    else:
+        effective_tenant = token_tenant
+
     # 注入到 request.state 供后续使用
     request.state.user_id = payload["sub"]
-    request.state.tenant_id = payload["tenant_id"]
-    request.state.org_id = payload["org_id"]
-    request.state.roles = payload["roles"]
+    request.state.tenant_id = effective_tenant
+    request.state.org_id = payload.get("org_id")
+    request.state.roles = roles
 
+    return user
+
+
+async def require_capability_access(
+    request: Request,
+    user: dict = Depends(get_current_user),
+) -> dict:
+    """capability 核心接口门控（#4）：租户须有有效订阅 + 配额未耗尽，否则拒绝。
+
+    内部已依赖 get_current_user（故会注入 tenant_id 等上下文），直接在端点上
+    用 Depends(require_capability_access) 替代 Depends(get_current_user) 即可同时
+    完成鉴权 + 套餐/配额校验。
+    """
+    tenant_id = getattr(request.state, "tenant_id", None)
+    if not tenant_id:
+        raise HTTPException(
+            status_code=403,
+            detail=error("FORBIDDEN", "无租户上下文，拒绝访问核心能力"),
+        )
+    from qihuang_platform.billing.quota import check_quota
+    res = check_quota(tenant_id)
+    if res.get("code") != 0:
+        raise HTTPException(
+            status_code=403,
+            detail=error("FORBIDDEN", "租户无有效订阅，无法使用核心能力"),
+        )
+    if (res.get("data") or {}).get("is_exceeded"):
+        raise HTTPException(
+            status_code=402,
+            detail=error("QUOTA_EXCEEDED", "本月调用配额已用尽"),
+        )
     return user
 
 
@@ -115,9 +169,12 @@ async def get_current_admin(
     request: Request,
     user: dict = Depends(get_current_user),
 ) -> dict:
-    """管理端鉴权：Token + 管理员角色"""
-    roles = request.state.roles
-    if "admin" not in roles and "super_admin" not in roles:
+    """管理端鉴权：Token + 管理员角色白名单（#6 打通 tenant_admin/org_admin 进控制台）
+
+    super_admin 同时保留跨租户能力（经由 get_current_user 的 X-Tenant-Id 切换）。
+    """
+    roles = request.state.roles or []
+    if not (set(roles) & ADMIN_ROLE_WHITELIST):
         raise HTTPException(status_code=403, detail=error("FORBIDDEN", "需要管理员权限"))
     return user
 

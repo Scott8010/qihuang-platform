@@ -25,10 +25,8 @@ class TraceMiddleware(BaseHTTPMiddleware):
 
         # 注入 trace_id 到响应头
         response.headers["X-Trace-Id"] = trace_id
-        # CORS 开发阶段全开
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "*"
+        # 注意：CORS 响应头统一由 CORSMiddleware 按白名单管控（#7 修复），
+        # 此处不再强制写 "*"，否则会覆盖白名单导致任意源可跨域访问。
         return response
 
 

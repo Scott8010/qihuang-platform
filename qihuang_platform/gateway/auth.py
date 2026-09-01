@@ -112,7 +112,38 @@ def register_user(user_id: str, tenant_id: str, org_id: str,
 
 
 def get_user(user_id: str) -> Optional[dict]:
-    return _users_db.get(user_id)
+    """按 user_id 取用户信息（#9 落库：内存优先，回退 DB，重启不丢真实用户身份）
+
+    - 内存态覆盖微信/短信/mock 等开发登录（user_id 非 DB 主键，仅运行时存在）
+    - DB 态覆盖 password 真实登录用户（user_id = User.id），服务重启后仍可鉴权
+    - 已禁用/注销的用户在 DB 回退路径直接判为不存在（吊销即时生效）
+    """
+    u = _users_db.get(user_id)
+    if u:
+        return u
+    # 回退 DB（适用于重启后真实用户态恢复）
+    try:
+        from qihuang_platform.db.config import SessionLocal
+        from qihuang_platform.db.models import User
+        db = SessionLocal()
+        try:
+            row = db.query(User).filter_by(id=user_id).first()
+            if row:
+                if row.status != "active":
+                    return None
+                return {
+                    "user_id": row.id,
+                    "tenant_id": row.tenant_id,
+                    "org_id": row.org_id,
+                    "roles": (row.extra or {}).get("roles", []) if row.extra else [],
+                    "status": row.status,
+                }
+        finally:
+            db.close()
+    except Exception:
+        # DB 不可用时退回内存态结果（None），不阻断鉴权链
+        pass
+    return None
 
 
 # ========== API Key HMAC-SHA256 签名体系 ==========

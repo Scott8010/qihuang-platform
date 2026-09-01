@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel, Field
 
-from qihuang_platform.gateway.deps import get_current_user
+from qihuang_platform.gateway.deps import require_capability_access
 from qihuang_platform.gateway.response import success, error
 from qihuang_platform.capability.proxy import proxy
 
@@ -52,7 +52,7 @@ class SizhenRequest(BaseModel):
 # ═══════════════════════════════════════════════════════════════
 
 @router.post("/reasoning/diagnose", summary="综合辨证推理")
-async def diagnose(req: DiagnoseRequest, user: dict = Depends(get_current_user)):
+async def diagnose(req: DiagnoseRequest, user: dict = Depends(require_capability_access)):
     """
     综合辨证推理：八纲+六经+脏腑+方证对应+推理链。
     底层透传 GET /reasoning/api/diagnose
@@ -64,7 +64,7 @@ async def diagnose(req: DiagnoseRequest, user: dict = Depends(get_current_user))
 
 
 @router.post("/reasoning/sizhen", summary="四诊合参")
-async def sizhen_hezhan(req: SizhenRequest, user: dict = Depends(get_current_user)):
+async def sizhen_hezhan(req: SizhenRequest, user: dict = Depends(require_capability_access)):
     """
     四诊合参：舌诊+面诊+脉象综合辨证
     底层透传 POST /reasoning/api/sizhen
@@ -78,7 +78,7 @@ async def sizhen_hezhan(req: SizhenRequest, user: dict = Depends(get_current_use
 
 
 @router.post("/reasoning/consensus", summary="多模型共识投票")
-async def consensus_vote(req: ConsensusRequest, user: dict = Depends(get_current_user)):
+async def consensus_vote(req: ConsensusRequest, user: dict = Depends(require_capability_access)):
     """
     多模型共识投票辨证
     底层透传 GET /reasoning/api/consensus
@@ -90,7 +90,7 @@ async def consensus_vote(req: ConsensusRequest, user: dict = Depends(get_current
 
 
 @router.post("/reasoning/formula", summary="方剂君臣佐使分析")
-async def formula_analysis(req: FormulaAnalysisRequest, user: dict = Depends(get_current_user)):
+async def formula_analysis(req: FormulaAnalysisRequest, user: dict = Depends(require_capability_access)):
     """
     方剂君臣佐使详细分析
     底层透传 GET /formula-analysis/api/formula/{name}
@@ -103,7 +103,7 @@ async def formula_analysis(req: FormulaAnalysisRequest, user: dict = Depends(get
 async def diagnose_system(
     system: str,
     req: DiagnoseRequest,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_capability_access),
 ):
     """
     单体系辨证：bagang/liujing/zangfu/zabing/wenbing
@@ -121,7 +121,7 @@ async def diagnose_system(
 # ═══════════════════════════════════════════════════════════════
 
 @router.post("/safety/check", summary="用药安全审查")
-async def safety_check(req: SafetyCheckRequest, user: dict = Depends(get_current_user)):
+async def safety_check(req: SafetyCheckRequest, user: dict = Depends(require_capability_access)):
     """
     配伍禁忌安全检查（方剂/中药/妊娠）
     底层透传 GET /reasoning/api/check_safety
@@ -141,7 +141,7 @@ async def safety_check(req: SafetyCheckRequest, user: dict = Depends(get_current
 async def graph_query(
     q: str = Query(..., description="搜索关键词"),
     limit: int = Query(10, ge=1, le=50),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_capability_access),
 ):
     """图谱语义搜索，底层透传 GET /query/api/search"""
     return await proxy.forward("GET", "/api/v1/herbs", params={"q": q, "limit": limit})
@@ -151,7 +151,7 @@ async def graph_query(
 async def graph_entity(
     entity_type: str,
     entity_id: str,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_capability_access),
 ):
     """
     图谱节点详情，底层透传 /api/v1/{entity_type}/{entity_id}
@@ -167,7 +167,7 @@ async def graph_entity(
 # ═══════════════════════════════════════════════════════════════
 
 @router.post("/agent/chat", summary="智能对话（中医问答）")
-async def agent_chat(req: ChatRequest, user: dict = Depends(get_current_user)):
+async def agent_chat(req: ChatRequest, user: dict = Depends(require_capability_access)):
     """
     中医智能对话，支持多轮对话
     底层透传 POST /chat/api/ask
@@ -185,7 +185,7 @@ async def literature_search(
     status: Optional[str] = Query(None, description="处理状态"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_capability_access),
 ):
     """文献库检索，底层透传 GET /library/api/list"""
     params = {"limit": limit, "offset": offset}
@@ -203,7 +203,7 @@ async def query_herbs(
     q: Optional[str] = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_capability_access),
 ):
     """中药列表/搜索"""
     params = {"limit": limit, "offset": offset}
@@ -212,7 +212,7 @@ async def query_herbs(
 
 
 @router.get("/query/herbs/{name}", summary="中药详情")
-async def query_herb_detail(name: str, user: dict = Depends(get_current_user)):
+async def query_herb_detail(name: str, user: dict = Depends(require_capability_access)):
     """中药详情（归经/配伍/禁忌/所在方剂）"""
     return await proxy.forward("GET", f"/api/v1/herbs/{name}")
 
@@ -223,7 +223,7 @@ async def query_formulas(
     meridian: Optional[str] = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_capability_access),
 ):
     """方剂列表/搜索"""
     params = {"limit": limit, "offset": offset}
@@ -233,7 +233,7 @@ async def query_formulas(
 
 
 @router.get("/query/formulas/{name}", summary="方剂详情")
-async def query_formula_detail(name: str, user: dict = Depends(get_current_user)):
+async def query_formula_detail(name: str, user: dict = Depends(require_capability_access)):
     """方剂详情（组成/证候/经典出处/安全检查）"""
     return await proxy.forward("GET", f"/api/v1/formulas/{name}")
 
@@ -243,7 +243,7 @@ async def query_syndromes(
     q: Optional[str] = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_capability_access),
 ):
     """证候列表/搜索"""
     params = {"limit": limit, "offset": offset}
@@ -252,7 +252,7 @@ async def query_syndromes(
 
 
 @router.get("/query/syndromes/{name}", summary="证候详情")
-async def query_syndrome_detail(name: str, user: dict = Depends(get_current_user)):
+async def query_syndrome_detail(name: str, user: dict = Depends(require_capability_access)):
     """证候详情（症状/方剂/六经）"""
     return await proxy.forward("GET", f"/api/v1/syndromes/{name}")
 
@@ -262,7 +262,7 @@ async def query_classics(
     q: Optional[str] = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_capability_access),
 ):
     """经典原文列表/搜索"""
     params = {"limit": limit, "offset": offset}

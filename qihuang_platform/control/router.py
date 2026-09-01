@@ -10,6 +10,7 @@
 7. 容器管理: 容器状态监控 + 自动恢复
 """
 import os
+import warnings
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, Query, Body, Request, Header, HTTPException, UploadFile as FastAPIUploadFile, File, Form
@@ -1129,7 +1130,13 @@ async def review_action(req: ReviewActionRequest, admin: dict = Depends(get_curr
 # 跨服务摄入通道：8601 自生长引擎 → 8602 审核队列
 # ═══════════════════════════════════════════
 
-_QH_INTERNAL_KEY = os.environ.get("QH_INTERNAL_API_KEY", "qh_key_default_2026")
+_QH_INTERNAL_KEY = os.environ.get("QH_INTERNAL_API_KEY")
+if not _QH_INTERNAL_KEY:
+    warnings.warn(
+        "QH_INTERNAL_API_KEY 未配置：跨服务摄入通道(/kg/review/ingest)将拒绝一切请求"
+        "(fail-closed)。请在 8601 自生长引擎与 8602 两侧配置同一个强随机值。",
+        stacklevel=2,
+    )
 _DEFAULT_TENANT = os.environ.get("QH_DEFAULT_TENANT", "tenant_default")
 
 # 脏数据防线：测试/占位内容的硬性拦截关键词
@@ -1159,7 +1166,8 @@ async def _verify_internal_key(
 ):
     """服务间内部调用鉴权（8601 自生长引擎 → 8602 审核台）。"""
     provided = api_key or x_internal_key
-    if provided != _QH_INTERNAL_KEY:
+    # #8 修复：未配置内部密钥(fail-closed) 或密钥不匹配，一律拒绝
+    if not _QH_INTERNAL_KEY or provided != _QH_INTERNAL_KEY:
         raise HTTPException(status_code=401, detail=error("API_KEY_INVALID", "内部调用密钥错误"))
     return True
 
