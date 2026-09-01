@@ -153,11 +153,17 @@ async def open_list_templates(
 @router.get("/templates/{template_id}")
 async def open_get_template(
     template_id: str,
+    request: Request,
     db: Session = Depends(get_db),
     _: dict = Depends(get_current_principal),
 ):
     t = db.query(DbTemplate).filter(DbTemplate.id == template_id).first()
     if not t:
+        raise HTTPException(status_code=404, detail=error("NOT_FOUND", "模板不存在"))
+    # 🔒 跨租户隔离（IDOR 修复）：仅本人租户模板或平台公共模板(tenant_id=None)可读；
+    # 其余租户私有模板一律按 404 处理，避免泄露他人模板内容与存在性。
+    caller_tenant = getattr(request.state, "tenant_id", None)
+    if t.tenant_id is not None and t.tenant_id != caller_tenant:
         raise HTTPException(status_code=404, detail=error("NOT_FOUND", "模板不存在"))
     own = _get_ownership(db, template_id, None)
     return success(data=_serialize_template(t, own))
@@ -176,7 +182,12 @@ async def open_submit_template(
     t = db.query(DbTemplate).filter(DbTemplate.id == template_id).first()
     if not t:
         raise HTTPException(status_code=404, detail=error("NOT_FOUND", "模板不存在"))
-    tenant_id = getattr(request.state, "tenant_id", None)
+    # 🔒 跨租户隔离（IDOR 修复）：只能提交本人租户模板审核，禁止冒用他人机构身份提交。
+    # 平台公共模板(tenant_id=None)不属于任何租户，不允许经开放通道提交。
+    caller_tenant = getattr(request.state, "tenant_id", None)
+    if t.tenant_id is None or t.tenant_id != caller_tenant:
+        raise HTTPException(status_code=404, detail=error("NOT_FOUND", "模板不存在"))
+    tenant_id = caller_tenant
     own = _get_ownership(db, template_id, None)
     org_id = own.owner_org_id if own else None
     existing = db.query(TemplateReviewSubmission).filter(

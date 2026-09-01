@@ -21,6 +21,18 @@ def get_rbac(db: Session = Depends(get_db)) -> RBACService:
     return RBACService(db)
 
 
+def _assert_same_tenant(target, user):
+    """跨租户越权防护（IDOR 修复）。
+
+    仅 super_admin 可跨租户操作；其余管理员目标资源必须归属本人租户，
+    否则按 404 返回（不泄露目标是否存在，防止租户用户枚举）。
+    """
+    if "super_admin" in (user.get("roles") or []):
+        return
+    if getattr(target, "tenant_id", None) != user.get("tenant_id"):
+        raise HTTPException(404, detail=error("NOT_FOUND", "用户不存在"))
+
+
 # ========== 请求模型 ==========
 
 class CreateTenantRequest(BaseModel):
@@ -264,6 +276,7 @@ async def get_user(
     target = rbac.get_user(user_id)
     if not target:
         raise HTTPException(404, detail=error("NOT_FOUND", "用户不存在"))
+    _assert_same_tenant(target, user)
     roles = rbac.get_user_roles(user_id)
     return success({
         "id": target.id, "username": target.username, "display_name": target.display_name,
@@ -285,6 +298,7 @@ async def update_user(
     target = rbac.get_user(user_id)
     if not target:
         raise HTTPException(404, detail=error("NOT_FOUND", "用户不存在"))
+    _assert_same_tenant(target, user)
     updated = rbac.update_user(
         user_id,
         display_name=req.display_name,
@@ -312,6 +326,7 @@ async def reset_password(
     target = rbac.get_user(user_id)
     if not target:
         raise HTTPException(404, detail=error("NOT_FOUND", "用户不存在"))
+    _assert_same_tenant(target, user)
     if req.password is not None:
         ok, msg = validate_password(req.password)
         if not ok:
@@ -360,6 +375,7 @@ async def delete_user(
     target = rbac.get_user(user_id)
     if not target:
         raise HTTPException(404, detail=error("NOT_FOUND", "用户不存在"))
+    _assert_same_tenant(target, user)
     ok = rbac.delete_user(user_id)
     if not ok:
         raise HTTPException(400, detail=error("DELETE_FAILED", "删除失败"))

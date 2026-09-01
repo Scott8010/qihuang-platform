@@ -5,15 +5,26 @@ API Gateway - 双鉴权体系
 """
 import hashlib
 import hmac
+import os
 import time
 import uuid
+import warnings
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict
 
 import jwt
 
 # ---- 配置 ----
-JWT_SECRET = "qihuang-jwt-secret-dev-32bytes-ok!"  # ≥32 bytes for HS256, 生产从环境变量读取
+# 生产：JWT 签名密钥必须由环境变量 QH_JWT_SECRET 注入（强随机 ≥32 bytes）。
+# 未设置时回退到内置开发默认值并打告警——禁止无密钥直接把可伪造 token 放上生产。
+JWT_SECRET = os.environ.get("QH_JWT_SECRET")
+if not JWT_SECRET:
+    warnings.warn(
+        "QH_JWT_SECRET 未设置，使用内置默认 JWT 密钥（仅限开发/测试环境；"
+        "生产必须设置强随机值，否则 token 可被任意伪造）",
+        stacklevel=2,
+    )
+    JWT_SECRET = "qihuang-jwt-secret-dev-32bytes-ok!"  # ≥32 bytes for HS256 (dev fallback)
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 120  # 2小时
 REFRESH_TOKEN_EXPIRE_DAYS = 30    # 30天
