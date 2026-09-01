@@ -15,7 +15,7 @@ import type {
 import {
   fetchBillingStats, fetchPlans, fetchBills, fetchSubscriptions, fetchSceneUsage, fetchPriceBook,
   fetchTenantExtended, upgradeSubscription, rechargePack, fetchAgents, addAgentAddon, fetchOrders,
-  fetchWalletBalance, fetchBillDetail,
+  fetchWalletBalance, fetchBillDetail, generateBill,
 } from "@/lib/api";
 
 /* ═══════════════════════════════════════════
@@ -193,6 +193,10 @@ export default function Billing() {
   const [billDetail, setBillDetail] = useState<BillDetailItem | null>(null);
   const [billDetailOpen, setBillDetailOpen] = useState(false);
   const [billDetailLoading, setBillDetailLoading] = useState(false);
+  // 手动生成账单（无账单数据时先走这里）
+  const [genBillTenantId, setGenBillTenantId] = useState("");
+  const [genBillPeriod, setGenBillPeriod] = useState(new Date().toISOString().slice(0, 7));
+  const [genBillLoading, setGenBillLoading] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // 充值操作所需的上下文
@@ -250,6 +254,17 @@ export default function Billing() {
     setBillDetailLoading(true);
     setBillDetail(null);
     fetchBillDetail(billId).then((d) => { setBillDetail(d); setBillDetailLoading(false); });
+  };
+
+  // 手动生成账单（无账单数据时先走这里：选租户 + 账期 → 生成后列表出现，可点「查看明细」）
+  const handleGenerateBill = async () => {
+    if (!genBillTenantId) { flash("warn", "请先选择要生成账单的租户"); return; }
+    if (!genBillPeriod) { flash("warn", "请选择账期（月份）"); return; }
+    setGenBillLoading(true);
+    const r = await generateBill(genBillTenantId, genBillPeriod);
+    flash(r.ok ? "ok" : "err", r.msg);
+    setGenBillLoading(false);
+    if (r.ok) fetchBills().then(setBills);
   };
 
   // 打印账单（电信账单式一页纸：抬头/应缴/费用分节/合计）
@@ -865,9 +880,38 @@ export default function Billing() {
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[16px] font-medium" style={{ color: C.ink }}>账单管理</span>
-            <Button variant="outline" size="sm" style={{ borderColor: C.border, color: C.primary }} onClick={exportBillsCsv}>
-              <Download className="w-3.5 h-3.5 mr-1" /> 导出对账单
-            </Button>
+            <div className="flex items-center gap-2">
+              <Select value={genBillTenantId} onValueChange={setGenBillTenantId}>
+                <SelectTrigger className="h-8 w-[180px] text-[13px]">
+                  <SelectValue placeholder="生成账单给租户…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tenants.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  ))}
+                  {tenants.length === 0 && <SelectItem value="__none" disabled>加载租户中…</SelectItem>}
+                </SelectContent>
+              </Select>
+              <input
+                type="month"
+                value={genBillPeriod}
+                onChange={(e) => setGenBillPeriod(e.target.value)}
+                className="h-8 px-2 rounded border text-[13px] outline-none"
+                style={{ borderColor: C.border, color: C.ink, background: "#fff" }}
+              />
+              <Button
+                size="sm"
+                disabled={genBillLoading || !genBillTenantId}
+                style={{ background: C.primary, color: "#fff" }}
+                onClick={handleGenerateBill}
+              >
+                {genBillLoading && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />}
+                生成账单
+              </Button>
+              <Button variant="outline" size="sm" style={{ borderColor: C.border, color: C.primary }} onClick={exportBillsCsv}>
+                <Download className="w-3.5 h-3.5 mr-1" /> 导出对账单
+              </Button>
+            </div>
           </div>
           <table className="w-full text-[15px]">
             <thead>
@@ -906,7 +950,7 @@ export default function Billing() {
                   <td colSpan={8} className="py-12 text-center" style={{ color: C.light }}>
                     {loading ? (
                       <><Loader2 className="w-4 h-4 animate-spin inline mr-2" />加载中…</>
-                    ) : "暂无账单记录"}
+                    ) : "暂无账单记录（可先在上方选租户 + 月份，点「生成账单」）"}
                   </td>
                 </tr>
               )}

@@ -784,6 +784,14 @@ export async function fetchBillDetail(billId: string): Promise<BillDetailItem | 
   } catch { return null; }
 }
 
+/** POST /admin/v1/billing/bills/generate — 手动生成月度账单（无账单数据时先走这里） */
+export async function generateBill(tenantId: string, period: string): Promise<{ ok: boolean; msg: string }> {
+  try {
+    const r = await post<{ code: number; message: string }>("/admin/v1/billing/bills/generate", { tenant_id: tenantId, period });
+    return { ok: r?.code === 0, msg: r?.message || (r?.code === 0 ? "账单已生成" : "生成失败") };
+  } catch { return { ok: false, msg: "生成失败" }; }
+}
+
 // ═══ 内容管控 ═══
 
 export async function fetchReviews(): Promise<TodoReviewItem[]> {
