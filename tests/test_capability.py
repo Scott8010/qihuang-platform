@@ -5,6 +5,37 @@ tests/test_capability.py — 中台能力端点测试
 """
 import pytest
 
+from qihuang_platform.db.config import SessionLocal
+from qihuang_platform.db.models import Plan, Subscription
+
+
+@pytest.fixture(scope="module", autouse=True)
+def ensure_tenant_default_subscription():
+    """给测试默认租户 tenant_default 配一个基础套餐订阅（幂等）。
+
+    背景：capability 核心接口门控 require_capability_access 依赖 check_quota
+    判定租户有有效订阅；测试默认租户本就代表'已开通基础能力的平台租户'，
+    故在此建一个 active 订阅，使冒烟测试正常通过，同时保留'无订阅真实拒'
+    的安全语义（见 test_content_writer_agent / test_insight_agent 的无订阅拒测试）。
+    """
+    session = SessionLocal()
+    try:
+        existing = (
+            session.query(Subscription)
+            .filter_by(tenant_id="tenant_default", status="active")
+            .first()
+        )
+        if existing:
+            return
+        plan = session.query(Plan).filter_by(status="active").first()
+        if not plan:
+            return
+        sub = Subscription(tenant_id="tenant_default", plan_id=plan.id, status="active")
+        session.add(sub)
+        session.commit()
+    finally:
+        session.close()
+
 
 # ═══════════════════════════════════════════════════════════
 # 核心能力 /api/v1/core/* (17 端点)
