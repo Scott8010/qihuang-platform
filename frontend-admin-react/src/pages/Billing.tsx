@@ -10,11 +10,11 @@ import { BarChart3, Download, Check, Minus, Loader2 } from "lucide-react";
 import { C, billStatus, planFeatureLabels, sceneMap } from "@/lib/types";
 import type {
   PlanItem, BillItem, SubscriptionItem, SceneUsageItem, PriceBook,
-  TenantPlanItem, AgentCenterItem, RechargePack,
+  TenantPlanItem, AgentCenterItem, RechargePack, OrderItem,
 } from "@/lib/types";
 import {
   fetchBillingStats, fetchPlans, fetchBills, fetchSubscriptions, fetchSceneUsage, fetchPriceBook,
-  fetchTenantExtended, upgradeSubscription, rechargePack, fetchAgents, addAgentAddon,
+  fetchTenantExtended, upgradeSubscription, rechargePack, fetchAgents, addAgentAddon, fetchOrders,
 } from "@/lib/api";
 
 /* ═══════════════════════════════════════════
@@ -111,6 +111,19 @@ const MAIN_PLAN = "professional";   // 主力套餐高亮
 const MULTIMODAL_AGENTS = new Set(["tongue", "geo", "health-assistant", "health-advisor"]);
 const agentFeeYuan = (key: string) => (MULTIMODAL_AGENTS.has(key) ? 99 : 59);
 
+/** 订单类型 / 状态 展示映射（结算中心 #B） */
+const orderTypeMap: Record<string, { label: string; cls: string }> = {
+  recharge: { label: "充值", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  addon: { label: "单加订阅", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  usage: { label: "用量快照", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  plan: { label: "套餐", cls: "bg-purple-50 text-purple-700 border-purple-200" },
+};
+const orderStatusMap: Record<string, { label: string; cls: string }> = {
+  PAID: { label: "已支付", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  PENDING: { label: "待支付", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  CANCELLED: { label: "已取消", cls: "bg-gray-100 text-gray-600 border-gray-200" },
+};
+
 /** 复用：Agent 多选清单（套餐引导追加 & 单加 Agent 块共用） */
 function AgentChecklist({
   agents, selected, onToggle, emptyText,
@@ -161,6 +174,7 @@ export default function Billing() {
   const [subs, setSubs] = useState<SubscriptionItem[]>([]);
   const [scenes, setScenes] = useState<SceneUsageItem[]>([]);
   const [priceBook, setPriceBook] = useState<PriceBook | null>(null);
+  const [orders, setOrders] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   // 充值操作所需的上下文
@@ -194,6 +208,7 @@ export default function Billing() {
       fetchPriceBook().then(setPriceBook),
       fetchTenantExtended(50).then(setTenants),
       fetchAgents().then(setAgents),
+      fetchOrders({ page_size: 50 }).then(setOrders),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -639,6 +654,64 @@ export default function Billing() {
               </tbody>
             </table>
           )}
+        </CardContent>
+      </Card>
+
+      {/* 结算中心 · 订单记录（#B 方案：充值/单加订阅/用量快照先落订单再结算） */}
+      <Card className="border shadow-none" style={{ borderColor: C.border }}>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[16px] font-medium" style={{ color: C.ink }}>订单记录</span>
+            <span className="text-[12.5px]" style={{ color: C.light }}>
+              每笔收费先落订单再结算 · 充值单为预付款，不计入月度应付
+            </span>
+          </div>
+          <table className="w-full text-[15px]">
+            <thead>
+              <tr className="text-left text-[13px]" style={{ color: C.light }}>
+                {["订单号", "类型", "项目", "金额", "积分", "状态", "时间"].map((h) => (
+                  <th key={h} className="pb-2 font-normal">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {orders.slice(0, 20).map((o) => {
+                const typeInfo = orderTypeMap[o.order_type] || { label: o.order_type, cls: "bg-gray-100 text-gray-600 border-gray-200" };
+                const stInfo = orderStatusMap[o.status] || { label: o.status, cls: "bg-gray-100 text-gray-600 border-gray-200" };
+                const yuan = Math.round((o.amount_cents || 0) / 100);
+                return (
+                  <tr key={o.order_no} className="border-t hover:bg-[#F8FAF9]" style={{ borderColor: C.border }}>
+                    <td className="py-2.5 font-mono text-[13.5px]" style={{ color: C.mid }}>{o.order_no}</td>
+                    <td className="py-2.5">
+                      <span className={`text-[13px] px-2 py-0.5 rounded border ${typeInfo.cls}`}>{typeInfo.label}</span>
+                    </td>
+                    <td className="py-2.5" style={{ color: C.ink }}>{o.item_label || o.item_key || "—"}</td>
+                    <td className="py-2.5 font-medium" style={{ color: C.ink }}>¥{yuan.toLocaleString()}</td>
+                    <td className="py-2.5">
+                      <span className={o.credits >= 0 ? "font-medium text-emerald-600" : "font-medium text-red-500"}>
+                        {o.credits > 0 ? `+${o.credits}` : o.credits}
+                      </span>
+                    </td>
+                    <td className="py-2.5">
+                      <span className={`text-[13px] px-2 py-0.5 rounded border ${stInfo.cls}`}>{stInfo.label}</span>
+                    </td>
+                    <td className="py-2.5 text-[13.5px]" style={{ color: C.light }}>
+                      {o.created_at ? o.created_at.slice(0, 19).replace("T", " ") : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+              {orders.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center" style={{ color: C.light }}>
+                    {loading ? (
+                      <><Loader2 className="w-4 h-4 animate-spin inline mr-2" />加载中…</>
+                    ) : "暂无订单记录（充值 / 单加订阅后此处自动出现）"}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </CardContent>
       </Card>
 

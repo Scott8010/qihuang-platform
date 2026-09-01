@@ -155,6 +155,15 @@ export interface BillItem {
   calls: string; tokens: string; amount: number; status: string;
 }
 
+/** 对应 GET /billing/v1/orders → 结算中心订单记录（#B 方案）
+ *  order_type: recharge 充值 / addon 单加 / usage 用量快照 / plan 套餐 */
+export interface OrderItem {
+  id: string; order_no: string; tenant_id: string; order_type: string;
+  item_key: string; item_label: string; amount_cents: number; credits: number;
+  status: string; billed: boolean; period_month: string;
+  paid_at: string | null; created_at: string;
+}
+
 /** 对应 GET /admin/v1/plans → {plan_name, display_name, features_json}
  *  注意：后端不提供价格 / QPS / 配额，页面只能展示特性矩阵 */
 export interface PlanFeatures {

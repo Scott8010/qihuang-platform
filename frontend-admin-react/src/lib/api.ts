@@ -8,7 +8,7 @@ import type {
   AlertItem, TodoReviewItem, BillItem, PlanItem, SubscriptionItem, SceneUsageItem,
   OrgItem, TenantUserItem, PermissionItem, PlatformUser,
   SensitiveWordItem, ServiceItem, LlmProviderItem, AuditLogItem, DashboardData,
-  PriceBook, AgentCenterItem,
+  PriceBook, AgentCenterItem, OrderItem,
 } from "./types";
 
 // ═══ 基础 ═══
@@ -719,6 +719,40 @@ export async function fetchBills(): Promise<BillItem[]> {
       tokens: String(s.total_tokens || 0),
       amount: Math.round((s.amount_cents || 0) / 100),
       status: s.status || "DRAFT",
+    }));
+  } catch { return []; }
+}
+
+// ═══ 结算中心订单（#B 方案）═══
+
+/** GET /billing/v1/orders — 结算中心订单记录（admin 可查任意/全部，租户仅自身） */
+export async function fetchOrders(params?: {
+  tenant_id?: string; type?: string; period?: string; page?: number; page_size?: number;
+}): Promise<OrderItem[]> {
+  try {
+    const qs = new URLSearchParams();
+    if (params?.tenant_id) qs.set("tenant_id", params.tenant_id);
+    if (params?.type) qs.set("order_type", params.type);
+    if (params?.period) qs.set("period", params.period);
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.page_size) qs.set("page_size", String(params.page_size));
+    const q = qs.toString();
+    const r = await get<{ code: number; data: { items?: any[] } }>(`/billing/v1/orders${q ? `?${q}` : ""}`);
+    const items = r?.data?.items || [];
+    return items.map((s: any) => ({
+      id: s.id || "",
+      order_no: s.order_no || "",
+      tenant_id: s.tenant_id || "",
+      order_type: s.order_type || "",
+      item_key: s.item_key || "",
+      item_label: s.item_label || "",
+      amount_cents: s.amount_cents || 0,
+      credits: s.credits || 0,
+      status: s.status || "PENDING",
+      billed: !!s.billed,
+      period_month: s.period_month || "",
+      paid_at: s.paid_at || null,
+      created_at: s.created_at || "",
     }));
   } catch { return []; }
 }
