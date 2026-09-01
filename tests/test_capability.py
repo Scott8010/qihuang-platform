@@ -5,33 +5,35 @@ tests/test_capability.py — 中台能力端点测试
 """
 import pytest
 
+import jwt
+
 from qihuang_platform.db.config import SessionLocal
 from qihuang_platform.db.models import Plan, Subscription
 
 
-@pytest.fixture(scope="module", autouse=True)
-def ensure_tenant_default_subscription():
-    """给测试默认租户 tenant_default 配一个基础套餐订阅（幂等）。
+@pytest.fixture(autouse=True)
+def ensure_capability_tenant_subscription(user_headers):
+    """给当前测试用户所属租户建一个 active 订阅（幂等），使 capability 门控放行。
 
-    背景：capability 核心接口门控 require_capability_access 依赖 check_quota
-    判定租户有有效订阅；测试默认租户本就代表'已开通基础能力的平台租户'，
-    故在此建一个 active 订阅，使冒烟测试正常通过，同时保留'无订阅真实拒'
-    的安全语义（见 test_content_writer_agent / test_insight_agent 的无订阅拒测试）。
+    背景：require_capability_access 门控依赖 check_quota 判定租户有有效订阅；
+    wechat mock 登录的测试用户所属租户在测试库无订阅会被 403 挡，导致冒烟测试
+    失败。此处按 token 实际 tenant_id 建订阅（代表'已开通基础能力的租户'），
+    保留'无订阅真实拒'的安全语义（见 test_content_writer_agent / test_insight_agent）。
+    若测试库无 active 套餐种子，则自建一个 ci_trial 套餐兜底。
     """
+    token = user_headers["Authorization"].split(" ", 1)[1]
+    payload = jwt.decode(token, options={"verify_signature": False})
+    tid = payload.get("tenant_id") or "tenant_default"
     session = SessionLocal()
     try:
-        existing = (
-            session.query(Subscription)
-            .filter_by(tenant_id="tenant_default", status="active")
-            .first()
-        )
-        if existing:
+        if session.query(Subscription).filter_by(tenant_id=tid, status="active").first():
             return
         plan = session.query(Plan).filter_by(status="active").first()
         if not plan:
-            return
-        sub = Subscription(tenant_id="tenant_default", plan_id=plan.id, status="active")
-        session.add(sub)
+            plan = Plan(plan_name="ci_trial", status="active")
+            session.add(plan)
+            session.flush()
+        session.add(Subscription(tenant_id=tid, plan_id=plan.id, status="active"))
         session.commit()
     finally:
         session.close()
