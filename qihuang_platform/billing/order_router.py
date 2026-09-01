@@ -41,11 +41,10 @@ def api_list_orders(
     _user: dict = Depends(get_current_principal),
 ):
     """订单列表（admin 可查任意，租户仅自身）。"""
-    _ensure_scope(request, tenant_id)
-    effective_tenant = tenant_id
-    if not ("admin" in (getattr(request.state, "roles", None) or [])) and \
-       not ("super_admin" in (getattr(request.state, "roles", None) or [])):
-        effective_tenant = getattr(request.state, "tenant_id", None)
+    roles = getattr(request.state, "roles", None) or []
+    is_admin = "admin" in roles or "super_admin" in roles
+    effective_tenant = tenant_id if is_admin else getattr(request.state, "tenant_id", None)
+    _ensure_scope(request, effective_tenant)
     return list_orders(effective_tenant, order_type=order_type, period_month=period, page=page, page_size=page_size)
 
 
