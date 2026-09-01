@@ -15,6 +15,7 @@ import type {
 import {
   fetchBillingStats, fetchPlans, fetchBills, fetchSubscriptions, fetchSceneUsage, fetchPriceBook,
   fetchTenantExtended, upgradeSubscription, rechargePack, fetchAgents, addAgentAddon, fetchOrders,
+  fetchWalletBalance,
 } from "@/lib/api";
 
 /* ═══════════════════════════════════════════
@@ -124,14 +125,16 @@ const orderStatusMap: Record<string, { label: string; cls: string }> = {
   CANCELLED: { label: "已取消", cls: "bg-gray-100 text-gray-600 border-gray-200" },
 };
 
-/** 复用：Agent 多选清单（套餐引导追加 & 单加 Agent 块共用） */
+/** 复用：Agent 多选清单（套餐引导追加 & 单加 Agent 块共用）
+ *  disabledAgents：套餐已含的 agent（固定集合）→ 灰显「套餐已含 · 不另收费」，不可勾选 */
 function AgentChecklist({
-  agents, selected, onToggle, emptyText,
+  agents, selected, onToggle, emptyText, disabledAgents,
 }: {
   agents: AgentCenterItem[];
   selected: Set<string>;
   onToggle: (key: string, on: boolean) => void;
   emptyText?: string;
+  disabledAgents?: Set<string>;
 }) {
   if (agents.length === 0) {
     return <div className="py-6 text-center text-[13px]" style={{ color: C.light }}>{emptyText || "加载 Agent 列表中…"}</div>;
@@ -140,15 +143,25 @@ function AgentChecklist({
     <div className="space-y-1.5 max-h-72 overflow-auto pr-1">
       {agents.map((a) => {
         const on = selected.has(a.agentKey);
+        const locked = !!disabledAgents?.has(a.agentKey);
         return (
           <label
             key={a.agentKey}
-            className="flex items-center gap-2 p-2.5 rounded border cursor-pointer"
-            style={{ borderColor: on ? C.primary : C.border, background: on ? "#FBF4E4" : "#fff" }}
+            className={`flex items-center gap-2 p-2.5 rounded border ${locked ? "cursor-not-allowed" : "cursor-pointer"}`}
+            style={{
+              borderColor: locked ? C.border : (on ? C.primary : C.border),
+              background: locked ? "#F4F7F5" : (on ? "#FBF4E4" : "#fff"),
+              opacity: locked ? 0.62 : 1,
+            }}
           >
-            <Checkbox checked={on} onCheckedChange={(c) => onToggle(a.agentKey, !!c)} />
-            <span className="flex-1 text-[14px]" style={{ color: C.ink }}>{a.name}</span>
-            <span className="text-[12px]" style={{ color: C.light }}>¥{agentFeeYuan(a.agentKey)}/月</span>
+            <Checkbox checked={on || locked} disabled={locked} onCheckedChange={(c) => { if (!locked) onToggle(a.agentKey, !!c); }} />
+            <span className="flex-1 text-[14px]" style={{ color: locked ? C.light : C.ink }}>
+              {a.name}
+              {locked && <span className="ml-1.5 text-[12px]" style={{ color: "#8A6A1F" }}>（套餐已含）</span>}
+            </span>
+            <span className="text-[12px]" style={{ color: C.light }}>
+              {locked ? "套餐已含 · 不另收费" : `¥${agentFeeYuan(a.agentKey)}/月`}
+            </span>
           </label>
         );
       })}
@@ -175,6 +188,8 @@ export default function Billing() {
   const [scenes, setScenes] = useState<SceneUsageItem[]>([]);
   const [priceBook, setPriceBook] = useState<PriceBook | null>(null);
   const [orders, setOrders] = useState<OrderItem[]>([]);
+  const [orderStatusFilter, setOrderStatusFilter] = useState("all");
+  const [balance, setBalance] = useState<{ base: number; addon: number; total: number } | null>(null);
   const [loading, setLoading] = useState(true);
 
   // 充值操作所需的上下文
@@ -208,9 +223,20 @@ export default function Billing() {
       fetchPriceBook().then(setPriceBook),
       fetchTenantExtended(50).then(setTenants),
       fetchAgents().then(setAgents),
-      fetchOrders({ page_size: 50 }).then(setOrders),
     ]).finally(() => setLoading(false));
   }, []);
+
+  // 订单记录跟随选中租户（#B 回看：看"这个租户买了什么"）+ 余额
+  useEffect(() => {
+    if (!targetTenantId) { setOrders([]); setBalance(null); return; }
+    fetchOrders({ tenant_id: targetTenantId, page_size: 50 }).then(setOrders);
+    fetchWalletBalance(targetTenantId).then(setBalance);
+  }, [targetTenantId]);
+
+  // 当前租户套餐自带 agents（固定集合，前端灰显防重复叠加）
+  const targetPlanAgents = targetTenant ? (plans.find((p) => p.id === targetTenant.planId)?.agents || []) : [];
+  const disabledAgents = new Set(targetPlanAgents);
+  const filteredOrders = orderStatusFilter === "all" ? orders : orders.filter((o) => o.status === orderStatusFilter);
 
   // 应收 = 账单金额合计（真实派生，不写死）
   const receivable = bills.reduce((a, b) => a + (b.amount || 0), 0);
@@ -368,6 +394,53 @@ export default function Billing() {
         </CardContent>
       </Card>
 
+      {/* 租户现状（#B：当前套餐 + 套餐自带 agents + 单加 agents + 余额） */}
+      {targetTenant && (
+        <Card className="border shadow-none" style={{ borderColor: C.primary, background: "#FBFCFA" }}>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <BarChart3 className="w-4 h-4" style={{ color: C.primary }} />
+              <span className="text-[16px] font-medium" style={{ color: C.ink }}>租户现状</span>
+              <span className="text-[12.5px]" style={{ color: C.light }}>「{targetTenant.name}」当前套餐与已开通能力</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <div className="text-[12.5px] mb-1" style={{ color: C.light }}>当前套餐</div>
+                <div className="text-[17px] font-bold" style={{ color: C.primary }}>{targetTenant.plan || "未开通"}</div>
+                {targetTenant.pendingPlan && (
+                  <div className="text-[12px] mt-0.5" style={{ color: "#8A6A1F" }}>
+                    预约升级：{targetTenant.pendingPlan}（{targetTenant.pendingEffectiveDate || "待定"} 生效）
+                  </div>
+                )}
+              </div>
+              <div>
+                <div className="text-[12.5px] mb-1.5" style={{ color: C.light }}>套餐自带 Agent（固定，不另收费）</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {targetPlanAgents.length ? targetPlanAgents.map((k) => (
+                    <span key={k} className="text-[12.5px] px-2 py-0.5 rounded-full border" style={{ background: "#EAF2EE", color: "#2E5A4C", borderColor: "#C9E2D6" }}>{k}</span>
+                  )) : <span className="text-[13px]" style={{ color: C.light }}>—</span>}
+                </div>
+              </div>
+              <div>
+                <div className="text-[12.5px] mb-1.5" style={{ color: C.light }}>单加 Agent（套餐外另付）· 积分余额</div>
+                <div className="flex flex-wrap gap-1.5 mb-1.5">
+                  {(targetTenant.agentAddons?.length ? targetTenant.agentAddons : []).map((k) => (
+                    <span key={k} className="text-[12.5px] px-2 py-0.5 rounded-full border" style={{ background: "#EAF1F8", color: "#2F6FB0", borderColor: "#C7DCF0" }}>{k}</span>
+                  ))}
+                  {!targetTenant.agentAddons?.length && <span className="text-[13px]" style={{ color: C.light }}>无</span>}
+                </div>
+                <div className="text-[15px] font-bold" style={{ color: C.ink }}>
+                  {balance ? `${balance.total.toLocaleString()} 积分` : "—"}
+                  <span className="text-[12px] font-normal" style={{ color: C.light }}>
+                    （基本包 {balance?.base ?? 0} + 叠加包 {balance?.addon ?? 0}）
+                  </span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* 订阅列表 + 套餐体系 */}
       <div className="grid grid-cols-2 gap-4">
         {/* 租户订阅 */}
@@ -473,6 +546,9 @@ export default function Billing() {
                       })}
                     </div>
                     <div className="mt-2 text-[12.5px]" style={{ color: C.light }}>
+                      自带 Agent：{p.agents.length ? p.agents.join(" / ") : "—"}
+                    </div>
+                    <div className="mt-2 text-[12.5px]" style={{ color: C.light }}>
                       月调用 {p.monthCalls.toLocaleString()} 次
                     </div>
                     <div className="mt-3 pt-3 border-t" style={{ borderColor: C.border }}>
@@ -567,7 +643,7 @@ export default function Billing() {
             <div className="text-[13px] mb-3" style={{ color: C.mid }}>
               文本类 ¥{priceBook?.agentAddon.textMonthlyYuan ?? 59}/月 · 多模态类 ¥{priceBook?.agentAddon.multimodalMonthlyYuan ?? 99}/月
             </div>
-            <AgentChecklist agents={agents} selected={selectedAgents} onToggle={toggleAgent} />
+            <AgentChecklist agents={agents} selected={selectedAgents} onToggle={toggleAgent} disabledAgents={disabledAgents} />
             <div className="mt-3 flex items-center justify-between">
               <span className="text-[12.5px]" style={{ color: C.light }}>
                 {targetTenantId ? `将加购到租户「${targetTenant?.name || "—"}」` : "请先在顶部选择操作租户"}
@@ -661,10 +737,28 @@ export default function Billing() {
       <Card className="border shadow-none" style={{ borderColor: C.border }}>
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[16px] font-medium" style={{ color: C.ink }}>订单记录</span>
-            <span className="text-[12.5px]" style={{ color: C.light }}>
-              每笔收费先落订单再结算 · 充值单为预付款，不计入月度应付
+            <span className="text-[16px] font-medium" style={{ color: C.ink }}>
+              订单记录
+              {targetTenantId && (
+                <span className="ml-2 text-[12.5px] font-normal" style={{ color: C.light }}>
+                  「{targetTenant?.name || targetTenantId}」· 仅看该租户
+                </span>
+              )}
             </span>
+            <div className="flex items-center gap-2">
+              <Select value={orderStatusFilter} onValueChange={setOrderStatusFilter}>
+                <SelectTrigger className="h-8 w-[132px] text-[13px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部状态</SelectItem>
+                  <SelectItem value="PAID">已支付</SelectItem>
+                  <SelectItem value="PENDING">待支付</SelectItem>
+                  <SelectItem value="CANCELLED">已取消</SelectItem>
+                </SelectContent>
+              </Select>
+              <span className="text-[12.5px]" style={{ color: C.light }}>每笔收费先落订单再结算</span>
+            </div>
           </div>
           <table className="w-full text-[15px]">
             <thead>
@@ -675,7 +769,7 @@ export default function Billing() {
               </tr>
             </thead>
             <tbody>
-              {orders.slice(0, 20).map((o) => {
+              {filteredOrders.slice(0, 20).map((o) => {
                 const typeInfo = orderTypeMap[o.order_type] || { label: o.order_type, cls: "bg-gray-100 text-gray-600 border-gray-200" };
                 const stInfo = orderStatusMap[o.status] || { label: o.status, cls: "bg-gray-100 text-gray-600 border-gray-200" };
                 const yuan = Math.round((o.amount_cents || 0) / 100);
@@ -701,12 +795,14 @@ export default function Billing() {
                   </tr>
                 );
               })}
-              {orders.length === 0 && (
+              {filteredOrders.length === 0 && (
                 <tr>
                   <td colSpan={7} className="py-12 text-center" style={{ color: C.light }}>
                     {loading ? (
                       <><Loader2 className="w-4 h-4 animate-spin inline mr-2" />加载中…</>
-                    ) : "暂无订单记录（充值 / 单加订阅后此处自动出现）"}
+                    ) : (
+                      `暂无${orderStatusFilter !== "all" ? `「${orderStatusFilter}」状态的` : ""}订单记录（${targetTenantId ? "该租户" : "请先在上方选择租户"}充值 / 单加订阅后此处自动出现）`
+                    )}
                   </td>
                 </tr>
               )}

@@ -531,6 +531,7 @@ export async function fetchPlans(): Promise<PlanItem[]> {
           priority_support: !!f.priority_support,
           custom_skin: !!f.custom_skin,
         },
+        agents: Array.isArray(f.agents) ? f.agents : [],
       };
     });
   } catch { return []; }
@@ -604,6 +605,7 @@ export interface TenantPlanItem {
   planId: string;          // 当前套餐 UUID（可能空）
   pendingPlan: string | null;          // 待生效预约的目标套餐（scheduled 订阅）
   pendingEffectiveDate: string | null; // 待生效日期（YYYY-MM-DD）
+  agentAddons: string[];               // 单加 agent（tenant.extra.agent_addons）
   orgs: number;
   users: number;
   usedCalls: number;
@@ -629,6 +631,7 @@ export async function fetchTenantExtended(pageSize = 20): Promise<TenantPlanItem
       planId: t.plan_id || "",
       pendingPlan: t.pending_plan || null,
       pendingEffectiveDate: t.pending_effective_date || null,
+      agentAddons: Array.isArray(t.agent_addons) ? t.agent_addons : [],
       orgs: t.orgs || 0,
       users: t.users || 0,
       usedCalls: t.usedCalls || t.used_calls || 0,
@@ -755,6 +758,21 @@ export async function fetchOrders(params?: {
       created_at: s.created_at || "",
     }));
   } catch { return []; }
+}
+
+/** GET /billing/v1/wallet/{tenant_id} — 租户积分余额（结算中心租户现状卡） */
+export async function fetchWalletBalance(tenantId: string): Promise<{ base: number; addon: number; total: number } | null> {
+  try {
+    const r = await get<{ code: number; data: { base_credits?: number; addon_credits?: number; total_credits?: number } }>(
+      `/billing/v1/wallet/${encodeURIComponent(tenantId)}`,
+    );
+    if (r?.code !== 0 || !r?.data) return null;
+    return {
+      base: r.data.base_credits || 0,
+      addon: r.data.addon_credits || 0,
+      total: r.data.total_credits || 0,
+    };
+  } catch { return null; }
 }
 
 // ═══ 内容管控 ═══

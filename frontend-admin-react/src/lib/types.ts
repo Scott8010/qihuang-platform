@@ -179,6 +179,7 @@ export interface PlanItem {
   planName: string;      // trial / standard / professional / enterprise
   name: string;          // 体验版 / 标准版 / ...
   features: PlanFeatures;
+  agents: string[];      // 套餐自带 Agent 固定集合（plans.py features_json.agents）
   desc: string;          // 套餐说明（开户表单展示）
   priceCents: number;    // 月价（分）
   monthCalls: number;    // 月调用量配额
@@ -221,6 +222,7 @@ export interface TenantPlanItem {
   planId: string;          // 当前套餐 UUID（可能为空）
   pendingPlan: string | null;          // 待生效预约的目标套餐
   pendingEffectiveDate: string | null; // 待生效日期（YYYY-MM-DD）
+  agentAddons: string[];   // 单加 agent 列表（tenant.extra.agent_addons，套餐之外额外授权）
   orgs: number;
   users: number;
   usedCalls: number;
