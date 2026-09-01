@@ -62,11 +62,17 @@ export default function Dashboard({ go }: { go: (p: string) => void }) {
     return () => { mounted = false; };
   }, []);
 
+  // 平台应收——真实数据源是 Bill 表 paid/issued 账单的 total_cost_cents 合计。
+  // 真零数据时（平台尚未生成任何账单）显式说明，避免被误以为"未接数据/mock"。
+  const revenueSub = revenueYuan > 0
+    ? `来自套餐订阅 / 用量（${bills.filter((b) => (b.status || "").toUpperCase() === "PAID").length} 张已结清）`
+    : "当前为 0——平台尚未生成任何账单（首笔收入待生成账单后入账）";
+
   const kpis = [
     { label: "租户总数", value: fmtNumber(totalTenants), sub: `活跃 ${fmtNumber(activeTenants)} · 本月新增 —`, icon: Building2, delta: "" },
     { label: "用户总数", value: fmtNumber(totalUsers), sub: "平台累计注册用户", icon: Users, delta: "" },
     { label: "今日调用量", value: fmtNumber(todayCalls), sub: `累计 ${fmtNumber(apiCalls)} 次`, icon: Zap, delta: "" },
-    { label: "平台应收（元）", value: `¥${fmtNumber(Math.round(revenueYuan))}`, sub: "来自套餐订阅", icon: Banknote, delta: "" },
+    { label: "平台应收（元）", value: `¥${fmtNumber(Math.round(revenueYuan))}`, sub: revenueSub, icon: Banknote, delta: "" },
   ];
 
   // ── 待办任务：全部由真实信号派生（待审知识 / 逾期账单 / 系统告警），无信号则为空 ──

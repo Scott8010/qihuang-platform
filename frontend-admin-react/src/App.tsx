@@ -20,7 +20,7 @@ import PlanUpgrade from "@/pages/PlanUpgrade";
 import CapabilityCenter from "@/pages/CapabilityCenter";
 
 const nav: { id: string; label: string; icon: LucideIcon; desc?: string }[] = [
-  { id: "dashboard", label: "工作台", icon: LayoutDashboard },
+  { id: "dashboard", label: "运营总览", icon: LayoutDashboard },
   { id: "agents", label: "Agent 中台", icon: Bot },
   { id: "tenants", label: "租户管理", icon: Building2 },
   { id: "users", label: "用户管理", icon: UsersIcon },
