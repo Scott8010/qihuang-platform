@@ -155,6 +155,32 @@ export interface BillItem {
   calls: string; tokens: string; amount: number; status: string;
 }
 
+/** 对应 GET /admin/v1/billing/bills/{bill_id} → 账单明细（含订单聚合 + 用量按端点/3D聚合） */
+export interface BillDetailItem {
+  id: string;
+  tenant_id: string;
+  bill_period: string;
+  total_calls: number;
+  total_tokens: number;
+  total_cost_cents: number;
+  status: string;
+  paid_at: string | null;
+  extra: {
+    plan_name?: string;
+    plan_price_cents?: number;
+    overage_cost_cents?: number;
+    orders?: OrderItem[];
+    summary?: { recharge_cents?: number; addon_cents?: number; usage_cents?: number };
+  };
+  usage_breakdown: {
+    by_endpoint: { endpoint: string; calls: number; tokens: number; cost_cents: number }[];
+    by_module: {
+      "3d": { calls: number; tokens: number; cost_cents: number; cdn_bytes: number };
+      standard: { calls: number; tokens: number; cost_cents: number; cdn_bytes: number };
+    };
+  } | null;
+}
+
 /** 对应 GET /billing/v1/orders → 结算中心订单记录（#B 方案）
  *  order_type: recharge 充值 / addon 单加 / usage 用量快照 / plan 套餐 */
 export interface OrderItem {

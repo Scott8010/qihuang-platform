@@ -10,12 +10,12 @@ import { BarChart3, Download, Check, Minus, Loader2 } from "lucide-react";
 import { C, billStatus, planFeatureLabels, sceneMap } from "@/lib/types";
 import type {
   PlanItem, BillItem, SubscriptionItem, SceneUsageItem, PriceBook,
-  TenantPlanItem, AgentCenterItem, RechargePack, OrderItem,
+  TenantPlanItem, AgentCenterItem, RechargePack, OrderItem, BillDetailItem,
 } from "@/lib/types";
 import {
   fetchBillingStats, fetchPlans, fetchBills, fetchSubscriptions, fetchSceneUsage, fetchPriceBook,
   fetchTenantExtended, upgradeSubscription, rechargePack, fetchAgents, addAgentAddon, fetchOrders,
-  fetchWalletBalance,
+  fetchWalletBalance, fetchBillDetail,
 } from "@/lib/api";
 
 /* ═══════════════════════════════════════════
@@ -190,6 +190,9 @@ export default function Billing() {
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
   const [balance, setBalance] = useState<{ base: number; addon: number; total: number } | null>(null);
+  const [billDetail, setBillDetail] = useState<BillDetailItem | null>(null);
+  const [billDetailOpen, setBillDetailOpen] = useState(false);
+  const [billDetailLoading, setBillDetailLoading] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // 充值操作所需的上下文
@@ -240,6 +243,14 @@ export default function Billing() {
 
   // 应收 = 账单金额合计（真实派生，不写死）
   const receivable = bills.reduce((a, b) => a + (b.amount || 0), 0);
+
+  // 账单详情弹窗（后端 get_bill_detail：订单聚合 + 用量按端点/3D 聚合）
+  const openBillDetail = (billId: string) => {
+    setBillDetailOpen(true);
+    setBillDetailLoading(true);
+    setBillDetail(null);
+    fetchBillDetail(billId).then((d) => { setBillDetail(d); setBillDetailLoading(false); });
+  };
   const sceneTotalCalls = scenes.reduce((a, s) => a + (s.calls || 0), 0);
 
   // 租户订阅清单：受顶部"操作对象"选择器联动过滤
@@ -823,7 +834,7 @@ export default function Billing() {
           <table className="w-full text-[15px]">
             <thead>
               <tr className="text-left text-[13px]" style={{ color: C.light }}>
-                {["账单号", "套餐 / 租户", "账期", "调用量", "Token", "金额", "状态"].map((h) => (
+                {["账单号", "套餐 / 租户", "账期", "调用量", "Token", "金额", "状态", "详情"].map((h) => (
                   <th key={h} className="pb-2 font-normal">{h}</th>
                 ))}
               </tr>
@@ -844,12 +855,17 @@ export default function Billing() {
                         {st?.label || b.status}
                       </span>
                     </td>
+                    <td className="py-2.5">
+                      <Button variant="outline" size="sm" style={{ borderColor: C.border, color: C.primary }} onClick={() => openBillDetail(b.id)}>
+                        查看明细
+                      </Button>
+                    </td>
                   </tr>
                 );
               })}
               {bills.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center" style={{ color: C.light }}>
+                  <td colSpan={8} className="py-12 text-center" style={{ color: C.light }}>
                     {loading ? (
                       <><Loader2 className="w-4 h-4 animate-spin inline mr-2" />加载中…</>
                     ) : "暂无账单记录"}
@@ -860,6 +876,104 @@ export default function Billing() {
           </table>
         </CardContent>
       </Card>
+
+      {/* 账单详情弹窗（#B：订单聚合 + 用量明细） */}
+      <Dialog open={billDetailOpen} onOpenChange={setBillDetailOpen}>
+        <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>账单明细{billDetail ? ` · ${billDetail.bill_period || ""}` : ""}</DialogTitle>
+            <DialogDescription>
+              {billDetail
+                ? `应付 ¥${((billDetail.total_cost_cents || 0) / 100).toLocaleString()} · ${billDetail.extra?.plan_name || billDetail.tenant_id || ""}`
+                : "加载中…"}
+            </DialogDescription>
+          </DialogHeader>
+          {billDetailLoading && (
+            <div className="py-10 text-center text-[14px]" style={{ color: C.light }}>
+              <Loader2 className="w-4 h-4 animate-spin inline mr-2" />加载账单明细…
+            </div>
+          )}
+          {!billDetailLoading && billDetail && (
+            <div className="space-y-4">
+              {/* 金额构成 */}
+              <div className="rounded-md p-3" style={{ background: "#EAF2EE", color: "#2E5A4C" }}>
+                <div className="text-[13px] mb-1">应付构成（元）</div>
+                <div className="text-[13.5px] space-y-0.5">
+                  <div>套餐费：¥{((billDetail.extra?.plan_price_cents || 0) / 100).toLocaleString()}</div>
+                  <div>用量费：¥{((billDetail.extra?.overage_cost_cents || 0) / 100).toLocaleString()}</div>
+                  <div>单加订阅：¥{((billDetail.extra?.summary?.addon_cents || 0) / 100).toLocaleString()}</div>
+                  <div className="pt-1 border-t font-bold" style={{ borderColor: "#C9E2D6" }}>应付合计：¥{((billDetail.total_cost_cents || 0) / 100).toLocaleString()}</div>
+                  <div className="text-[12px] opacity-80">充值预付款：¥{((billDetail.extra?.summary?.recharge_cents || 0) / 100).toLocaleString()}（不计入应付）</div>
+                </div>
+              </div>
+
+              {/* 订单聚合明细 */}
+              {(billDetail.extra?.orders?.length ?? 0) > 0 && (
+                <div>
+                  <div className="text-[14px] font-medium mb-2" style={{ color: C.ink }}>订单明细（{billDetail.extra!.orders!.length} 笔）</div>
+                  <table className="w-full text-[13.5px]">
+                    <thead>
+                      <tr className="text-left text-[12.5px]" style={{ color: C.light }}>
+                        {["订单号", "类型", "项目", "金额", "状态"].map((h) => <th key={h} className="pb-1.5 font-normal">{h}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {billDetail.extra!.orders!.map((o) => (
+                        <tr key={o.order_no} className="border-t" style={{ borderColor: C.border }}>
+                          <td className="py-1.5 font-mono text-[12.5px]" style={{ color: C.mid }}>{o.order_no}</td>
+                          <td className="py-1.5">
+                            <span className={`text-[12px] px-1.5 py-0.5 rounded border ${orderTypeMap[o.order_type]?.cls || "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                              {orderTypeMap[o.order_type]?.label || o.order_type}
+                            </span>
+                          </td>
+                          <td className="py-1.5" style={{ color: C.ink }}>{o.item_label || o.item_key}</td>
+                          <td className="py-1.5" style={{ color: C.ink }}>¥{Math.round((o.amount_cents || 0) / 100).toLocaleString()}</td>
+                          <td className="py-1.5">
+                            <span className={`text-[12px] px-1.5 py-0.5 rounded border ${orderStatusMap[o.status]?.cls || "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                              {orderStatusMap[o.status]?.label || o.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* 用量明细（按端点） */}
+              {billDetail.usage_breakdown?.by_endpoint?.length ? (
+                <div>
+                  <div className="text-[14px] font-medium mb-2" style={{ color: C.ink }}>用量明细（按调用端点）</div>
+                  <table className="w-full text-[13.5px]">
+                    <thead>
+                      <tr className="text-left text-[12.5px]" style={{ color: C.light }}>
+                        {["端点", "调用量", "Token", "费用"].map((h) => <th key={h} className="pb-1.5 font-normal">{h}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {billDetail.usage_breakdown.by_endpoint.map((e, i) => (
+                        <tr key={i} className="border-t" style={{ borderColor: C.border }}>
+                          <td className="py-1.5 font-mono text-[12.5px]" style={{ color: C.mid }}>{e.endpoint}</td>
+                          <td className="py-1.5" style={{ color: C.ink }}>{e.calls}</td>
+                          <td className="py-1.5" style={{ color: C.mid }}>{wan(e.tokens)}</td>
+                          <td className="py-1.5" style={{ color: C.ink }}>¥{(e.cost_cents / 100).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="py-6 text-center text-[13px]" style={{ color: C.light }}>本月无用量调用明细</div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">关闭</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ══ 套餐开通/升级 + 引导追加 Agent ══ */}
       {/* ══ 套餐开通/升级 收银台 ══ */}

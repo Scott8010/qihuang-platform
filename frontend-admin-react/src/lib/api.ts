@@ -8,7 +8,7 @@ import type {
   AlertItem, TodoReviewItem, BillItem, PlanItem, SubscriptionItem, SceneUsageItem,
   OrgItem, TenantUserItem, PermissionItem, PlatformUser,
   SensitiveWordItem, ServiceItem, LlmProviderItem, AuditLogItem, DashboardData,
-  PriceBook, AgentCenterItem, OrderItem,
+  PriceBook, AgentCenterItem, OrderItem, BillDetailItem,
 } from "./types";
 
 // ═══ 基础 ═══
@@ -772,6 +772,15 @@ export async function fetchWalletBalance(tenantId: string): Promise<{ base: numb
       addon: r.data.addon_credits || 0,
       total: r.data.total_credits || 0,
     };
+  } catch { return null; }
+}
+
+/** GET /admin/v1/billing/bills/{bill_id} — 账单明细（订单聚合 + 用量按端点/3D 聚合） */
+export async function fetchBillDetail(billId: string): Promise<BillDetailItem | null> {
+  try {
+    const r = await get<{ code: number; data: any }>(`/admin/v1/billing/bills/${encodeURIComponent(billId)}`);
+    if (r?.code !== 0 || !r?.data) return null;
+    return r.data as BillDetailItem;
   } catch { return null; }
 }
 
