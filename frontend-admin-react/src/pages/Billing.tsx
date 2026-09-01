@@ -251,6 +251,44 @@ export default function Billing() {
     setBillDetail(null);
     fetchBillDetail(billId).then((d) => { setBillDetail(d); setBillDetailLoading(false); });
   };
+
+  // 打印账单（电信账单式一页纸：抬头/应缴/费用分节/合计）
+  const printBill = () => {
+    if (!billDetail) return;
+    const w = window.open("", "_blank", "width=820,height=960");
+    if (!w) return;
+    const y = (c: number) => `¥${(c / 100).toLocaleString()}`;
+    const addonOrders = (billDetail.extra?.orders || []).filter((o) => o.order_type === "addon" && o.status === "PAID");
+    const rechargeOrders = (billDetail.extra?.orders || []).filter((o) => o.order_type === "recharge" && o.status === "PAID");
+    const eps = billDetail.usage_breakdown?.by_endpoint || [];
+    const planName = billDetail.extra?.plan_name || billDetail.tenant_id || "";
+    const statusLabel = orderStatusMap[billDetail.status]?.label || billDetail.status;
+    const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>账单 ${billDetail.bill_period}</title><style>
+      body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;color:#1f2a24;margin:28px;font-size:13px;line-height:1.8}
+      h1{font-size:20px;margin:0} .head{border-bottom:2px solid #2E7D4F;padding-bottom:12px;display:flex;justify-content:space-between;align-items:flex-end}
+      .meta{width:100%;border-collapse:collapse;margin:14px 0} .meta td{padding:3px 0;color:#5a6b61}
+      .total{text-align:center;background:#EAF2EE;border:1px solid #C9E2D6;border-radius:10px;padding:14px;margin:16px 0}
+      .total .big{font-size:30px;font-weight:700;color:#2E7D4F}
+      h2{font-size:15px;color:#2E7D4F;border-left:4px solid #2E7D4F;padding-left:8px;margin:18px 0 8px}
+      table.det{width:100%;border-collapse:collapse} table.det th{background:#F0F5F2;text-align:left;padding:6px 8px;font-weight:600;color:#5a6b61;font-size:12px}
+      table.det td{padding:6px 8px;border-bottom:1px solid #e3e9e5}
+      .r{text-align:right} .muted{color:#8a978f} .note{border-top:2px solid #2E7D4F;margin-top:20px;padding-top:10px;font-size:12px;color:#5a6b61}
+      .sum td{font-weight:700;font-size:14px}
+    </style></head><body>
+      <div class="head"><div><h1>岐黄智脑 · 结算账单</h1><div class="muted">月度费用明细单</div></div><div class="muted">账单号：${billDetail.id}<br/>打印时间：${new Date().toLocaleString()}</div></div>
+      <table class="meta"><tr><td>客户名称：${planName}</td><td>账期：${billDetail.bill_period}</td><td>账单状态：${statusLabel}</td></tr></table>
+      <div class="total"><div class="muted">本月应缴（元）</div><div class="big">${y(billDetail.total_cost_cents || 0)}</div><div class="muted">套餐费 ${y(billDetail.extra?.plan_price_cents || 0)} + 用量费 ${y(billDetail.extra?.overage_cost_cents || 0)} + 单加订阅 ${y(billDetail.extra?.summary?.addon_cents || 0)}</div></div>
+      <h2>一、套餐费</h2><table class="det"><tr><th>套餐名称</th><th class="r">金额（元）</th></tr><tr><td>${planName}</td><td class="r">${y(billDetail.extra?.plan_price_cents || 0)}</td></tr></table>
+      <h2>二、单加 Agent 订阅费</h2>${addonOrders.length ? `<table class="det"><tr><th>Agent</th><th class="r">金额（元）</th></tr>${addonOrders.map((o) => `<tr><td>${o.item_label || o.item_key}</td><td class="r">${y(o.amount_cents || 0)}</td></tr>`).join("")}<tr class="sum"><td>小计</td><td class="r">${y(billDetail.extra?.summary?.addon_cents || 0)}</td></tr></table>` : `<div class="muted">无</div>`}
+      <h2>三、用量费（按调用端点）</h2>${eps.length ? `<table class="det"><tr><th>端点</th><th class="r">调用量</th><th class="r">Token</th><th class="r">费用（元）</th></tr>${eps.map((e) => `<tr><td class="muted">${e.endpoint}</td><td class="r">${e.calls}</td><td class="r">${e.tokens.toLocaleString()}</td><td class="r">${(e.cost_cents / 100).toLocaleString()}</td></tr>`).join("")}<tr class="sum"><td colspan="3">小计</td><td class="r">${y(billDetail.extra?.overage_cost_cents || 0)}</td></tr></table>` : `<div class="muted">本月无用量调用</div>`}
+      ${rechargeOrders.length ? `<h2>四、充值预付款（不计入应缴）</h2><table class="det"><tr><th>充值包</th><th class="r">金额（元）</th></tr>${rechargeOrders.map((o) => `<tr><td>${o.item_label || o.item_key}</td><td class="r">${y(o.amount_cents || 0)}</td></tr>`).join("")}<tr class="sum"><td>小计</td><td class="r">${y(billDetail.extra?.summary?.recharge_cents || 0)}</td></tr></table>` : ""}
+      <div class="note">说明：本账单为预收结算单，实际扣款将在支付通道开通后按订单金额结算；充值预付款用于抵扣后续调用消耗，不计入本月应缴。如有疑问请联系平台运营。</div>
+    </body></html>`;
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { w.print(); }, 300);
+  };
   const sceneTotalCalls = scenes.reduce((a, s) => a + (s.calls || 0), 0);
 
   // 租户订阅清单：受顶部"操作对象"选择器联动过滤
@@ -877,14 +915,14 @@ export default function Billing() {
         </CardContent>
       </Card>
 
-      {/* 账单详情弹窗（#B：订单聚合 + 用量明细） */}
+      {/* 账单详情弹窗（电信账单式：#B 订单聚合 + 用量明细 + 打印） */}
       <Dialog open={billDetailOpen} onOpenChange={setBillDetailOpen}>
         <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>账单明细{billDetail ? ` · ${billDetail.bill_period || ""}` : ""}</DialogTitle>
+            <DialogTitle>账单明细 · {billDetail?.bill_period || ""}</DialogTitle>
             <DialogDescription>
               {billDetail
-                ? `应付 ¥${((billDetail.total_cost_cents || 0) / 100).toLocaleString()} · ${billDetail.extra?.plan_name || billDetail.tenant_id || ""}`
+                ? `${billDetail.extra?.plan_name || billDetail.tenant_id || ""} · ${orderStatusMap[billDetail.status]?.label || billDetail.status}`
                 : "加载中…"}
             </DialogDescription>
           </DialogHeader>
@@ -895,55 +933,73 @@ export default function Billing() {
           )}
           {!billDetailLoading && billDetail && (
             <div className="space-y-4">
-              {/* 金额构成 */}
-              <div className="rounded-md p-3" style={{ background: "#EAF2EE", color: "#2E5A4C" }}>
-                <div className="text-[13px] mb-1">应付构成（元）</div>
-                <div className="text-[13.5px] space-y-0.5">
-                  <div>套餐费：¥{((billDetail.extra?.plan_price_cents || 0) / 100).toLocaleString()}</div>
-                  <div>用量费：¥{((billDetail.extra?.overage_cost_cents || 0) / 100).toLocaleString()}</div>
-                  <div>单加订阅：¥{((billDetail.extra?.summary?.addon_cents || 0) / 100).toLocaleString()}</div>
-                  <div className="pt-1 border-t font-bold" style={{ borderColor: "#C9E2D6" }}>应付合计：¥{((billDetail.total_cost_cents || 0) / 100).toLocaleString()}</div>
-                  <div className="text-[12px] opacity-80">充值预付款：¥{((billDetail.extra?.summary?.recharge_cents || 0) / 100).toLocaleString()}（不计入应付）</div>
+              {/* 抬头：客户/账单号/账期 + 打印 */}
+              <div className="flex items-start justify-between rounded-md border p-3" style={{ borderColor: C.border, background: "#FBFDFC" }}>
+                <div className="text-[13px] space-y-1" style={{ color: C.mid }}>
+                  <div>客户名称：<b style={{ color: C.ink }}>{billDetail.extra?.plan_name || billDetail.tenant_id || "—"}</b></div>
+                  <div>账单号：<span className="font-mono text-[12.5px]">{billDetail.id}</span></div>
+                  <div>账期：{billDetail.bill_period} · 状态：{orderStatusMap[billDetail.status]?.label || billDetail.status}</div>
+                </div>
+                <Button variant="outline" size="sm" style={{ borderColor: C.primary, color: C.primary }} onClick={printBill}>
+                  <Download className="w-3.5 h-3.5 mr-1" /> 打印账单
+                </Button>
+              </div>
+
+              {/* 本月应缴（大字） */}
+              <div className="rounded-md py-3.5 text-center" style={{ background: "#EAF2EE", border: "1px solid #C9E2D6" }}>
+                <div className="text-[12.5px]" style={{ color: "#2E5A4C" }}>本月应缴（元）</div>
+                <div className="text-[28px] font-bold" style={{ color: "#2E7D4F" }}>¥{((billDetail.total_cost_cents || 0) / 100).toLocaleString()}</div>
+                <div className="text-[12px]" style={{ color: "#2E5A4C" }}>
+                  套餐费 ¥{((billDetail.extra?.plan_price_cents || 0) / 100).toLocaleString()} + 用量费 ¥{((billDetail.extra?.overage_cost_cents || 0) / 100).toLocaleString()} + 单加订阅 ¥{((billDetail.extra?.summary?.addon_cents || 0) / 100).toLocaleString()}
                 </div>
               </div>
 
-              {/* 订单聚合明细 */}
-              {(billDetail.extra?.orders?.length ?? 0) > 0 && (
-                <div>
-                  <div className="text-[14px] font-medium mb-2" style={{ color: C.ink }}>订单明细（{billDetail.extra!.orders!.length} 笔）</div>
+              {/* 一、套餐费 */}
+              <div>
+                <div className="text-[14px] font-medium mb-1.5 flex items-center gap-2" style={{ color: C.ink }}>
+                  <span className="w-1 h-3.5 rounded" style={{ background: C.primary }} />一、套餐费
+                </div>
+                <table className="w-full text-[13.5px]">
+                  <tbody>
+                    <tr className="border-t" style={{ borderColor: C.border }}>
+                      <td className="py-1.5" style={{ color: C.ink }}>{billDetail.extra?.plan_name || "—"}</td>
+                      <td className="py-1.5 text-right" style={{ color: C.ink }}>¥{((billDetail.extra?.plan_price_cents || 0) / 100).toLocaleString()}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 二、单加 Agent 订阅费 */}
+              <div>
+                <div className="text-[14px] font-medium mb-1.5 flex items-center gap-2" style={{ color: C.ink }}>
+                  <span className="w-1 h-3.5 rounded" style={{ background: C.primary }} />二、单加 Agent 订阅费
+                </div>
+                {(billDetail.extra?.orders || []).filter((o) => o.order_type === "addon" && o.status === "PAID").length ? (
                   <table className="w-full text-[13.5px]">
-                    <thead>
-                      <tr className="text-left text-[12.5px]" style={{ color: C.light }}>
-                        {["订单号", "类型", "项目", "金额", "状态"].map((h) => <th key={h} className="pb-1.5 font-normal">{h}</th>)}
-                      </tr>
-                    </thead>
                     <tbody>
-                      {billDetail.extra!.orders!.map((o) => (
+                      {(billDetail.extra?.orders || []).filter((o) => o.order_type === "addon" && o.status === "PAID").map((o) => (
                         <tr key={o.order_no} className="border-t" style={{ borderColor: C.border }}>
-                          <td className="py-1.5 font-mono text-[12.5px]" style={{ color: C.mid }}>{o.order_no}</td>
-                          <td className="py-1.5">
-                            <span className={`text-[12px] px-1.5 py-0.5 rounded border ${orderTypeMap[o.order_type]?.cls || "bg-gray-100 text-gray-600 border-gray-200"}`}>
-                              {orderTypeMap[o.order_type]?.label || o.order_type}
-                            </span>
-                          </td>
                           <td className="py-1.5" style={{ color: C.ink }}>{o.item_label || o.item_key}</td>
-                          <td className="py-1.5" style={{ color: C.ink }}>¥{Math.round((o.amount_cents || 0) / 100).toLocaleString()}</td>
-                          <td className="py-1.5">
-                            <span className={`text-[12px] px-1.5 py-0.5 rounded border ${orderStatusMap[o.status]?.cls || "bg-gray-100 text-gray-600 border-gray-200"}`}>
-                              {orderStatusMap[o.status]?.label || o.status}
-                            </span>
-                          </td>
+                          <td className="py-1.5 text-right" style={{ color: C.ink }}>¥{Math.round((o.amount_cents || 0) / 100).toLocaleString()}</td>
                         </tr>
                       ))}
+                      <tr className="border-t font-bold" style={{ borderColor: C.border }}>
+                        <td className="py-1.5" style={{ color: C.ink }}>小计</td>
+                        <td className="py-1.5 text-right" style={{ color: C.ink }}>¥{((billDetail.extra?.summary?.addon_cents || 0) / 100).toLocaleString()}</td>
+                      </tr>
                     </tbody>
                   </table>
-                </div>
-              )}
+                ) : (
+                  <div className="py-2 text-[13px]" style={{ color: C.light }}>无</div>
+                )}
+              </div>
 
-              {/* 用量明细（按端点） */}
-              {billDetail.usage_breakdown?.by_endpoint?.length ? (
-                <div>
-                  <div className="text-[14px] font-medium mb-2" style={{ color: C.ink }}>用量明细（按调用端点）</div>
+              {/* 三、用量费（按端点） */}
+              <div>
+                <div className="text-[14px] font-medium mb-1.5 flex items-center gap-2" style={{ color: C.ink }}>
+                  <span className="w-1 h-3.5 rounded" style={{ background: C.primary }} />三、用量费（按调用端点）
+                </div>
+                {billDetail.usage_breakdown?.by_endpoint?.length ? (
                   <table className="w-full text-[13.5px]">
                     <thead>
                       <tr className="text-left text-[12.5px]" style={{ color: C.light }}>
@@ -956,15 +1012,46 @@ export default function Billing() {
                           <td className="py-1.5 font-mono text-[12.5px]" style={{ color: C.mid }}>{e.endpoint}</td>
                           <td className="py-1.5" style={{ color: C.ink }}>{e.calls}</td>
                           <td className="py-1.5" style={{ color: C.mid }}>{wan(e.tokens)}</td>
-                          <td className="py-1.5" style={{ color: C.ink }}>¥{(e.cost_cents / 100).toLocaleString()}</td>
+                          <td className="py-1.5 text-right" style={{ color: C.ink }}>¥{(e.cost_cents / 100).toLocaleString()}</td>
                         </tr>
                       ))}
+                      <tr className="border-t font-bold" style={{ borderColor: C.border }}>
+                        <td colSpan={3} className="py-1.5" style={{ color: C.ink }}>小计</td>
+                        <td className="py-1.5 text-right" style={{ color: C.ink }}>¥{((billDetail.extra?.overage_cost_cents || 0) / 100).toLocaleString()}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="py-2 text-[13px]" style={{ color: C.light }}>本月无用量调用</div>
+                )}
+              </div>
+
+              {/* 四、充值预付款（备注） */}
+              {(billDetail.extra?.orders || []).some((o) => o.order_type === "recharge" && o.status === "PAID") && (
+                <div>
+                  <div className="text-[14px] font-medium mb-1.5 flex items-center gap-2" style={{ color: C.ink }}>
+                    <span className="w-1 h-3.5 rounded" style={{ background: "#8A978F" }} />四、充值预付款（不计入应缴）
+                  </div>
+                  <table className="w-full text-[13.5px]">
+                    <tbody>
+                      {(billDetail.extra?.orders || []).filter((o) => o.order_type === "recharge" && o.status === "PAID").map((o) => (
+                        <tr key={o.order_no} className="border-t" style={{ borderColor: C.border }}>
+                          <td className="py-1.5" style={{ color: C.ink }}>{o.item_label || o.item_key}</td>
+                          <td className="py-1.5 text-right" style={{ color: C.ink }}>¥{Math.round((o.amount_cents || 0) / 100).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                      <tr className="border-t font-bold" style={{ borderColor: C.border }}>
+                        <td className="py-1.5" style={{ color: C.ink }}>小计</td>
+                        <td className="py-1.5 text-right" style={{ color: C.ink }}>¥{((billDetail.extra?.summary?.recharge_cents || 0) / 100).toLocaleString()}</td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
-              ) : (
-                <div className="py-6 text-center text-[13px]" style={{ color: C.light }}>本月无用量调用明细</div>
               )}
+
+              <div className="text-[12px] leading-relaxed pt-1 border-t" style={{ borderColor: C.border, color: C.light }}>
+                本账单为预收结算单，实际扣款将在支付通道开通后按订单金额结算；充值预付款用于抵扣后续调用消耗，不计入本月应缴。
+              </div>
             </div>
           )}
           <DialogFooter>
