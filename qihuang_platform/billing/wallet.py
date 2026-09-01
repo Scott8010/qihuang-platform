@@ -264,29 +264,52 @@ def deduct_fixed(tenant_id: str, amount: int, reason: str = "") -> bool:
 
 
 def charge_addon_subscription(tenant_id: str, agent_key: str, fee_cents: int) -> bool:
-    """单加 agent 开通：首月订阅费从积分池扣除（先赠后充）。
+    """单加 agent 开通：首月订阅费从积分池扣除（先赠后充）→ 结算中心 #B：先落订单再扣费。
 
     1 积分 = ¥0.05 → 积分 = 分 / 5（文本 ¥59=5900 分=1180 积分；多模态 ¥99=9900 分=1980 积分）。
     返回是否扣费成功（余额不足 → 原子不放行返回 False，调用方据此拒开通 402，不建订阅、不递延对账）。
 
-    B3 修复：扣费成功后写持久化 DB CallLog（固定积分订阅费，与 charge_call 对齐），
-    否则单加订阅只扣钱不记账，admin 用量聚合与对账漏掉这笔，等于「计量不扣费」的变体。
+    流程：① 落订单(addon, PENDING) → ② deduct_fixed 扣积分 → ③ 订单置 PAID + 写 CallLog（trace_id 关联订单号）。
+    余额不足 → 订单置 CANCELLED，不留脏数据。
     """
     credits = max(1, round(fee_cents / 5))
+
+    # ① 先落订单（PENDING）
+    from qihuang_platform.billing.order import (
+        create_order, mark_order_paid, mark_order_cancelled, ORDER_ADDON,
+    )
+    o = create_order(
+        tenant_id,
+        ORDER_ADDON,
+        item_key=agent_key,
+        item_label=agent_key,
+        amount_cents=int(fee_cents),
+        credits=-credits,
+        extra={"agent_key": agent_key},
+    )
+    if o.get("code") != 0:
+        return False
+    order_no = o["data"]["order_no"]
+
+    # ② 扣积分（先 base 后 addon；两池空 → 原子不放行）
     ok = deduct_fixed(tenant_id, credits, reason=f"agent_addon:{agent_key}")
-    if ok:
-        # 懒加载 import 避免与 charge 模块循环依赖（charge.py 顶层 import 了本模块的 consume_credits）
-        from qihuang_platform.billing.charge import _write_call_log, CENTS_PER_CREDIT
-        _write_call_log(
-            tenant_id=tenant_id,
-            agent_key=agent_key,
-            tokens_used=0,
-            cost_cents=credits * CENTS_PER_CREDIT,
-            user_id=None,
-            endpoint=f"/api/v1/agent/{agent_key}/addon_subscribe",
-            trace_id=None,
-            status_code=200,
-        )
+    if not ok:
+        mark_order_cancelled(order_no)
+        return False
+
+    # ③ 订单置已支付 + 写持久化 DB CallLog（trace_id 关联订单号，对账可查）
+    mark_order_paid(order_no)
+    from qihuang_platform.billing.charge import _write_call_log, CENTS_PER_CREDIT
+    _write_call_log(
+        tenant_id=tenant_id,
+        agent_key=agent_key,
+        tokens_used=0,
+        cost_cents=credits * CENTS_PER_CREDIT,
+        user_id=None,
+        endpoint=f"/api/v1/agent/{agent_key}/addon_subscribe",
+        trace_id=order_no,
+        status_code=200,
+    )
     return ok
 
 
