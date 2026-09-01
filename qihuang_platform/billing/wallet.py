@@ -19,6 +19,9 @@ from qihuang_platform.gateway.response import success, error
 from qihuang_platform.billing.pricing_config import (
     compute_credits, get_base_credits, get_pack,
 )
+from qihuang_platform.billing.order import (
+    create_order, mark_order_paid, ORDER_RECHARGE,
+)
 
 logger = logging.getLogger("billing.wallet")
 
@@ -73,17 +76,40 @@ def maybe_reset_base_monthly(db, w: Wallet) -> None:
 
 
 def recharge(tenant_id: str, pack_key: str) -> dict:
-    """叠加包充值（永久有效）。"""
+    """叠加包充值（永久有效）→ 结算中心 #B：先落订单（PENDING）→ 入账 → 订单置 PAID。
+
+    每笔充值都有订单号可查；中间异常留 PENDING 单可人工排查（结算只统计 PAID，安全）。
+    """
     pack = get_pack(pack_key)
     if not pack:
         return error("INVALID_PARAM", message=f"未知充值包: {pack_key}")
     db = SessionLocal()
     try:
         w = _get_or_create(db, tenant_id)
+
+        # 1. 先落订单（PENDING），保证每笔充值有据可查
+        o = create_order(
+            tenant_id,
+            ORDER_RECHARGE,
+            item_key=pack_key,
+            item_label=pack["label"],
+            amount_cents=int(pack["yuan"] * 100),
+            credits=pack["credits"],
+            extra={"pack": pack_key},
+        )
+        if o.get("code") != 0:
+            return o
+        order_no = o["data"]["order_no"]
+
+        # 2. 入账（叠加包永久有效）
         w.addon_credits += pack["credits"]
         w.total_bought += pack["credits"]
         w.updated_at = datetime.now(timezone.utc)
         db.commit()
+
+        # 3. 订单置已支付
+        mark_order_paid(order_no)
+
         db.refresh(w)
         return success(data={
             "tenant_id": tenant_id,
@@ -92,6 +118,7 @@ def recharge(tenant_id: str, pack_key: str) -> dict:
             "addon_credits": w.addon_credits,
             "base_credits": w.base_credits,
             "total_bought": w.total_bought,
+            "order_no": order_no,
         }, message=f"充值成功：{pack['label']} +{pack['credits']}积分")
     except Exception as e:
         db.rollback()
