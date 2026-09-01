@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import secrets
 from datetime import datetime, timezone
+from typing import List
 
 from qihuang_platform.db.config import SessionLocal
 from qihuang_platform.db.models import Order
@@ -210,3 +211,55 @@ def get_order(order_no: str) -> dict:
         return error("INTERNAL_ERROR", message=f"查询订单失败: {e}")
     finally:
         db.close()
+
+
+def ensure_usage_snapshot(
+    session,
+    tenant_id: str,
+    period: str,
+    *,
+    total_calls: int = 0,
+    total_tokens: int = 0,
+    cost_cents: int = 0,
+) -> dict:
+    """确保租户某月存在 usage 月度快照单（幂等，随调用方 session 一起提交）。
+
+    用量高频不逐条建单：结算时按当月 CallLog 汇总成一张 type=usage 快照单，
+    作为结算单的「用量订单项」聚合展示。已存在则返回现有（不覆盖）。
+    """
+    o = session.query(Order).filter_by(
+        tenant_id=tenant_id, order_type=ORDER_USAGE, period_month=period
+    ).first()
+    if o:
+        return success(data=_serialize(o), message="用量快照单已存在")
+    cost_credits = max(0, round(cost_cents / 5))
+    o = Order(
+        order_no=gen_order_no(),
+        tenant_id=tenant_id,
+        order_type=ORDER_USAGE,
+        item_key="usage:monthly",
+        item_label=f"用量快照 {period}",
+        amount_cents=int(cost_cents or 0),
+        credits=-cost_credits,
+        status=ORDER_PAID,
+        paid_at=datetime.now(timezone.utc),
+        period_month=period,
+        extra={"total_calls": total_calls, "total_tokens": total_tokens},
+    )
+    session.add(o)
+    session.flush()
+    return success(data=_serialize(o), message=f"用量快照单 {o.order_no} 已创建")
+
+
+def paid_orders_in_period(session, tenant_id: str, period: str) -> List[Order]:
+    """某租户某月所有 PAID 订单（供结算单聚合），按创建时间升序。"""
+    return (
+        session.query(Order)
+        .filter(
+            Order.tenant_id == tenant_id,
+            Order.period_month == period,
+            Order.status == ORDER_PAID,
+        )
+        .order_by(Order.created_at.asc())
+        .all()
+    )

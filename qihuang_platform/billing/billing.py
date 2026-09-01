@@ -19,6 +19,10 @@ from qihuang_platform.db.models import (
 )
 from qihuang_platform.db.config import SessionLocal
 from qihuang_platform.gateway.response import success, error, paginated
+from qihuang_platform.billing.order import (
+    ensure_usage_snapshot, paid_orders_in_period,
+    _serialize as serialize_order,
+)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -205,6 +209,19 @@ def generate_monthly_bill(tenant_id: str, period_str: str) -> dict:
         # 3. 汇总当月用量
         usage = _get_period_usage(session, tenant_id, start, end)
 
+        # 3.5 结算中心 #B：确保用量快照单 + 聚合当月全部 PAID 订单
+        ensure_usage_snapshot(
+            session, tenant_id, period_str,
+            total_calls=usage["total_calls"],
+            total_tokens=usage["total_tokens"],
+            cost_cents=usage["total_cost_cents"],
+        )
+        orders = paid_orders_in_period(session, tenant_id, period_str)
+        order_items = [serialize_order(o) for o in orders]
+        recharge_cents = sum(o.amount_cents or 0 for o in orders if o.order_type == "recharge")
+        addon_cents = sum(o.amount_cents or 0 for o in orders if o.order_type == "addon")
+        usage_cents = sum(o.amount_cents or 0 for o in orders if o.order_type == "usage")
+
         # 4. 查询订阅与套餐，计算应付金额
         subscription = _get_active_subscription(session, tenant_id)
         plan = None
@@ -229,9 +246,9 @@ def generate_monthly_bill(tenant_id: str, period_str: str) -> dict:
                 # 超额逻辑由 quota.py 在调用时控制，此处账单以实际发生的 cost 为准
                 overage_cost_cents = usage["total_cost_cents"]
 
-        # 应付金额 = 套餐订阅费 + 实际调用产生的费用
-        # （开发阶段简化: 套餐价为主，call_log 的 cost_cents 作为超额/增值部分）
-        total_payable_cents = plan_price_cents + overage_cost_cents
+        # 应付金额 = 套餐订阅费 + 实际调用产生的费用 + 单加 agent 订阅费
+        # （充值订单为预付款，不计入应付，单独在 summary 列出供对账）
+        total_payable_cents = plan_price_cents + overage_cost_cents + addon_cents
 
         # 5. 创建或更新账单
         extra = {
@@ -240,6 +257,12 @@ def generate_monthly_bill(tenant_id: str, period_str: str) -> dict:
             "overage_cost_cents": overage_cost_cents,
             "subscription_id": subscription.id if subscription else None,
             "generated_at": _now().isoformat(),
+            "orders": order_items,
+            "summary": {
+                "recharge_cents": recharge_cents,
+                "addon_cents": addon_cents,
+                "usage_cents": usage_cents,
+            },
         }
 
         if existing and existing.status == "DRAFT":
