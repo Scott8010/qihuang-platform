@@ -343,6 +343,14 @@ try:
     except ImportError as e:
         print(f"[Platform] 计费中台钱包模块未就绪: {e}")
 
+    # 结算中心订单端点（#B 方案）
+    try:
+        from qihuang_platform.billing.order_router import order_router
+        app.include_router(order_router)
+        print("[Platform] 结算中心订单端点已挂载 → /billing/v1/orders")
+    except ImportError as e:
+        print(f"[Platform] 结算中心订单模块未就绪: {e}")
+
     # 客户管理路由
     try:
         from qihuang_platform.control.customer_mgr import router as customer_router

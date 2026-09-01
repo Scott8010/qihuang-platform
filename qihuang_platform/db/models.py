@@ -212,6 +212,38 @@ class Bill(Base):
     )
 
 
+class Order(Base):
+    """订单表（结算中心 #B 方案：所有收费动作先落订单再处理）
+
+    订单类型 order_type:
+      - recharge  充值包购买（积分 +N，PAID）
+      - addon     agent 单加订阅（积分 -N，PAID）
+      - usage     用量月度快照单（积分 -N，PAID，结算时生成）
+      - plan      套餐变更/升级（预留）
+    状态 status: PENDING → PAID（成功）/ CANCELLED（失败/取消）
+    billed: 是否已并入月度结算单（阶段⑤结算聚合消费）
+    """
+    __tablename__ = "orders"
+    id = Column(String(36), primary_key=True, default=_uid)
+    order_no = Column(String(64), nullable=False, index=True)  # 订单号 ORD+时间戳+随机
+    tenant_id = Column(String(36), ForeignKey("tenant.id"), nullable=False, index=True)
+    order_type = Column(String(20), nullable=False, index=True)
+    item_key = Column(String(50), default="")  # 包key / agent_key / usage:monthly
+    item_label = Column(String(100), default="")  # 展示名
+    amount_cents = Column(Integer, default=0)  # 应付金额（分）
+    credits = Column(Integer, default=0)  # 积分变动：充值=+N，加购/用量=-N
+    status = Column(String(20), default="PENDING")  # PENDING/PAID/CANCELLED
+    billed = Column(Boolean, default=False)  # 是否已并入结算单
+    period_month = Column(String(7), index=True)  # 归属月份 YYYY-MM（结算聚合）
+    paid_at = Column(DateTime)
+    extra = Column(JSON)
+    created_at = Column(DateTime, default=_now)
+
+    __table_args__ = (
+        UniqueConstraint("order_no", name="uq_orders_order_no"),
+    )
+
+
 class AuditLog(Base):
     """审计日志表"""
     __tablename__ = "audit_log"
