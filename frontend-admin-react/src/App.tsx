@@ -26,7 +26,7 @@ const nav: { id: string; label: string; icon: LucideIcon; desc?: string }[] = [
   { id: "users", label: "用户管理", icon: UsersIcon },
   { id: "roles", label: "权限管理", icon: ShieldCheck },
   { id: "keys", label: "密钥配额", icon: KeyRound },
-  { id: "billing", label: "计量计费", icon: BarChart3 },
+  { id: "billing", label: "结算中心", icon: BarChart3 },
   { id: "capability", label: "能力中心", icon: Boxes },
   { id: "content", label: "内容管控", icon: BookOpenCheck },
   { id: "monitor", label: "监控运维", icon: Activity },

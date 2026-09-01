@@ -342,7 +342,7 @@ export default function Tenants({ go }: { go: (p: string) => void }) {
                     <div className="rounded-lg p-3 text-[14px] leading-relaxed" style={{ background: "#fff", color: C.mid, border: `1px solid ${C.border}` }}>
                       <span className="font-medium" style={{ color: C.ink }}>{sel.name}：</span>
                       {sel.desc || "—"}
-                      <div className="mt-1" style={{ color: C.light }}>订阅期 12 个月，到期后可在「计量计费」页续费或变更套餐。</div>
+                      <div className="mt-1" style={{ color: C.light }}>订阅期 12 个月，到期后可在「结算中心」页续费或变更套餐。</div>
                     </div>
                   );
                 })()}

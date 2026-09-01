@@ -166,7 +166,7 @@ export default function TenantDetail({ tenant, onBack, go }: { tenant: Tenant; o
               <div className="py-8 text-center text-[15px]" style={{ color: C.light }}>
                 后端当前未提供单租户「分日趋势」与「端点级用量」明细接口
                 <div className="mt-1 text-[13.5px]">
-                  已上报的聚合口径见「计量计费」与「监控大盘」；明细接口开通后此处自动填充
+                  已上报的聚合口径见「结算中心」与「监控大盘」；明细接口开通后此处自动填充
                 </div>
               </div>
             </CardContent>
@@ -321,7 +321,7 @@ export default function TenantDetail({ tenant, onBack, go }: { tenant: Tenant; o
                 </table>
               )}
               <div className="mt-3 flex items-center gap-1.5 text-[13.5px]" style={{ color: C.light }}>
-                <KeyRound className="w-3.5 h-3.5" /> 续费与套餐变更在「计量计费」页操作。
+                <KeyRound className="w-3.5 h-3.5" /> 续费与套餐变更在「结算中心」页操作。
               </div>
             </CardContent>
           </Card>
