@@ -8,7 +8,7 @@ import pytest
 import jwt
 
 from qihuang_platform.db.config import SessionLocal
-from qihuang_platform.db.models import Plan, Subscription
+from qihuang_platform.db.models import Plan, Subscription, Tenant
 
 
 @pytest.fixture(autouse=True)
@@ -26,6 +26,10 @@ def ensure_capability_tenant_subscription(user_headers):
     tid = payload.get("tenant_id") or "tenant_default"
     session = SessionLocal()
     try:
+        # wechat mock 登录的用户租户可能未落 tenant 表，先确保租户存在
+        if not session.query(Tenant).filter_by(id=tid).first():
+            session.add(Tenant(id=tid, name=tid, status="active"))
+            session.flush()
         if session.query(Subscription).filter_by(tenant_id=tid, status="active").first():
             return
         plan = session.query(Plan).filter_by(status="active").first()
