@@ -85,6 +85,6 @@ async def record_call(
                 "action": action,
                 "metric_count": metric_count,
             },
-        ))
+        ), persist=False)
     except Exception as e:  # noqa: BLE001
         logger.warning("[insight.metering] record_call 失败: %s", e)

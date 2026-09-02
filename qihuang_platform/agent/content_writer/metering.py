@@ -85,6 +85,6 @@ async def record_call(
                 "action": action,
                 "variants": variants,
             },
-        ))
+        ), persist=False)
     except Exception as e:  # noqa: BLE001
         logger.warning("[content_writer.metering] record_call 失败: %s", e)

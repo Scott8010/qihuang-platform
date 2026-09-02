@@ -75,6 +75,6 @@ async def record_call(
                 "code": code,
                 "action": action,
             },
-        ))
+        ), persist=False)
     except Exception as e:  # noqa: BLE001
         logger.warning("[coach.metering] record_call 失败: %s", e)

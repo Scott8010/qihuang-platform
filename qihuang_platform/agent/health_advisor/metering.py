@@ -92,6 +92,6 @@ async def record_call(
                 "code": code,
                 "partial": partial,
             },
-        ))
+        ), persist=False)
     except Exception as e:  # noqa: BLE001
         logger.warning("[metering] record_call 失败: %s", e)
