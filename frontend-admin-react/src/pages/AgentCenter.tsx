@@ -17,7 +17,9 @@ import {
   fetchDashboard, fetchSceneUsage, fetchAgentUsage, fetchAgentBusinessSignals,
   fetchHealthAssistantPrompt, saveHealthAssistantPrompt,
   fetchTenantOrgs, fetchOrgHealthAssistantPrompt, saveOrgHealthAssistantPrompt,
+  fetchTenants, fetchBillingReconcile,
   type AgentDef, type PlanAgentRow, type HealthAdvisorConsultResult, type AgentBusinessSignals,
+  type BillingReconcileResult,
 } from "@/lib/api";
 
 /* ═══════════════════════════════════════════
@@ -513,14 +515,38 @@ function AgentOverview() {
   const [sceneUsage, setSceneUsage] = useState<any[]>([]);
   const [agentUsage, setAgentUsage] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tenantId, setTenantId] = useState<string>("");
+  const [days, setDays] = useState<number>(7);
+  const [tenants, setTenants] = useState<any[]>([]);
+  const [recon, setRecon] = useState<BillingReconcileResult | null>(null);
+  const [reconLoading, setReconLoading] = useState(false);
+
+  const curMonth = new Date().toISOString().slice(0, 7);
 
   const load = () => {
     setLoading(true);
-    Promise.all([fetchDashboard(), fetchSceneUsage(), fetchAgentUsage()])
-      .then(([d, s, u]) => { setDash(d); setSceneUsage(s); setAgentUsage(u.usage || []); })
+    Promise.all([
+      fetchDashboard(),
+      fetchSceneUsage(),
+      fetchAgentUsage(tenantId || undefined, days),
+      fetchTenants(),
+    ])
+      .then(([d, s, u, ts]) => {
+        setDash(d);
+        setSceneUsage(s);
+        setAgentUsage(u.usage || []);
+        setTenants(Array.isArray(ts) ? ts : []);
+      })
       .finally(() => setLoading(false));
   };
-  useEffect(load, []);
+  useEffect(load, [tenantId, days]);
+
+  const runReconcile = () => {
+    setReconLoading(true);
+    fetchBillingReconcile(curMonth)
+      .then((r) => setRecon(r))
+      .finally(() => setReconLoading(false));
+  };
 
   // 近7日趋势：callTrend 三段求和还原真实每日调用
   const trend = (dash?.callTrend || []).map((t: any) => ({
@@ -537,8 +563,9 @@ function AgentOverview() {
     }))
     .filter((x: any) => x.value > 0);
 
-  // Agent 活跃度排行（近7日真实计量，按调用降序）
+  // Agent 活跃度排行（近N日真实计量，按调用降序）
   const usageData = (agentUsage || []).slice(0, 8);
+  const totalCost = (agentUsage || []).reduce((n: number, x: any) => n + (x.cost_yuan || 0), 0);
 
   const services = dash?.services || [];
   const okCount = services.filter((s: any) => s.ok).length;
@@ -555,9 +582,34 @@ function AgentOverview() {
             真实计量
           </span>
         </div>
-        <Button size="sm" variant="outline" className="h-7 text-[14px]" onClick={load}>
-          <RefreshCw className="w-3.5 h-3.5 mr-1" /> 刷新
-        </Button>
+        <div className="flex items-center gap-2">
+          <select
+            value={tenantId}
+            onChange={(e) => setTenantId(e.target.value)}
+            className="h-7 text-[13px] rounded-md border px-2 bg-white"
+            style={{ borderColor: C.border, color: C.ink }}
+            title="租户下钻"
+          >
+            <option value="">全部租户</option>
+            {tenants.map((t: any) => (
+              <option key={t.id} value={t.id}>{t.display_name || t.name || t.id}</option>
+            ))}
+          </select>
+          <select
+            value={days}
+            onChange={(e) => setDays(Number(e.target.value))}
+            className="h-7 text-[13px] rounded-md border px-2 bg-white"
+            style={{ borderColor: C.border, color: C.ink }}
+            title="时间窗"
+          >
+            <option value={7}>近 7 日</option>
+            <option value={15}>近 15 日</option>
+            <option value={30}>近 30 日</option>
+          </select>
+          <Button size="sm" variant="outline" className="h-7 text-[14px]" onClick={load}>
+            <RefreshCw className="w-3.5 h-3.5 mr-1" /> 刷新
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -660,7 +712,7 @@ function AgentOverview() {
                 <div className="flex items-center gap-2 mb-2">
                   <Zap className="w-3.5 h-3.5" style={{ color: C.primary }} />
                   <span className="text-[14px] font-medium" style={{ color: C.ink }}>Agent 活跃度排行</span>
-                  <span className="text-[12px]" style={{ color: C.light }}>近 7 日调用量（真实计量）</span>
+                  <span className="text-[12px]" style={{ color: C.light }}>近 {days} 日调用量（真实计量）</span>
                 </div>
                 {usageData.length === 0 ? (
                   <div className="h-44 flex items-center justify-center text-[14px]" style={{ color: C.light }}>
@@ -684,6 +736,39 @@ function AgentOverview() {
                     </ResponsiveContainer>
                   </div>
                 )}
+                {/* 金额明细表（看板放大：真实扣费金额维度 + 租户下钻后联动） */}
+                <div className="mt-3 pt-3 border-t" style={{ borderColor: C.border }}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[12px]" style={{ color: C.light }}>明细（金额 ¥ = 真实扣费）</span>
+                    <span className="text-[12px] font-mono" style={{ color: C.ink }}>合计 ¥{totalCost.toFixed(2)}</span>
+                  </div>
+                  {agentUsage.length === 0 ? (
+                    <div className="text-[12px] py-1" style={{ color: C.light }}>暂无调用</div>
+                  ) : (
+                    <div className="max-h-40 overflow-auto">
+                      <table className="w-full text-[12px]">
+                        <thead>
+                          <tr style={{ color: C.light }}>
+                            <th className="text-left font-normal py-1">Agent</th>
+                            <th className="text-right font-normal">调用</th>
+                            <th className="text-right font-normal">Token</th>
+                            <th className="text-right font-normal">金额¥</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {agentUsage.map((x: any) => (
+                            <tr key={x.agent_key} className="border-t" style={{ borderColor: C.border }}>
+                              <td className="py-1" style={{ color: C.mid }}>{x.name}</td>
+                              <td className="text-right font-mono" style={{ color: C.ink }}>{x.calls}</td>
+                              <td className="text-right font-mono" style={{ color: C.mid }}>{x.tokens}</td>
+                              <td className="text-right font-mono" style={{ color: C.ink }}>{(x.cost_yuan || 0).toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
@@ -720,6 +805,73 @@ function AgentOverview() {
               </CardContent>
             </Card>
           </div>
+
+          {/* 真计费对账健康度入口（看板放大 · #656 收尾） */}
+          <Card className="border" style={{ borderColor: C.border }}>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Coins className="w-3.5 h-3.5" style={{ color: C.primary }} />
+                  <span className="text-[14px] font-medium" style={{ color: C.ink }}>真计费对账</span>
+                  <span className="text-[12px]" style={{ color: C.light }}>CallLog → usage单 → Bill 三层一致性</span>
+                </div>
+                <Button size="sm" variant="outline" className="h-7 text-[13px]" onClick={runReconcile} disabled={reconLoading}>
+                  <RefreshCw className={`w-3.5 h-3.5 mr-1 ${reconLoading ? "animate-spin" : ""}`} />
+                  运行对账（本月 {curMonth}）
+                </Button>
+              </div>
+              {reconLoading ? (
+                <div className="py-6 text-center text-[13px]" style={{ color: C.light }}>
+                  <Loader2 className="w-4 h-4 animate-spin inline mr-2" />对账中…
+                </div>
+              ) : recon ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[13px] px-2 py-1 rounded-full" style={{ background: "#F3F6F4", color: "#2E5A4C" }}>
+                      健康 {recon.summary?.healthy ?? 0}
+                    </span>
+                    <span className="text-[13px] px-2 py-1 rounded-full" style={{ background: "#FBF4E4", color: "#8A6A1F" }}>
+                      有缺口 {recon.summary?.with_gaps ?? 0}
+                    </span>
+                    <span className="text-[13px] px-2 py-1 rounded-full" style={{ background: "#FBEAE6", color: "#B03A2E" }}>
+                      缺口项 {recon.summary?.total_gaps ?? 0}
+                    </span>
+                    <span className="text-[12px]" style={{ color: C.light }}>共 {recon.summary?.total ?? 0} 租户</span>
+                  </div>
+                  {(recon.summary?.with_gaps ?? 0) > 0 ? (
+                    <div className="max-h-48 overflow-auto border rounded-lg" style={{ borderColor: C.border }}>
+                      <table className="w-full text-[12px]">
+                        <thead>
+                          <tr style={{ color: C.light }} className="border-b" >
+                            <th className="text-left font-normal px-2 py-1">租户</th>
+                            <th className="text-left font-normal px-2 py-1">异常明细</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(recon.tenants || []).filter((t: any) => !t.healthy).map((t: any) => (
+                            <tr key={t.tenant_id} className="border-t" style={{ borderColor: C.border }}>
+                              <td className="px-2 py-1 font-mono" style={{ color: C.ink }}>{t.tenant_id}</td>
+                              <td className="px-2 py-1" style={{ color: C.mid }}>
+                                {(t.gaps || []).map((g: any) => g.detail).join("；")}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="text-[13px] py-2" style={{ color: "#2E5A4C" }}>
+                      ✅ 全部租户三层计量一致，无缺口
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-[13px] py-2" style={{ color: C.light }}>
+                  点击「运行对账」核对本月真计费一致性（漏结算 / 数值漂移 / 裸0 / 双写）
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
     </section>

@@ -1065,22 +1065,76 @@ export interface AgentUsageItem {
   calls: number;
   tokens: number;
   cost_cents: number;
+  cost_yuan: number;
 }
 
-/** GET /admin/v1/agents/usage — 各 Agent 近7日调用量聚合（运营驾驶舱·活跃度排行数据源） */
-export async function fetchAgentUsage(): Promise<{ usage: AgentUsageItem[]; totalCalls: number }> {
+/** GET /admin/v1/agents/usage — 各 Agent 调用量聚合（支持租户下钻 + 近 N 日）
+ *  tenantId 留空=全部租户；days 默认 7。驾驶舱活跃度排行 + 金额维度数据源。 */
+export async function fetchAgentUsage(tenantId?: string, days = 7): Promise<{ usage: AgentUsageItem[]; totalCalls: number; totalCostYuan: number }> {
   try {
-    const r = await get<{ code: number; data?: { usage?: any[]; total_calls?: number } }>("/admin/v1/agents/usage");
-    if (r?.code !== 0 || !r.data) return { usage: [], totalCalls: 0 };
+    const qs = new URLSearchParams();
+    if (tenantId) qs.set("tenant_id", tenantId);
+    qs.set("days", String(days));
+    const r = await get<{ code: number; data?: { usage?: any[]; total_calls?: number; total_cost_yuan?: number } }>(
+      `/admin/v1/agents/usage?${qs.toString()}`
+    );
+    if (r?.code !== 0 || !r.data) return { usage: [], totalCalls: 0, totalCostYuan: 0 };
     const usage = (r.data.usage || []).map((u: any) => ({
       agent_key: u.agent_key || "",
       name: u.name || u.agent_key || "",
       calls: u.calls ?? 0,
       tokens: u.tokens ?? 0,
       cost_cents: u.cost_cents ?? 0,
+      cost_yuan: u.cost_yuan ?? 0,
     }));
-    return { usage, totalCalls: r.data.total_calls ?? 0 };
-  } catch (e) { console.error("fetchAgentUsage error", e); return { usage: [], totalCalls: 0 }; }
+    return { usage, totalCalls: r.data.total_calls ?? 0, totalCostYuan: r.data.total_cost_yuan ?? 0 };
+  } catch (e) { console.error("fetchAgentUsage error", e); return { usage: [], totalCalls: 0, totalCostYuan: 0 }; }
+}
+
+export interface ReconcileGap {
+  type: string;
+  severity: string;
+  detail: string;
+}
+export interface ReconcileTenantResult {
+  tenant_id: string;
+  period: string;
+  calllog?: { calls: number; tokens: number; cost_cents: number };
+  usage_order?: any;
+  bill?: any;
+  healthy: boolean;
+  gaps: ReconcileGap[];
+}
+export interface ReconcileAnomalies {
+  bare_zero?: { count: number; samples: string[] };
+  double_write_suspect?: { trace_ids_with_dup: number; count: number; samples: string[] };
+}
+export interface BillingReconcileResult {
+  mode: "tenant" | "all";
+  period: string;
+  tenant_id?: string;
+  reconcile?: ReconcileTenantResult;
+  anomalies?: ReconcileAnomalies;
+  fixed?: boolean;
+  tenants?: ReconcileTenantResult[];
+  summary?: { total: number; healthy: number; with_gaps: number; total_gaps: number; fixed: number };
+}
+
+/** GET /admin/v1/billing/reconcile — 真计费对账（三层: CallLog→usage单→Bill） */
+export async function fetchBillingReconcile(
+  period: string,
+  tenantId?: string,
+  fix = false
+): Promise<BillingReconcileResult | null> {
+  try {
+    const qs = new URLSearchParams();
+    qs.set("period", period);
+    if (tenantId) qs.set("tenant_id", tenantId);
+    if (fix) qs.set("fix", "1");
+    const r = await get<{ code: number; data?: BillingReconcileResult }>(`/admin/v1/billing/reconcile?${qs.toString()}`);
+    if (r?.code !== 0 || !r.data) return null;
+    return r.data;
+  } catch (e) { console.error("fetchBillingReconcile error", e); return null; }
 }
 
 export interface AgentBusinessSignal {

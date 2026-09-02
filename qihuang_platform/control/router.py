@@ -42,6 +42,12 @@ from qihuang_platform.gateway.health_probe import get_services_health
 from qihuang_platform.control.container_mgr import container_mgr
 from qihuang_platform.control.cost_mgr import router as cost_router
 from qihuang_platform.billing.billing import get_bill_detail
+from qihuang_platform.billing.reconcile import (
+    reconcile_all,
+    reconcile_tenant,
+    detect_calllog_anomalies,
+    ensure_usage_snapshot_for,
+)
 from qihuang_platform.agent.registry import list_agents, get_agent, set_agent_status, is_active
 from qihuang_platform.agent import dashboard as agent_dashboard
 
@@ -2755,29 +2761,31 @@ async def list_agent_center(admin: dict = Depends(get_current_admin)):
     return success(data={"total": len(items), "agents": items})
 
 
-@router.get("/agents/usage", summary="Agent 中台-调用量聚合(近7日)")
-async def agent_center_usage(admin: dict = Depends(get_current_admin)):
-    """按 CallLog.endpoint 前缀聚合各 Agent 能力近7日调用量（真实计量，运营驾驶舱数据源）。
+@router.get("/agents/usage", summary="Agent 中台-调用量聚合(支持租户下钻+近N日)")
+async def agent_center_usage(
+    tenant_id: Optional[str] = Query(None, description="租户下钻（留空=全部租户）"),
+    days: int = Query(7, ge=1, le=92, description="近 N 日窗口"),
+    admin: dict = Depends(get_current_admin),
+):
+    """按 CallLog.endpoint 前缀聚合各 Agent 能力调用量（真实计量，运营驾驶舱数据源）。
 
     前缀规则：/api/v1/agent/{agent_key}/... —— 与 agent/__init__.py 挂载前缀一致。
-    返回按 calls 降序排列，含 tokens / cost_cents 累计。
+    支持 tenant_id 租户下钻 + days 时间窗；返回按 calls 降序，含 tokens / cost_cents / cost_yuan。
     """
     db = SessionLocal()
     try:
         agents = list_agents()
         now = _now()
-        since = now - timedelta(days=7)
-        rows = (
-            db.query(
-                CallLog.endpoint,
-                func.count(CallLog.id),
-                func.coalesce(func.sum(CallLog.tokens_used), 0),
-                func.coalesce(func.sum(CallLog.cost_cents), 0),
-            )
-            .filter(CallLog.timestamp >= since)
-            .group_by(CallLog.endpoint)
-            .all()
-        )
+        since = now - timedelta(days=days)
+        q = db.query(
+            CallLog.endpoint,
+            func.count(CallLog.id),
+            func.coalesce(func.sum(CallLog.tokens_used), 0),
+            func.coalesce(func.sum(CallLog.cost_cents), 0),
+        ).filter(CallLog.timestamp >= since)
+        if tenant_id:
+            q = q.filter(CallLog.tenant_id == tenant_id)
+        rows = q.group_by(CallLog.endpoint).all()
         usage_map: dict = {}
         for ep, cnt, tokens, cost in rows:
             ep = ep or ""
@@ -2790,21 +2798,77 @@ async def agent_center_usage(admin: dict = Depends(get_current_admin)):
                     u["cost_cents"] += round(float(cost or 0), 2)
                     break
         items = [
-            {"agent_key": key,
-             "name": spec.get("name") or key,
-             "calls": u["calls"],
-             "tokens": u["tokens"],
-             "cost_cents": u["cost_cents"]}
+            {
+                "agent_key": key,
+                "name": spec.get("name") or key,
+                "calls": u["calls"],
+                "tokens": u["tokens"],
+                "cost_cents": u["cost_cents"],
+                "cost_yuan": round(u["cost_cents"] / 100.0, 2),
+            }
             for key, u in usage_map.items()
         ]
         items.sort(key=lambda x: x["calls"], reverse=True)
         total_calls = sum(i["calls"] for i in items)
+        total_cost_cents = round(sum(i["cost_cents"] for i in items), 2)
         return success(data={
-            "period": "7d",
+            "period": f"{days}d",
+            "tenant_id": tenant_id,
             "since": since.strftime("%Y-%m-%d"),
             "total_calls": total_calls,
+            "total_cost_cents": total_cost_cents,
+            "total_cost_yuan": round(total_cost_cents / 100.0, 2),
             "usage": items,
         })
+    finally:
+        db.close()
+
+
+@router.get("/billing/reconcile", summary="真计费对账(三层: CallLog→usage单→Bill)")
+async def billing_reconcile(
+    period: str = Query(..., description="账单周期 YYYY-MM，如 2026-09"),
+    tenant_id: Optional[str] = Query(None, description="指定租户（留空=全租户）"),
+    fix: int = Query(0, description="1=对漏结算租户自动补 usage 快照单（幂等）"),
+    admin: dict = Depends(get_current_admin),
+):
+    """运行时真计费对账（旁路非阻断）。
+
+    - 单租户（tenant_id 给定）：返回 reconcile_tenant + detect_calllog_anomalies 明细
+    - 全租户（tenant_id 留空）：返回 reconcile_all 汇总（fix=1 时自动补漏结算单）
+    抓漏结算 / 数值漂移 / 裸 0 / 双写嫌疑四类异常。
+    """
+    db = SessionLocal()
+    try:
+        if tenant_id:
+            rec = reconcile_tenant(db, tenant_id, period)
+            anomalies = detect_calllog_anomalies(db, tenant_id, period)
+            fixed = False
+            if fix and not rec["healthy"]:
+                for gap in rec["gaps"]:
+                    if gap["type"] == "missing_usage_order":
+                        fx = ensure_usage_snapshot_for(db, tenant_id, period)
+                        fixed = bool(fx.get("ok") and not fx.get("skipped"))
+                        if fixed:
+                            rec = reconcile_tenant(db, tenant_id, period)
+                        break
+            if fix:
+                db.commit()
+            return success(data={
+                "mode": "tenant",
+                "tenant_id": tenant_id,
+                "period": period,
+                "reconcile": rec,
+                "anomalies": anomalies,
+                "fixed": fixed,
+            })
+        result = reconcile_all(db, period, fix=bool(fix))
+        if fix:
+            db.commit()
+        return success(data={"mode": "all", **result})
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        logging.getLogger(__name__).warning("[reconcile] 对账端点异常: %s", e)
+        return error("INTERNAL_ERROR", message=f"对账失败: {e}")
     finally:
         db.close()
 
