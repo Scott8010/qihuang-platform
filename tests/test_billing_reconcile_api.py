@@ -8,12 +8,16 @@ tests/test_billing_reconcile_api.py — 对账/用量增强端点契约测试（
 from datetime import datetime, timezone
 
 from qihuang_platform.db.config import SessionLocal
-from qihuang_platform.db.models import CallLog
+from qihuang_platform.db.models import CallLog, Tenant
 
 
 def _seed_call(tenant_id, cost, trace_id, day=15):
     db = SessionLocal()
     try:
+        # upsert 租户以满足 call_log.tenant_id 外键约束（CI 真 Postgres 强制 FK，
+        # 本地 SQLite 不强制；此处统一保证两种环境一致，避免测试假绿）
+        db.merge(Tenant(id=tenant_id, name=tenant_id, status="active"))
+        db.commit()
         db.add(CallLog(
             tenant_id=tenant_id,
             endpoint="/api/v1/agent/health-assistant/consult",
