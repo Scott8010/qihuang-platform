@@ -14,6 +14,15 @@ from qihuang_platform.gateway.metering import metering_store, CallLog
 from qihuang_platform.gateway.ratelimit import rate_limiter
 
 
+def _should_persist_call(path: str, status_code: int) -> bool:
+    """判定本次请求是否真落库 call_log 表（防双写 + 只记成功）。
+
+    - agent 业务路径由 agent 自身 record_call 落库，中间件不重复落库
+    - 失败响应(>=400)不计入配额（与「成功才计」一致）
+    """
+    return (status_code < 400) and (not path.startswith("/api/v1/agent/"))
+
+
 class TraceMiddleware(BaseHTTPMiddleware):
     """注入 trace_id + 记录响应头"""
 
@@ -67,14 +76,19 @@ class MeteringMiddleware(BaseHTTPMiddleware):
             org_id=getattr(request.state, "org_id", None),
             status_code=response.status_code,
             latency_ms=getattr(request.state, "latency_ms", 0),
-            tokens_used=0,  # 实际由业务层写入
+            tokens_used=0,  # 实际由业务层写入(agent 端点由业务 record_call 带真实 token)
             cost_cents=0,
             ip=request.client.host if request.client else "",
             user_agent=request.headers.get("User-Agent", ""),
             timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
-        await metering_store.log(call)
+        # 防双写 + 只记成功调用：
+        # - agent 业务路径由 agent 自身 record_call 落库，中间件置 persist=False
+        # - 失败响应(>=400)不计入配额（与「成功才计」一致）
+        path = request.url.path
+        should_persist = _should_persist_call(path, response.status_code)
+        await metering_store.log(call, persist=should_persist)
         return response
 
 
