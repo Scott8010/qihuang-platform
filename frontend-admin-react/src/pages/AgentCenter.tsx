@@ -850,7 +850,7 @@ function AgentOverview() {
                         <tbody>
                           {(recon.tenants || []).filter((t: any) => !t.healthy).map((t: any) => (
                             <tr key={t.tenant_id} className="border-t" style={{ borderColor: C.border }}>
-                              <td className="px-2 py-1 font-mono" style={{ color: C.ink }}>{t.tenant_id}</td>
+                              <td className="px-2 py-1" style={{ color: C.ink }}>{t.tenant_name || t.tenant_id}</td>
                               <td className="px-2 py-1" style={{ color: C.mid }}>
                                 {(t.gaps || []).map((g: any) => g.detail).join("；")}
                               </td>

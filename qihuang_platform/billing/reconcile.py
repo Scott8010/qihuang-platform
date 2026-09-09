@@ -22,7 +22,7 @@ from typing import Optional
 
 from sqlalchemy import func
 
-from qihuang_platform.db.models import CallLog, Order, Bill
+from qihuang_platform.db.models import CallLog, Order, Bill, Tenant
 from qihuang_platform.billing.order import (
     ORDER_USAGE,
     ensure_usage_snapshot,
@@ -48,6 +48,20 @@ def _period_bounds_safe(period: str):
     except (ValueError, AttributeError, TypeError) as e:
         logger.warning("[reconcile] 周期格式错误 %s: %s", period, e)
         return None
+
+
+def _resolve_tenant_name(session, tenant_id: str) -> str:
+    """返回租户可读名（display_name || name），无记录回退 id 本身。
+
+    用于对账结果直接带出人类可读租户名，避免前端裸显 UUID。
+    """
+    try:
+        t = session.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if t:
+            return (t.display_name or t.name or tenant_id) or tenant_id
+    except Exception:  # noqa: BLE001
+        logger.warning("[reconcile] 解析租户名失败 %s", tenant_id)
+    return tenant_id
 
 
 def aggregate_calllog(session, tenant_id: str, period: str) -> dict:
@@ -114,9 +128,11 @@ def reconcile_tenant(session, tenant_id: str, period: str) -> dict:
       }
     """
     cl = aggregate_calllog(session, tenant_id, period)
+    tname = _resolve_tenant_name(session, tenant_id)
     if not cl["ok"]:
         return {
             "tenant_id": tenant_id,
+            "tenant_name": tname,
             "period": period,
             "ok": False,
             "calllog": cl,
@@ -182,6 +198,7 @@ def reconcile_tenant(session, tenant_id: str, period: str) -> dict:
 
     return {
         "tenant_id": tenant_id,
+        "tenant_name": tname,
         "period": period,
         "ok": True,
         "calllog": cl,

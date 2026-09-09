@@ -1098,6 +1098,7 @@ export interface ReconcileGap {
 }
 export interface ReconcileTenantResult {
   tenant_id: string;
+  tenant_name?: string;
   period: string;
   calllog?: { calls: number; tokens: number; cost_cents: number };
   usage_order?: any;

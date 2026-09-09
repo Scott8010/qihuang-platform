@@ -276,7 +276,7 @@ export default function Billing() {
     const addonOrders = (billDetail.extra?.orders || []).filter((o) => o.order_type === "addon" && o.status === "PAID");
     const rechargeOrders = (billDetail.extra?.orders || []).filter((o) => o.order_type === "recharge" && o.status === "PAID");
     const eps = billDetail.usage_breakdown?.by_endpoint || [];
-    const planName = billDetail.extra?.plan_name || billDetail.tenant_id || "";
+    const planName = billDetail.extra?.plan_name || (billDetail.tenant_id ? (tenants.find((x: any) => x.id === billDetail.tenant_id)?.name || billDetail.tenant_id) : "") || "";
     const statusLabel = orderStatusMap[billDetail.status]?.label || billDetail.status;
     const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>账单 ${billDetail.bill_period}</title><style>
       body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;color:#1f2a24;margin:28px;font-size:13px;line-height:1.8}
@@ -966,7 +966,7 @@ export default function Billing() {
             <DialogTitle>账单明细 · {billDetail?.bill_period || ""}</DialogTitle>
             <DialogDescription>
               {billDetail
-                ? `${billDetail.extra?.plan_name || billDetail.tenant_id || ""} · ${orderStatusMap[billDetail.status]?.label || billDetail.status}`
+                ? `${billDetail.extra?.plan_name || (billDetail.tenant_id ? (tenants.find((x: any) => x.id === billDetail.tenant_id)?.name || billDetail.tenant_id) : "") || ""} · ${orderStatusMap[billDetail.status]?.label || billDetail.status}`
                 : "加载中…"}
             </DialogDescription>
           </DialogHeader>
@@ -980,7 +980,7 @@ export default function Billing() {
               {/* 抬头：客户/账单号/账期 + 打印 */}
               <div className="flex items-start justify-between rounded-md border p-3" style={{ borderColor: C.border, background: "#FBFDFC" }}>
                 <div className="text-[13px] space-y-1" style={{ color: C.mid }}>
-                  <div>客户名称：<b style={{ color: C.ink }}>{billDetail.extra?.plan_name || billDetail.tenant_id || "—"}</b></div>
+                  <div>客户名称：<b style={{ color: C.ink }}>{billDetail.extra?.plan_name || (billDetail.tenant_id ? (tenants.find((x: any) => x.id === billDetail.tenant_id)?.name || billDetail.tenant_id) : "—") || "—"}</b></div>
                   <div>账单号：<span className="font-mono text-[12.5px]">{billDetail.id}</span></div>
                   <div>账期：{billDetail.bill_period} · 状态：{orderStatusMap[billDetail.status]?.label || billDetail.status}</div>
                 </div>

@@ -307,7 +307,7 @@ export default function ApiKeys() {
                 </SelectContent>
               </Select>
               <div className='text-[13px]' style={{ color: C.light }}>
-                已选 tenant_id：{tenantInput || '—'}；套餐默认 standard，可在开户时配置。
+                已选租户：{tenants.find((t) => t.id === tenantInput)?.name || tenantInput || '—'}（{tenantInput || '—'}）；套餐默认 standard，可在开户时配置。
               </div>
             </div>
           )}
