@@ -1,9 +1,14 @@
 """
-LLM降级链 — DeepSeek主用 -> GLM-4-plus备用 -> 规则引擎兜底
+LLM降级链 — 四模型共识 (DeepSeek -> 通义千问 -> GLM-4 -> Kimi) + 规则引擎兜底
+
+设计对齐：
+- 四模型与 8601 core/llm_client.py、8602 agent/refine_llm.py 完全一致
+  （DeepSeek / Qwen / GLM-4 / Kimi，base_url+model 见 refine_llm._PROVIDERS）。
+- 监控大盘「LLM 共识集群可用性」直接读 get_status()，本列表即大盘展示的模型数。
 
 降级策略:
-1. 主用LLM(DeepSeek)请求失败/超时 -> 自动切换备用LLM(GLM-4)
-2. 备用LLM也失败 -> 规则引擎兜底 + degraded:true 标记
+1. 主用LLM(DeepSeek)请求失败/超时 -> 依次切换 通义千问 -> GLM-4 -> Kimi
+2. 全部失败 -> 规则引擎兜底 + degraded:true 标记
 3. 辩证类返回规则引擎兜底结果, 生成类返回 LLM-DOWN-001(503)
 """
 import time
@@ -37,9 +42,12 @@ class LLMFallbackChain:
     """LLM降级链管理器"""
 
     def __init__(self):
+        # 四模型共识：与 refine_llm._PROVIDERS / 8601 完全对齐
         self.providers = [
             LLMStatus(name="deepseek"),
+            LLMStatus(name="qwen"),
             LLMStatus(name="glm-4"),
+            LLMStatus(name="kimi"),
         ]
         self._health_check_interval = 60  # 60秒检查一次
         self._max_fail_count = 3  # 连续失败3次标记不可用
