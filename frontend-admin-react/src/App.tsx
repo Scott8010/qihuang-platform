@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import {
   LayoutDashboard, Building2, ShieldCheck, KeyRound, BarChart3,
   BookOpenCheck, Activity, Search, Bell, Sprout, ChevronDown, LogOut,
-  Users as UsersIcon, Eye, EyeOff, Lock, Bot, CreditCard, Boxes,
+  Users as UsersIcon, Eye, EyeOff, Lock, Bot, CreditCard, Boxes, Scale,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { C } from "@/lib/types";
@@ -27,6 +27,7 @@ const nav: { id: string; label: string; icon: LucideIcon; desc?: string }[] = [
   { id: "roles", label: "权限管理", icon: ShieldCheck },
   { id: "keys", label: "密钥配额", icon: KeyRound },
   { id: "billing", label: "结算中心", icon: BarChart3 },
+  { id: "ledger", label: "双账本", icon: Scale, desc: "平台成本与租户消耗" },
   { id: "capability", label: "能力中心", icon: Boxes },
   { id: "content", label: "内容管控", icon: BookOpenCheck },
   { id: "monitor", label: "监控运维", icon: Activity },
