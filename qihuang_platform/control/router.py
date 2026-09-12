@@ -1866,9 +1866,9 @@ async def kg_stats(
     try:
         now = _now()
         # 审核统计
-        pending = db.query(KgReviewItem).filter(KgReviewItem.status == "pending").count()
-        approved = db.query(KgReviewItem).filter(KgReviewItem.status == "approved").count()
-        rejected = db.query(KgReviewItem).filter(KgReviewItem.status == "rejected").count()
+        pending = db.query(KgReviewItem).filter(KgReviewItem.status == "PENDING").count()
+        approved = db.query(KgReviewItem).filter(KgReviewItem.status == "APPROVED").count()
+        rejected = db.query(KgReviewItem).filter(KgReviewItem.status == "REJECTED").count()
 
         # 增长趋势（近7天或30天）
         days = 7 if period == "7d" else 30
