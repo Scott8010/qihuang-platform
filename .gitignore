@@ -74,3 +74,26 @@ frontend-admin-react/_verify_caps/
 frontend-admin-react/stub_*.cjs
 frontend-admin-react/dbg_*.cjs
 frontend-admin-react/verify_*.cjs
+
+# ── 单树化清理后补充：本地 scratch 验证/构建残留（不入库，2026-09-13）──
+# 根级限定，避免误伤嵌套真源 qihuang_platform/billing/ 等
+.platform_8602_autolaunch.err
+/_routes.txt
+LLMGUARD_RULES_DIFF.patch
+/billing/
+/event_logs/
+/uploads/
+*_watchdog.bat
+*_logged.bat
+# React 前端验证/构建残留
+frontend-admin-react/dist.bak.*/
+frontend-admin-react/_verify_prompt/
+frontend-admin-react/open_8602.cjs
+frontend-admin-react/playwright_check.cjs
+frontend-admin-react/tenant_render.cjs
+frontend-admin-react/chk_index-*.js
+frontend-admin-react/prod_*.cjs
+frontend-admin-react/prod_*.png
+frontend-admin-react/prod_bundle*.js
+frontend-admin-react/prod_bundle*.css
+frontend-admin-react/prod_idx5.html
