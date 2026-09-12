@@ -193,7 +193,15 @@ export async function fetchDashboard(): Promise<{
       })),
       sceneDist,
       alerts,
-      reviews: [],
+      reviews: (d.reviews || []).map((x: any) => ({
+        id: x.id || "",
+        type: x.item_type || x.type || "知识条目",
+        name: x.name || x.entity_name || x.clause_text || x.title || x.item_id_in_kg || x.id || "",
+        conf: x.confidence ?? x.conf ?? 0,
+        source: x.source || x._src || "自生长审核",
+        reviewer: x.reviewer_role || x.reviewer || "—",
+        content: x.content,
+      })),
       services: (d.services || []).map((s: any) => ({
         name: s.name,
         status: s.ok ? (s.status === "warning" ? "DeepSeek 备用切换中" : "运行正常") : "服务不可用",

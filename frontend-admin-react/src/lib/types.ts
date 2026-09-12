@@ -336,6 +336,7 @@ export interface DashboardData {
   api: { total_calls: number; total_tokens?: number; avg_latency_ms?: number; today_calls: number; call_diff?: number };
   revenue?: { total_cents: number };
   kg?: { pending: number };
+  reviews?: { id: string; item_type?: string; type?: string; name?: string; entity_name?: string; clause_text?: string; title?: string; item_id_in_kg?: string; confidence?: number; conf?: number; source?: string; _src?: string; reviewer_role?: string; reviewer?: string; content?: any }[];
   recent_ops?: { time: string; user: string; action: string; target: string }[];
   trend?: { dates: string[]; values: number[] };
   services?: { name: string; key?: string; status: string; latency_ms?: number; uptime?: string; ok?: boolean }[];

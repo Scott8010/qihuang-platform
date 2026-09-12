@@ -8,7 +8,7 @@ import {
 } from "recharts";
 import { Building2, Users, Zap, Banknote, ArrowRight, AlertTriangle, Clock, Info, Loader2 } from "lucide-react";
 import { C } from "@/lib/types";
-import { fetchDashboard, fetchBills, fetchTenantExtended } from "@/lib/api";
+import { fetchDashboard, fetchBills, fetchTenantExtended, fetchReviews } from "@/lib/api";
 import type { CallTrendItem, SceneDistItem, AlertItem, TodoReviewItem, BillItem, DeckTask } from "@/lib/types";
 import TaskDeck from "@/components/TaskDeck";
 
@@ -38,6 +38,7 @@ export default function Dashboard({ go }: { go: (p: string) => void }) {
   useEffect(() => {
     let mounted = true;
     fetchBills().then((b) => { if (mounted) setBills(b); });
+    fetchReviews().then((list) => { if (mounted) setReviews(list); }).catch(() => {});
     // 岐黄三境 3D 真实开通情况：与 dashboard 并行拉，避免再开一次慢查询
     fetchTenantExtended(50).then((list) => {
       if (!mounted) return;
@@ -96,15 +97,18 @@ export default function Dashboard({ go }: { go: (p: string) => void }) {
       tone: "red" as DeckTask["tone"],
       tag: `${overdueBills.length} 张逾期`,
     })),
-    ...alerts.slice(0, 4).map((a, i) => ({
-      id: `AL-${i}`,
-      type: "系统告警",
-      title: a.text,
-      desc: `告警级别 ${a.level || "—"}，上报时间 ${a.time || "—"}`,
-      page: "monitor",
-      tone: (a.level === "high" ? "red" : a.level === "mid" ? "amber" : "green") as DeckTask["tone"],
-      tag: `${alerts.length} 条告警`,
-    })),
+    ...alerts.slice(0, 4).map((a, i) => {
+      const isReviewEvent = /审核|驳回|待审|review/i.test(a.text || "");
+      return {
+        id: `AL-${i}`,
+        type: isReviewEvent ? "知识审核" : "系统告警",
+        title: a.text,
+        desc: `告警级别 ${a.level || "—"}，上报时间 ${a.time || "—"}`,
+        page: isReviewEvent ? "content" : "monitor",
+        tone: (a.level === "high" ? "red" : a.level === "mid" ? "amber" : "green") as DeckTask["tone"],
+        tag: `${alerts.length} 条告警`,
+      };
+    }),
   ];
 
   return (
