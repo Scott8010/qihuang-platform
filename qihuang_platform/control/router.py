@@ -781,6 +781,85 @@ async def list_subscriptions(
 # 2. 账单系统
 # ═══════════════════════════════════════════
 
+# ═══════════════════════════════════════════
+# 8601 自生长引擎 · 平台自身成本账本（与租户账本分离展示）
+# 8601 的 LLM token 消耗直连模型供应商，不写入 8602 call_log；
+# 其用量按天落盘于 data/usage/<date>.json。此处直接读宿主文件聚合，
+# 作为「平台自身成本」独立分列项返回，明确不计入任何租户/客户账单。
+# ──────────────────────────────────────────────
+def get_platform_self_growth_cost(target_month: str) -> dict:
+    """聚合 8601 自生长引擎当月 LLM 用量，作为平台自身成本分列项。
+
+    target_month: "YYYY-MM"
+    关键语义：is_tenant_billed=False —— 此为平台成本，由平台承担，不向租户计费。
+    """
+    import json as _json
+    import glob as _glob
+
+    base = os.getenv("GROWTH_USAGE_DIR", "/root/qihuang/app/data/usage")
+    out = {
+        "available": False,
+        "label": "平台自身成本 · 自生长引擎",
+        "scope": "platform",
+        "is_tenant_billed": False,
+        "source": "8601 auto_growth engine / data/usage/*.json",
+        "total_calls": 0,
+        "success_calls": 0,
+        "failed_calls": 0,
+        "total_tokens": 0,
+        "total_cost_rmb": 0.0,
+        "by_model": {},
+        "by_class": {},
+        "daily_breakdown": {},
+        "note": "此项为平台自生长引擎消耗的 LLM 成本，由平台承担，不计入任何租户/客户账单。",
+    }
+    try:
+        pattern = os.path.join(base, f"{target_month}-*.json")
+        files = sorted(_glob.glob(pattern))
+        if not files:
+            out["note"] = f"未在 {base} 找到 {target_month} 的 8601 用量文件（本月引擎可能尚未产生调用）。"
+            return out
+        for fp in files:
+            try:
+                with open(fp, "r", encoding="utf-8") as f:
+                    records = _json.load(f)
+            except (_json.JSONDecodeError, IOError):
+                continue
+            for r in records:
+                out["total_calls"] += 1
+                if r.get("success", True):
+                    out["success_calls"] += 1
+                else:
+                    out["failed_calls"] += 1
+                tok = int(r.get("total_tokens", 0) or 0)
+                cost = float(r.get("cost_rmb", 0.0) or 0.0)
+                out["total_tokens"] += tok
+                out["total_cost_rmb"] = round(out["total_cost_rmb"] + cost, 4)
+                m = r.get("model", "unknown")
+                if m not in out["by_model"]:
+                    out["by_model"][m] = {"calls": 0, "total_tokens": 0, "cost_rmb": 0.0}
+                out["by_model"][m]["calls"] += 1
+                out["by_model"][m]["total_tokens"] += tok
+                out["by_model"][m]["cost_rmb"] = round(out["by_model"][m]["cost_rmb"] + cost, 4)
+                c = r.get("model_class", "unknown")
+                if c not in out["by_class"]:
+                    out["by_class"][c] = {"calls": 0, "total_tokens": 0, "cost_rmb": 0.0}
+                out["by_class"][c]["calls"] += 1
+                out["by_class"][c]["total_tokens"] += tok
+                out["by_class"][c]["cost_rmb"] = round(out["by_class"][c]["cost_rmb"] + cost, 4)
+                ts = (r.get("timestamp") or "")[:10]
+                if ts:
+                    if ts not in out["daily_breakdown"]:
+                        out["daily_breakdown"][ts] = {"calls": 0, "total_tokens": 0, "cost_rmb": 0.0}
+                    out["daily_breakdown"][ts]["calls"] += 1
+                    out["daily_breakdown"][ts]["total_tokens"] += tok
+                    out["daily_breakdown"][ts]["cost_rmb"] = round(out["daily_breakdown"][ts]["cost_rmb"] + cost, 4)
+        out["available"] = out["total_calls"] > 0
+    except Exception as e:
+        out["note"] = f"读取 8601 用量文件失败: {e}"
+    return out
+
+
 @router.get("/billing/usage", summary="用量查询")
 async def get_usage(
     tenant_id: Optional[str] = Query(None),
@@ -812,6 +891,8 @@ async def get_usage(
             daily[day]["calls"] += 1
             daily[day]["tokens"] += l.tokens_used or 0
 
+        platform_cost = get_platform_self_growth_cost(period)
+
         return success(data={
             "period": period,
             "total_calls": total_calls,
@@ -819,6 +900,7 @@ async def get_usage(
             "total_cost_cents": round(total_cost, 2),
             "d3_module_calls": d3_calls,
             "daily_breakdown": dict(sorted(daily.items())[-30:]),
+            "platform_cost": platform_cost,
         })
     finally:
         db.close()
