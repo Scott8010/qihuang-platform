@@ -129,7 +129,7 @@
         <td>health + 页面 + 关键端点</td>
         <td>
           <code>curl http://111.231.63.73:8602/platform/health</code> → <code>status: ok</code><br>
-          页面：<code>/admin/</code>、<code>/admin-static/admin.html</code>、<code>/admin-static/edu.html</code>、<code>/admin-static/medical.html</code> 等<br>
+          页面：<code>/admin/</code>、<code>/admin/billing_ledger.html</code>（双账本）等<br>
           关键端点：<code>GET /admin/v1/roles/role_admin</code>（无 token → <span class="pass">401</span> 非 404，证明路由已注册）
         </td>
         <td>health ok；所有页面 200；关键端点返回真实响应（非 404）</td>
@@ -150,7 +150,7 @@
 <section>
   <h2>三、红线（禁止项 · 违反即视为部署事故）</h2>
   <ul class="redlines">
-    <li><b>红线1：</b>禁止把接口健康检查 JSON（如 <code>/platform/health</code> 返回的 <code>{"status":"ok"}</code>）当成"页面已部署"。页面入口是 <code>/admin/</code>、<code>/admin-static/*.html</code>。</li>
+    <li><b>红线1：</b>禁止把接口健康检查 JSON（如 <code>/platform/health</code> 返回的 <code>{"status":"ok"}</code>）当成"页面已部署"。页面入口是 <code>/admin/</code>（React 控制台）、<code>/admin/billing_ledger.html</code>（双账本报告）。</li>
     <li><b>红线2：</b>禁止 push 后未确认 CI 实际状态（四 job 全绿）就声称"部署成功"。这是 2026-08-09 误报老黄的根因。</li>
     <li><b>红线3：</b>禁止仓库根目录存在与包内同名的模块目录（<code>./control</code>、<code>./rbac</code> 等）。pytest 加载错模块 → test 红 → CD 门禁挡住 → 部署不跑。</li>
     <li><b>红线4：</b>禁止提交未 <code>git add</code> 的前端文件。untracked 文件 CD（rsync git checkout）不会同步，服务器上页面 404。</li>

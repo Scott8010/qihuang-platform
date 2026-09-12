@@ -43,8 +43,8 @@ DEFAULT_REPO = "Scott8010/qihuang-platform"
 # 故门禁必须打域名(https)而非直连 IP:Port（直连会连不上，造成假阴性）。
 DEFAULT_SERVER = "https://yshealth.com.cn"
 EXPECTED_JOBS = ["代码检查", "测试 Python 3.13", "测试 Python 3.12", "部署到生产服务器"]
-# 路径实测：健康检查 + React 控制台 + 旧版控制端
-SERVER_PATHS = ["/platform/health", "/admin/", "/admin-static/admin.html"]
+# 路径实测：健康检查 + React 控制台 + 双账本报告（旧版控制端已于 2026-09-12 清理）
+SERVER_PATHS = ["/platform/health", "/admin/", "/admin/billing_ledger.html"]
 # fortune Agent 专项：401=路由已注册且鉴权生效(已上线)，404=未上线
 FORTUNE_PATH = "/api/v1/agent/fortune/dashboard"
 

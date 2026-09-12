@@ -18,6 +18,7 @@ import Monitor from "@/pages/Monitor";
 import AgentCenter from "@/pages/AgentCenter";
 import PlanUpgrade from "@/pages/PlanUpgrade";
 import CapabilityCenter from "@/pages/CapabilityCenter";
+import Ledger from "@/pages/Ledger";
 
 const nav: { id: string; label: string; icon: LucideIcon; desc?: string }[] = [
   { id: "dashboard", label: "运营总览", icon: LayoutDashboard },
@@ -265,6 +266,7 @@ export default function App() {
           {page === "content" && <Content />}
           {page === "monitor" && <Monitor />}
           {page === "planupgrade" && <PlanUpgrade />}
+          {page === "ledger" && <Ledger />}
         </main>
       </div>
 

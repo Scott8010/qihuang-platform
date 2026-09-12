@@ -245,24 +245,9 @@ except ImportError as e:
 
 # ═══════════════════════════════════════════════════════════════
 # 控制端静态页面托管（解决 file:// 协议 Failed to fetch 问题）
+# 旧版 frontend-admin（控制端 HTML 入口）已于 2026-09-12 清理；
+# 运营控制台统一由嵌套 qihuang_platform/main.py 的 React /admin 承载。
 # ═══════════════════════════════════════════════════════════════
-ADMIN_DIR = Path(__file__).resolve().parent / "frontend-admin"
-if ADMIN_DIR.exists():
-    app.mount("/admin-static", StaticFiles(directory=str(ADMIN_DIR)), name="admin-static")
-    print(f"[Platform] 控制端静态文件已挂载 → /admin-static/ (目录: {ADMIN_DIR})")
-
-@app.get("/")
-async def root_redirect():
-    """根路径重定向到控制端"""
-    return RedirectResponse(url="/admin")
-
-@app.get("/admin")
-async def admin_page():
-    """返回控制端 HTML"""
-    html_path = ADMIN_DIR / "admin.html"
-    if html_path.exists():
-        return RedirectResponse(url="/admin-static/admin.html")
-    return JSONResponse({"detail": "控制端页面未找到"}, status_code=404)
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -215,12 +215,12 @@ app.add_middleware(RateLimitHeaderMiddleware)    # 限流响应头
 
 # ─── 运营控制台 /admin 不缓存 ───
 # 入口 index.html 文件名固定（不带 hash），浏览器一旦缓存旧版就看不到新构建
-# （如 Agent 中台「套餐专家团组合」构件 B）。对 /admin 与 /admin-static 全路径禁用缓存。
+# （如 Agent 中台「套餐专家团组合」构件 B）。对 /admin 全路径禁用缓存。
 @app.middleware("http")
 async def no_cache_admin_console(request: Request, call_next):
     resp = await call_next(request)
     p = request.url.path
-    if p == "/admin" or p.startswith("/admin/") or p.startswith("/admin-static/"):
+    if p == "/admin" or p.startswith("/admin/"):
         resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         resp.headers["Pragma"] = "no-cache"
         resp.headers["Expires"] = "0"
@@ -488,42 +488,33 @@ except ImportError as e:
 # ═══════════════════════════════════════════════════════════════
 # 运营控制台静态页面托管（React SPA 统一入口）
 # 入口合一，数据同源 → 通过角色/权限区分各场景管理
+# 旧版 frontend-admin（admin/business/console/ops...）已于 2026-09-12 清理；
+# 唯一活依赖「双账本」已归口到 frontend-admin-react/public/billing_ledger.html，
+# 由 React 控制台 Ledger 页以 iframe /admin/billing_ledger.html 内嵌。
 # ═══════════════════════════════════════════════════════════════
 ADMIN_DIR = Path(__file__).resolve().parent.parent / "frontend-admin-react" / "dist"
-LEGACY_ADMIN_DIR = Path(__file__).resolve().parent / "frontend-admin"
 
 if ADMIN_DIR.exists():
     app.mount("/admin", NoCacheStaticFiles(directory=str(ADMIN_DIR), html=True), name="admin-console")
     print(f"[Platform] 运营控制台(React)已挂载 → /admin/ (目录: {ADMIN_DIR})")
 
-if LEGACY_ADMIN_DIR.exists():
-    # 旧版 HTML 入口（控制端反馈审核台等）始终并行挂载，不依赖 React 是否存在
-    app.mount("/admin-static", NoCacheStaticFiles(directory=str(LEGACY_ADMIN_DIR)), name="admin-static")
-    print(f"[Platform] 管理端(旧版HTML)已挂载 → /admin-static/ (目录: {LEGACY_ADMIN_DIR})")
-
 
 @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
 async def root_redirect():
-    """根路径重定向到新版 React 运营控制台（主入口）"""
-    if ADMIN_DIR.exists():
-        return RedirectResponse(url="/admin/")
-    return RedirectResponse(url="/admin-static/admin.html")
+    """根路径重定向到 React 运营控制台（主入口）"""
+    return RedirectResponse(url="/admin/")
 
 
 @app.api_route("/ops", methods=["GET", "HEAD"], include_in_schema=False)
 async def ops_page():
     """运维端 → 统一控制台"""
-    if ADMIN_DIR.exists():
-        return RedirectResponse(url="/admin/")
-    return JSONResponse({"detail": "请访问 /admin"}, status_code=404)
+    return RedirectResponse(url="/admin/")
 
 
 @app.api_route("/business", methods=["GET", "HEAD"], include_in_schema=False)
 async def business_page():
     """运营端 → 统一控制台"""
-    if ADMIN_DIR.exists():
-        return RedirectResponse(url="/admin/")
-    return JSONResponse({"detail": "请访问 /admin"}, status_code=404)
+    return RedirectResponse(url="/admin/")
 
 
 # 启动入口
