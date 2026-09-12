@@ -891,6 +891,48 @@ async def get_usage(
             daily[day]["calls"] += 1
             daily[day]["tokens"] += l.tokens_used or 0
 
+        # 按 agent / endpoint 拆分（agent_key 从 /api/v1/agent/{agent}/... 路径解析）
+        def _agent_from_endpoint(ep: str) -> str:
+            if not ep:
+                return "unknown"
+            parts = [p for p in ep.split("/") if p]
+            # 期望 ['api','v1','agent',{agent},...]
+            if len(parts) >= 4 and parts[0] == "api" and parts[1] == "v1" and parts[2] == "agent":
+                return parts[3]
+            return ep
+
+        by_agent = {}
+        by_endpoint = {}
+        for l in logs:
+            agent = _agent_from_endpoint(l.endpoint or "")
+            ep = l.endpoint or "unknown"
+            cost = l.cost_cents or 0
+            tokens = l.tokens_used or 0
+
+            if agent not in by_agent:
+                by_agent[agent] = {"calls": 0, "tokens": 0, "cost_cents": 0.0}
+            by_agent[agent]["calls"] += 1
+            by_agent[agent]["tokens"] += tokens
+            by_agent[agent]["cost_cents"] = round(by_agent[agent]["cost_cents"] + cost, 4)
+
+            if ep not in by_endpoint:
+                by_endpoint[ep] = {"agent": agent, "calls": 0, "tokens": 0, "cost_cents": 0.0}
+            by_endpoint[ep]["calls"] += 1
+            by_endpoint[ep]["tokens"] += tokens
+            by_endpoint[ep]["cost_cents"] = round(by_endpoint[ep]["cost_cents"] + cost, 4)
+
+        # 最近调用明细（脱敏：不返回原始请求体）
+        recent = []
+        for l in sorted(logs, key=lambda x: x.timestamp or datetime.min.replace(tzinfo=timezone.utc), reverse=True)[:20]:
+            recent.append({
+                "agent": _agent_from_endpoint(l.endpoint or ""),
+                "endpoint": l.endpoint or "unknown",
+                "tokens_used": l.tokens_used or 0,
+                "cost_cents": l.cost_cents or 0,
+                "timestamp": l.timestamp.strftime("%m-%d %H:%M") if l.timestamp else "—",
+                "status_code": l.status_code,
+            })
+
         platform_cost = get_platform_self_growth_cost(period)
 
         return success(data={
@@ -900,6 +942,9 @@ async def get_usage(
             "total_cost_cents": round(total_cost, 2),
             "d3_module_calls": d3_calls,
             "daily_breakdown": dict(sorted(daily.items())[-30:]),
+            "by_agent": dict(sorted(by_agent.items(), key=lambda x: x[1]["tokens"], reverse=True)),
+            "by_endpoint": dict(sorted(by_endpoint.items(), key=lambda x: x[1]["tokens"], reverse=True)),
+            "recent_records": recent,
             "platform_cost": platform_cost,
         })
     finally:

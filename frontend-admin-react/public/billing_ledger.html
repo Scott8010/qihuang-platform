@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>岐黄智脑 · 双账本视图（已打通）</title>
+<title>岐黄智脑 · 用量核算</title>
 <style>
   :root{
     --green:#2e9e5b; --green-d:#1f7a44; --blue:#2b6cb0; --blue-d:#1f4f86;
@@ -11,7 +11,7 @@
   }
   *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
   body{background:var(--bg);color:var(--ink);padding:28px;line-height:1.5;}
-  .wrap{max-width:1080px;margin:0 auto;}
+  .wrap{max-width:1200px;margin:0 auto;}
   header{margin-bottom:18px;}
   h1{font-size:22px;color:var(--green-d);display:flex;align-items:center;gap:10px;}
   h1 .dot{width:12px;height:12px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px rgba(46,158,91,.15);}
@@ -42,8 +42,10 @@
   .xlabels{display:flex;gap:3px;font-size:9px;color:var(--muted);margin-top:3px;overflow:hidden;}
   .xlabels span{flex:1;text-align:center;}
   table.mini{width:100%;font-size:12px;border-collapse:collapse;margin-top:4px;}
-  table.mini td{padding:3px 6px;border-bottom:1px solid var(--line);}
+  table.mini th{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);color:var(--muted);font-weight:600;}
+  table.mini td{padding:5px 6px;border-bottom:1px solid var(--line);}
   table.mini td:last-child{text-align:right;color:var(--muted);}
+  table.mini tr:hover td{background:#fafcfb;}
   .status{margin:20px 0;padding:14px 18px;border-radius:10px;font-size:14px;}
   .status.err{background:#fdecea;color:#b71c1c;}
   .status.info{background:#eef5ff;color:var(--blue-d);}
@@ -51,13 +53,17 @@
   .divider{height:1px;background:var(--line);margin:26px 0;}
   .legend{font-size:12px;color:var(--muted);margin-top:8px;}
   .legend b{color:var(--ink);}
+  .muted{color:var(--muted);}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media(max-width:900px){.two-col{grid-template-columns:1fr;}}
+  .full-card{grid-column:1/-1;}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1><span class="dot"></span>岐黄智脑 · 双账本视图</h1>
-    <div class="sub">8601 自生长引擎账本 与 8602 租户/客户账本 已打通并分列展示。两本账性质不同，请勿混算。</div>
+    <h1><span class="dot"></span>岐黄智脑 · 用量核算</h1>
+    <div class="sub">8602 租户/客户消耗按 <b>agent</b> 与 <b>业务端点</b> 拆分；8601 自生长引擎成本独立列示。两本账性质不同，请勿混算。</div>
   </header>
 
   <div class="toolbar">
@@ -102,11 +108,40 @@
       <table class="mini" id="p_model"></table>
       <div class="legend">数据来源：8601 自生长引擎 <code>data/usage/*.json</code>（引擎直连模型供应商，平台自付成本）。</div>
     </div>
+
+    <!-- agent 维度拆分 -->
+    <div class="card full-card">
+      <h2>按 Agent 拆分</h2>
+      <span class="badge tenant">租户 / 客户消耗</span>
+      <div class="two-col" style="margin-top:10px;">
+        <div>
+          <div class="section-title">调用次数 · Token · 费用</div>
+          <table class="mini" id="agent_table"></table>
+        </div>
+        <div>
+          <div class="section-title">按业务端点（场景）Top 10</div>
+          <table class="mini" id="endpoint_table"></table>
+        </div>
+      </div>
+      <div class="legend">agent 名称从调用端点 <code>/api/v1/agent/{agent}/...</code> 自动解析；端点即业务场景入口。</div>
+    </div>
+
+    <!-- 最近调用明细 -->
+    <div class="card full-card">
+      <h2>最近调用明细</h2>
+      <span class="badge tenant">最近 20 条</span>
+      <table class="mini" id="recent_table" style="margin-top:10px;">
+        <thead>
+          <tr><th>时间</th><th>Agent</th><th>业务端点（场景）</th><th>Status</th><th style="text-align:right">Token</th><th style="text-align:right">费用</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </div>
 
   <div class="divider"></div>
   <div class="legend">
-    <b>口径说明：</b>「租户/客户账本」是向租户计费的依据；「平台自身成本」是岐黄智脑自生长引擎运行消耗的 LLM 成本，由平台自己承担，<b>不计入任何租户账单</b>。两者独立列示，互不包含。
+    <b>口径说明：</b>「租户/客户账本」是向租户计费的依据，已按 agent 与业务端点拆分明细；「平台自身成本」是岐黄智脑自生长引擎运行消耗的 LLM 成本，由平台自己承担，<b>不计入任何租户账单</b>。两者独立列示，互不包含。
   </div>
 </div>
 
@@ -145,6 +180,41 @@ function renderModelTable(elId, byModel){
   });
 }
 
+function renderAgentTable(elId, byAgent){
+  const el=document.getElementById(elId); el.innerHTML="";
+  const rows=Object.entries(byAgent||{}).sort((a,b)=>b[1].tokens-a[1].tokens);
+  if(!rows.length){ el.innerHTML="<tr><td>本月无数据</td></tr>"; return; }
+  rows.forEach(([a,o])=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td><b>${a}</b></td><td>${fmt(o.calls)} 次 · ${fmt(o.tokens)} tok · ${rmb(o.cost_cents)}</td>`;
+    el.appendChild(tr);
+  });
+}
+
+function renderEndpointTable(elId, byEndpoint){
+  const el=document.getElementById(elId); el.innerHTML="";
+  const rows=Object.entries(byEndpoint||{}).sort((a,b)=>b[1].tokens-a[1].tokens).slice(0,10);
+  if(!rows.length){ el.innerHTML="<tr><td>本月无数据</td></tr>"; return; }
+  rows.forEach(([ep,o])=>{
+    const short = ep.length > 38 ? "…"+ep.slice(-36) : ep;
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td title="${ep}"><b>${o.agent}</b><br><span style="color:var(--muted)">${short}</span></td><td>${fmt(o.tokens)} tok · ${rmb(o.cost_cents)}</td>`;
+    el.appendChild(tr);
+  });
+}
+
+function renderRecentTable(elId, recent){
+  const el=document.getElementById(elId).querySelector("tbody"); el.innerHTML="";
+  const list = recent || [];
+  if(!list.length){ el.innerHTML="<tr><td colspan='6'>本月无数据</td></tr>"; return; }
+  list.forEach((r)=>{
+    const tr=document.createElement("tr");
+    const statusColor = (r.status_code===200||r.status_code===201) ? "var(--green-d)" : "#b71c1c";
+    tr.innerHTML=`<td>${r.timestamp}</td><td><b>${r.agent}</b></td><td title="${r.endpoint}" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.endpoint}</td><td style="color:${statusColor};font-weight:600;">${r.status_code||"—"}</td><td style="text-align:right">${fmt(r.tokens_used)}</td><td style="text-align:right">${rmb(r.cost_cents)}</td>`;
+    el.appendChild(tr);
+  });
+}
+
 async function load(){
   const statusEl=document.getElementById("status");
   const token=localStorage.getItem("qh_admin_token");
@@ -154,7 +224,7 @@ async function load(){
     document.getElementById("cards").style.display="none";
     return;
   }
-  statusEl.className="status info"; statusEl.textContent="正在拉取双账本数据…";
+  statusEl.className="status info"; statusEl.textContent="正在拉取用量核算数据…";
   try{
     const resp=await fetch(API,{headers:{Authorization:"Bearer "+token}});
     if(resp.status===401){
@@ -172,6 +242,10 @@ async function load(){
     document.getElementById("t_cost").textContent=rmb(d.total_cost_cents);
     document.getElementById("t_d3").textContent=fmt(d.d3_module_calls);
     renderBars("t_bars","t_x",d.daily_breakdown);
+    // agent / endpoint 拆分
+    renderAgentTable("agent_table", d.by_agent);
+    renderEndpointTable("endpoint_table", d.by_endpoint);
+    renderRecentTable("recent_table", d.recent_records);
     // 平台账本
     const p=d.platform_cost||{};
     document.getElementById("p_calls").textContent=fmt(p.total_calls);
@@ -186,7 +260,7 @@ async function load(){
     renderModelTable("p_model",p.by_model);
     document.getElementById("cards").style.display="grid";
     statusEl.className="status info";
-    statusEl.innerHTML="<span class='ok'>✓ 账本已打通</span> · 租户账本(可计费) 与 平台自生长成本(平台承担) 已分列展示。";
+    statusEl.innerHTML="<span class='ok'>✓ 用量核算已打通</span> · 租户消耗(可计费) 与 平台自生长成本(平台承担) 已分列展示。";
   }catch(e){
     statusEl.className="status err";
     statusEl.textContent="拉取失败："+e.message;

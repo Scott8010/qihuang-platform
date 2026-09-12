@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import {
   LayoutDashboard, Building2, ShieldCheck, KeyRound, BarChart3,
   BookOpenCheck, Activity, Search, Bell, Sprout, ChevronDown, LogOut,
-  Users as UsersIcon, Eye, EyeOff, Lock, Bot, CreditCard, Boxes, Scale,
+  Users as UsersIcon, Eye, EyeOff, Lock, Bot, CreditCard, Boxes,
+  ChevronRight,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { C } from "@/lib/types";
@@ -20,15 +21,27 @@ import PlanUpgrade from "@/pages/PlanUpgrade";
 import CapabilityCenter from "@/pages/CapabilityCenter";
 import Ledger from "@/pages/Ledger";
 
-const nav: { id: string; label: string; icon: LucideIcon; desc?: string }[] = [
+type NavChild = { id: string; label: string; desc?: string };
+type NavItem =
+  | { id: string; label: string; icon: LucideIcon; desc?: string }
+  | { id: string; label: string; icon: LucideIcon; children: NavChild[] };
+
+const nav: NavItem[] = [
   { id: "dashboard", label: "运营总览", icon: LayoutDashboard },
   { id: "agents", label: "Agent 中台", icon: Bot },
   { id: "tenants", label: "租户管理", icon: Building2 },
   { id: "users", label: "用户管理", icon: UsersIcon },
   { id: "roles", label: "权限管理", icon: ShieldCheck },
   { id: "keys", label: "密钥配额", icon: KeyRound },
-  { id: "billing", label: "结算中心", icon: BarChart3 },
-  { id: "ledger", label: "双账本", icon: Scale, desc: "平台成本与租户消耗" },
+  {
+    id: "billing-group",
+    label: "结算中心",
+    icon: BarChart3,
+    children: [
+      { id: "billing", label: "结算概览" },
+      { id: "ledger", label: "用量核算", desc: "按 agent / 场景拆分" },
+    ],
+  },
   { id: "capability", label: "能力中心", icon: Boxes },
   { id: "content", label: "内容管控", icon: BookOpenCheck },
   { id: "monitor", label: "监控运维", icon: Activity },
@@ -46,6 +59,7 @@ export default function App() {
 
   // 修改密码弹窗状态
   const [menuOpen, setMenuOpen] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({ "billing-group": true });
   const [showPwdModal, setShowPwdModal] = useState(false);
   const [cpOld, setCpOld] = useState("");
   const [cpNew, setCpNew] = useState("");
@@ -154,7 +168,7 @@ export default function App() {
   }
 
   const identity = getIdentity();
-  const current = nav.find((n) => n.id === page)!;
+  const current = nav.flatMap((n) => ("children" in n ? [n, ...n.children] : [n])).find((n) => n.id === page)!;
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: C.bg, color: C.ink }}>
@@ -172,6 +186,52 @@ export default function App() {
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           <div className="px-3 pt-2 pb-1 text-[13px] font-medium" style={{ color: C.light }}>运营管理</div>
           {nav.map((n) => {
+            if ("children" in n) {
+              const open = !!expanded[n.id];
+              const childActive = n.children.some((c) => c.id === page);
+              return (
+                <div key={n.id} className="space-y-0.5">
+                  <button
+                    onClick={() => setExpanded((prev) => ({ ...prev, [n.id]: !prev[n.id] }))}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[16px] transition-colors"
+                    style={{
+                      background: childActive ? C.soft : "transparent",
+                      color: childActive ? C.primary : C.mid,
+                      fontWeight: childActive ? 600 : 400,
+                    }}
+                  >
+                    <n.icon className="w-[18px] h-[18px]" style={{ color: childActive ? C.primary : C.light }} />
+                    <span className="flex-1 text-left">{n.label}</span>
+                    <ChevronRight
+                      className="w-4 h-4 transition-transform"
+                      style={{ color: C.light, transform: open ? "rotate(90deg)" : "rotate(0deg)" }}
+                    />
+                  </button>
+                  {open && (
+                    <div className="pl-9 space-y-0.5">
+                      {n.children.map((c) => {
+                        const cActive = page === c.id;
+                        return (
+                          <button
+                            key={c.id}
+                            onClick={() => setPage(c.id)}
+                            className="w-full text-left px-3 py-2 rounded-lg text-[15px] transition-colors"
+                            style={{
+                              background: cActive ? C.soft : "transparent",
+                              color: cActive ? C.primary : C.mid,
+                              fontWeight: cActive ? 600 : 400,
+                            }}
+                          >
+                            <span className="block">{c.label}</span>
+                            {c.desc && <span className="block text-[12px] font-normal leading-tight" style={{ color: C.light }}>{c.desc}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
             const active = page === n.id;
             return (
               <button
