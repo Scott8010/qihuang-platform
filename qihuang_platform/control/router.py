@@ -2800,7 +2800,7 @@ async def agent_center_usage(
         items = [
             {
                 "agent_key": key,
-                "name": spec.get("name") or key,
+                "name": agents[key].get("name") or key,
                 "calls": u["calls"],
                 "tokens": u["tokens"],
                 "cost_cents": u["cost_cents"],
