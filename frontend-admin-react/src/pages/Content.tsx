@@ -117,9 +117,17 @@ export default function Content() {
   const handleAction = async (id: string, action: "approve" | "reject") => {
     setBusyId(id);
     try {
-      await reviewAction(id, action);
+      const r: any = await reviewAction(id, action);
+      // 后端拦截（脏数据/自生长低置信需填意见/空壳）时返回 code!=0，
+      // 必须把原因弹出来，否则静默刷新会让人以为"通过没反应"。
+      if (r && r.code !== 0) {
+        alert(`${action === "approve" ? "通过" : "驳回"}失败：${r.message || "未知错误"}`);
+        return;
+      }
       await loadReviews();   // 以后端为准重新拉取，不做本地假删除
       if (detail?.id === id) setDetail(null);
+    } catch (e: any) {
+      alert(`${action === "approve" ? "通过" : "驳回"}失败：${e?.message || "网络错误"}`);
     } finally {
       setBusyId("");
     }

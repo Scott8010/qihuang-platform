@@ -1754,7 +1754,7 @@ async def admin_dashboard(admin: dict = Depends(get_current_admin)):
         ).scalar()
 
         # KG统计
-        kg_pending = db.query(KgReviewItem).filter(KgReviewItem.status == "pending").count()
+        kg_pending = db.query(KgReviewItem).filter(KgReviewItem.status == "PENDING").count()
 
         # 最近操作（8/30 升级：联表 user/tenant 取出人类可读名，避免 UUID 直淋页面）
         recent_ops = []
