@@ -1,12 +1,57 @@
 #!/usr/bin/env bash
-# Fix cdn.yshealth.com.cn.conf:
-#  - drop any orphaned "location /" block appended OUTSIDE the server block
-#    (caused by an earlier `echo >> file` that broke `nginx -t`, so reload never ran)
-#  - ensure a valid `location / { proxy_pass http://127.0.0.1:8602; ... }`
-#    exists INSIDE the server block (replacing the stale `return 404`)
-# Safe to re-run: idempotent.
+# Production nginx repair (run via CI on push with 'nginx-fix-cdn' in commit msg).
+# Phase 1: remove DUPLICATE default_server across /etc/nginx/conf.d/*.conf
+#          (a dup default_server makes `nginx -t` fail -> reload never runs -> stale config).
+# Phase 2: fix cdn.yshealth.com.cn.conf (drop orphaned location block outside the
+#          server block, ensure a valid `location / { proxy_pass 127.0.0.1:8602; }`).
+# Safe to re-run (idempotent).
 set -e
 
+# ---------- Phase 1: dedupe default_server (use os.listdir, not glob, for portability) ----------
+if command -v python3 >/dev/null 2>&1; then
+python3 - <<'PYEOF'
+import re, os
+conf_dir = '/etc/nginx/conf.d'
+confs = []
+if os.path.isdir(conf_dir):
+    confs = [os.path.join(conf_dir, f) for f in os.listdir(conf_dir) if f.endswith('.conf')]
+seen = {}
+changed = []
+for f in sorted(confs):
+    try:
+        lines = open(f, encoding='utf-8').read().splitlines(keepends=True)
+    except OSError:
+        continue
+    out = []
+    file_changed = False
+    for ln in lines:
+        m = re.search(r'listen\s+.*?(\d+)([^;]*default_server[^;]*);', ln)
+        if m:
+            port = m.group(1)
+            rest = m.group(2)
+            ssl = 'ssl' in rest
+            key = (port, ssl)
+            if seen.get(key):
+                new_rest = re.sub(r'\s*default_server', '', rest, count=1)
+                new_rest = re.sub(r'\s+', ' ', new_rest).strip()
+                ln = ('    listen %s %s;\n' % (port, new_rest)) if new_rest else ('    listen %s;\n' % port)
+                file_changed = True
+                changed.append('%s :%s%s' % (f, port, ' ssl' if ssl else ''))
+            else:
+                seen[key] = True
+        out.append(ln)
+    if file_changed:
+        open(f, 'w', encoding='utf-8').write(''.join(out))
+if changed:
+    print('[fix-nginx] stripped duplicate default_server on: ' + ', '.join(changed))
+else:
+    print('[fix-nginx] no duplicate default_server found')
+PYEOF
+else
+  echo '[fix-nginx] WARNING: python3 missing, skipping default_server dedupe' >&2
+fi
+
+# ---------- Phase 2: fix cdn.yshealth.com.cn.conf ----------
 CDN=${1:-/etc/nginx/conf.d/cdn.yshealth.com.cn.conf}
 if [ ! -f "$CDN" ]; then
   echo "[fix-cdn-nginx] $CDN not found, nothing to do"
@@ -119,3 +164,6 @@ sleep 1
 echo "[fix-cdn-nginx] self check (cdn SNI)"
 curl -sk --resolve cdn.yshealth.com.cn:443:127.0.0.1 -o /dev/null -w "GET https://cdn.yshealth.com.cn/platform/health        -> %{http_code}\n" --max-time 5 https://cdn.yshealth.com.cn/platform/health
 curl -sk --resolve cdn.yshealth.com.cn:443:127.0.0.1 -o /dev/null -w "GET https://cdn.yshealth.com.cn/billing/v1/wallet/demo -> %{http_code}\n" --max-time 5 https://cdn.yshealth.com.cn/billing/v1/wallet/demo
+echo "[fix-cdn-nginx] self check (boss IP URL)"
+curl -sk -o /dev/null -w "GET https://111.231.63.73/platform/health        -> %{http_code}\n" --max-time 5 https://111.231.63.73/platform/health
+curl -sk -o /dev/null -w "GET https://111.231.63.73/billing/v1/wallet/demo -> %{http_code}\n" --max-time 5 https://111.231.63.73/billing/v1/wallet/demo

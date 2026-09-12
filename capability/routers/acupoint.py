@@ -10,7 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
-from qihuang_platform.gateway.deps import get_current_user
+from qihuang_platform.gateway.deps import get_current_user, get_current_principal
 from qihuang_platform.gateway.response import success, error
 from qihuang_platform.acupoint.data import acupoint_data
 
@@ -165,10 +165,75 @@ async def search_acupoints(
     })
 
 
+@router.get("/symptom-prescription")
+async def symptom_prescription(
+    symptoms: str = Query(..., description="症状名，逗号分隔，如 近视眼,眼疲劳"),
+    user=Depends(get_current_principal),
+):
+    """
+    按症状查穴位处方（主穴必选 / 配穴随症 / 经络 / 疗法 / 调理建议）
+
+    数据来源：acupoint/symptom_acupoints.json（提取自岐黄三境.html SYMPTOMS）
+    归属：3D穴位套餐（module:3d），与 /acupoint/guide 同级。
+    PAD 接待流程「症状查穴位」抽屉右侧面板消费此接口。
+
+    注册顺序说明：本端点必须定义在 catch-all /{acupoint_code} 之前，
+    否则 Starlette 会按注册顺序把 /symptom-prescription 匹配到 catch-all 上。
+    """
+    import json as _json
+    import os as _os
+
+    db_path = _os.path.join(_os.path.dirname(__file__), "symptom_acupoints.json")
+    try:
+        with open(db_path, "r", encoding="utf-8") as f:
+            db = _json.load(f)
+    except FileNotFoundError:
+        return error("DATA_MISSING", "症状处方数据未加载(symptom_acupoints.json)")
+
+    sym_db = db.get("symptoms", {})
+    therapy_map = db.get("therapy_map", {})
+
+    req = [s.strip() for s in symptoms.split(",") if s.strip()]
+    prescriptions = []
+    merged_main, merged_support, merged_mer, merged_ther = set(), set(), set(), set()
+
+    for s in req:
+        info = sym_db.get(s)
+        if not info:
+            continue
+        therapy_names = [therapy_map.get(t, t) for t in info.get("therapy", [])]
+        prescriptions.append({
+            "symptom": s,
+            "meridians": info.get("meridians", []),
+            "main": info.get("main", []),
+            "support": info.get("support", []),
+            "therapy": therapy_names,
+            "desc": info.get("desc", ""),
+            "source": info.get("source", ""),
+        })
+        merged_main.update(info.get("main", []))
+        merged_support.update(info.get("support", []))
+        merged_mer.update(info.get("meridians", []))
+        merged_ther.update(info.get("therapy", []))
+
+    return success(data={
+        "symptoms": req,
+        "prescriptions": prescriptions,
+        "merged": {
+            "main": list(merged_main),
+            "support": list(merged_support),
+            "meridians": list(merged_mer),
+            "therapy": [therapy_map.get(t, t) for t in merged_ther],
+        },
+        "total_found": len(prescriptions),
+        "total_requested": len(req),
+    })
+
+
 @router.get("/{acupoint_code}")
 async def get_acupoint_detail(
     acupoint_code: str,
-    user=Depends(get_current_user),
+    user=Depends(get_current_principal),
 ):
     """
     获取单个穴位详情
