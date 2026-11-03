@@ -11,7 +11,7 @@ deploy_gate.py — 岐黄智脑商业化平台(8602) 部署门禁脚本
 1. 读取当前 HEAD commit
 2. 调 GitHub API 定位该 commit 对应的最新 Actions run（找不到则提示手动 workflow_dispatch）
 3. 轮询该 run 直到 completed，检查四个 job 结论：
-   - 代码检查 (lint) / 测试 Python 3.13 / 测试 Python 3.12 / 部署到生产服务器
+   - 代码检查 (lint) / 测试 (Python 3.13) / 测试 (Python 3.12) / deploy to prod
    - skipped 视为通过（如 docs 改动触发的 run，deploy 按设计跳过）
 4. 部署完成后实测生产服务器：health + 关键页面 + 关键端点
 5. 输出绿/红报告；exit code 0 = 全绿，1 = 有红
@@ -42,7 +42,7 @@ DEFAULT_REPO = "Scott8010/qihuang-platform"
 # 注：生产服务只监听 127.0.0.1:8602，对外经 nginx 反代 + 强制 HTTPS + Host 匹配，
 # 故门禁必须打域名(https)而非直连 IP:Port（直连会连不上，造成假阴性）。
 DEFAULT_SERVER = "https://yshealth.com.cn"
-EXPECTED_JOBS = ["代码检查", "测试 Python 3.13", "测试 Python 3.12", "部署到生产服务器"]
+EXPECTED_JOBS = ["代码检查", "测试 (Python 3.13)", "测试 (Python 3.12)", "deploy to prod"]
 # 路径实测：健康检查 + React 控制台 + 双账本报告（旧版控制端已于 2026-09-12 清理）
 SERVER_PATHS = ["/platform/health", "/admin/", "/admin/billing_ledger.html"]
 # fortune Agent 专项：401=路由已注册且鉴权生效(已上线)，404=未上线
@@ -84,6 +84,13 @@ def find_run(repo: str, head_sha: str, token: str, retries: int = 8, wait: int =
     for i in range(retries):
         try:
             data = api_get(f"/repos/{repo}/actions/runs?per_page=20&head_sha={head_sha}", token)
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                print(f"❌ GitHub 鉴权失败 (HTTP {e.code})：GH_TOKEN 无 actions:read 权限或已失效，请检查 token 权限/是否过期。")
+                return None
+            print(f"⚠️ 查询 runs 失败 (HTTP {e.code}): {e}")
+            time.sleep(wait)
+            continue
         except Exception as e:
             print(f"⚠️ 查询 runs 失败: {e}")
             time.sleep(wait)
@@ -186,9 +193,11 @@ def main():
 
     jobs = get_jobs(args.repo, run["id"], token)
     print(f"\n=== CI Jobs ({len(jobs)}) ===")
+    present_names = set()
     all_ok = True
     for j in jobs:
         name = j.get("name", "?")
+        present_names.add(name)
         concl = j.get("conclusion")
         if concl == "success":
             mark = "✅"
@@ -200,6 +209,14 @@ def main():
         print(f"  {mark}  {name}")
         if name in EXPECTED_JOBS and concl not in ("success", "skipped"):
             all_ok = False
+
+    # H1 修复：期望 job 必须全部出现在 jobs 列表（缺失 = 该 job 未生成，如 deploy 因分支/条件未跑）
+    # 否则门禁会「假绿」——该拦的没拦。
+    missing = [n for n in EXPECTED_JOBS if n not in present_names]
+    if missing:
+        all_ok = False
+        for n in missing:
+            print(f"  ❌ 缺失（未生成）  {n}")
 
     print(f"\n=== 服务器实测 {args.server} ===")
     srv = check_server(args.server, SERVER_PATHS)
