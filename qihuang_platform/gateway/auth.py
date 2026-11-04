@@ -13,6 +13,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict
 
 import jwt
+import logging
+
+logger = logging.getLogger("gateway.auth")
 
 # ---- 配置 ----
 # 生产：JWT 签名密钥必须由环境变量 QH_JWT_SECRET 注入（强随机 ≥32 bytes）。
@@ -33,6 +36,7 @@ REFRESH_TOKEN_EXPIRE_DAYS = 30    # 30天
 _users_db: Dict[str, dict] = {}        # user_id -> user_info
 _api_keys_db: Dict[str, dict] = {}     # app_key -> {app_secret, tenant_id, ...}
 _token_blacklist: set = set()          # 已撤销的token jti
+_used_nonces: Dict[str, float] = {}    # nonce 防重放：app_key:nonce -> 使用时间戳
 
 
 # ========== JWT Token 体系 ==========
@@ -91,9 +95,50 @@ def verify_token(token: str, token_type: str = "access") -> Optional[dict]:
         return None
 
 
-def revoke_token(jti: str):
-    """撤销 token（加入黑名单）"""
+def revoke_token(jti: str, expires_ts: Optional[int] = None):
+    """撤销 token（加入内存黑名单 + 持久化 DB，防重启复活）。
+
+    expires_ts: token 的 exp（unix 秒）；未提供时按 refresh 最大有效期保守兜底。
+    """
+    if not jti:
+        return
     _token_blacklist.add(jti)
+    # 持久化到 DB（防服务重启后黑名单清空 → 已吊销 token 复活）
+    try:
+        from qihuang_platform.db.config import SessionLocal
+        from qihuang_platform.db.models import RevokedToken
+        if expires_ts:
+            exp = datetime.fromtimestamp(int(expires_ts), tz=timezone.utc)
+        else:
+            exp = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        db = SessionLocal()
+        try:
+            if not db.query(RevokedToken).filter_by(jti=jti).first():
+                db.add(RevokedToken(jti=jti, expires_at=exp))
+                db.commit()
+        finally:
+            db.close()
+    except Exception as e:  # 持久化失败不阻断吊销（内存仍生效，仅失去重启恢复能力）
+        logger.warning("[auth] 黑名单持久化失败: %s", e)
+
+
+def load_token_blacklist() -> int:
+    """启动冷加载：从 DB 恢复未过期的吊销 jti 到内存黑名单（防重启复活）。"""
+    try:
+        from qihuang_platform.db.config import SessionLocal
+        from qihuang_platform.db.models import RevokedToken
+        db = SessionLocal()
+        try:
+            now = datetime.now(timezone.utc)
+            rows = db.query(RevokedToken).filter(RevokedToken.expires_at > now).all()
+            for r in rows:
+                _token_blacklist.add(r.jti)
+            return len(rows)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning("[auth] 黑名单冷加载失败: %s", e)
+        return 0
 
 
 def register_user(user_id: str, tenant_id: str, org_id: str,
@@ -198,17 +243,40 @@ def verify_api_key(app_key: str, signature: str, method: str,
         app_key, key_info["app_secret"], method, path, timestamp, nonce, body
     )
     if hmac.compare_digest(expected, signature):
-        return key_info
+        return _accept_and_record_nonce(app_key, nonce, key_info)
 
-    # 密钥轮换并行期：旧密钥在 72h 内仍可被接受
-    for old_secret in key_info.get("prev_secrets", []):
+    # 密钥轮换并行期：旧密钥仅在 72h 内可被接受（带时间戳判断）
+    now_ts = time.time()
+    for old in key_info.get("prev_secrets", []):
+        old_secret = old["secret"] if isinstance(old, dict) else old
+        rotated_at = old["rotated_at"] if isinstance(old, dict) else None
+        # 旧格式（无时间戳）或超过 72h 的旧密钥一律不再接受（安全优先）
+        if rotated_at is None or (now_ts - rotated_at) > 72 * 3600:
+            continue
         old_expected = generate_api_signature(
             app_key, old_secret, method, path, timestamp, nonce, body
         )
         if hmac.compare_digest(old_expected, signature):
-            return key_info
+            return _accept_and_record_nonce(app_key, nonce, key_info)
 
     return None
+
+
+def _accept_and_record_nonce(app_key: str, nonce: str, key_info: dict) -> Optional[dict]:
+    """签名通过后记录 nonce（5 分钟窗口内同 nonce 拒绝重放）。"""
+    now_ts = time.time()
+    key = f"{app_key}:{nonce}"
+    last = _used_nonces.get(key)
+    if last is not None and (now_ts - last) < 300:
+        logger.warning("[auth] 检测到 nonce 重放: app_key=%s", app_key)
+        return None
+    _used_nonces[key] = now_ts
+    # 惰性清理过期 nonce，防内存无限增长
+    if len(_used_nonces) > 10000:
+        expired = [k for k, v in _used_nonces.items() if now_ts - v >= 300]
+        for k in expired:
+            del _used_nonces[k]
+    return key_info
 
 
 def get_api_key_info(app_key: str) -> Optional[dict]:
@@ -250,8 +318,10 @@ def update_api_key_secret(app_key: str, new_secret: str,
         return False
     if prev_secret:
         prev_list = key_info.setdefault("prev_secrets", [])
-        if prev_secret not in prev_list:
-            prev_list.append(prev_secret)
+        # 新版：prev_secrets 存 {secret, rotated_at}，供 verify 判断 72h 并行期
+        existing = [x["secret"] if isinstance(x, dict) else x for x in prev_list]
+        if prev_secret not in existing:
+            prev_list.append({"secret": prev_secret, "rotated_at": time.time()})
             if len(prev_list) > 3:
                 key_info["prev_secrets"] = prev_list[-3:]
     key_info["app_secret"] = new_secret

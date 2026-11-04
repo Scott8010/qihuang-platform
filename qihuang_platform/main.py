@@ -143,6 +143,14 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             print(f"[Platform] API Key 冷启动加载失败: {e}")
 
+        # token 黑名单冷启动加载：从 DB 恢复未过期的吊销 jti（防重启后已吊销 token 复活）
+        try:
+            from qihuang_platform.gateway.auth import load_token_blacklist
+            n = load_token_blacklist()
+            print(f"[Platform] 已冷加载 {n} 条吊销 token 到内存黑名单")
+        except Exception as e:
+            print(f"[Platform] 黑名单冷启动加载失败: {e}")
+
     except Exception as e:
         print(f"[Platform] 数据库初始化失败（可能已初始化）: {e}")
 

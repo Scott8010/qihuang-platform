@@ -185,7 +185,7 @@ async def logout(request: Request, user: dict = Depends(get_current_user)):
         try:
             payload = verify_token(token, "access")
             if payload:
-                revoke_token(payload.get("jti", ""))
+                revoke_token(payload.get("jti", ""), expires_ts=payload.get("exp"))
         except Exception:
             pass
     return success(message="已登出")

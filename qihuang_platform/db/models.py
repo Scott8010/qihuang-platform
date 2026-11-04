@@ -192,6 +192,15 @@ class CallLog(Base):
     timestamp = Column(DateTime, default=_now, index=True)
 
 
+class RevokedToken(Base):
+    """已吊销 token 黑名单表（jti -> 原过期时间；到期后自动失效可清理）"""
+    __tablename__ = "revoked_token"
+    id = Column(String(36), primary_key=True, default=_uid)
+    jti = Column(String(64), unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)  # token 原过期时间
+    revoked_at = Column(DateTime, default=_now)
+
+
 class Bill(Base):
     """账单表"""
     __tablename__ = "bill"

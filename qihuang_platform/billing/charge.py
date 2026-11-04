@@ -79,26 +79,33 @@ def charge_call(
         cost_credits = compute_credits(agent_key, token_used, is_multimodal, uses_llm)
         cost_cents = cost_credits * CENTS_PER_CREDIT
 
-        # 真扣积分（先 base 后 addon；两池空 → 原子不放行，返回 False 由调用方决定拦截）
-        consume_credits(
+        # 真扣积分（先 base 后 addon；两池空 → 原子不放行）
+        # C1-a/C1-b 修复：接收返回值，用「实际扣费」口径写 CallLog，避免账实不符
+        # （余额不足→ok=False 记 0；计量异常→actual_cost=0 记 0）
+        ok, actual_cost = consume_credits(
             tenant_id=tenant_id,
             agent_key=agent_key,
             token_used=token_used,
             is_multimodal=is_multimodal,
             uses_llm=uses_llm,
         )
+        if not ok:
+            logger.warning("[charge] 余额不足未扣费（agent=%s tenant=%s），业务已放行", agent_key, tenant_id)
 
-        # 写持久化 DB CallLog（真实 token / 真实金额 / endpoint 标识）
-        _write_call_log(
+        # 写持久化 DB CallLog：金额按「实际扣费」口径（actual_cost*5），非预估值
+        logged_cents = (actual_cost * CENTS_PER_CREDIT) if ok else 0
+        written = _write_call_log(
             tenant_id=tenant_id,
             agent_key=agent_key,
             tokens_used=token_used,
-            cost_cents=cost_cents,
+            cost_cents=logged_cents,
             user_id=user_id,
             endpoint=endpoint,
             trace_id=trace_id,
             status_code=status_code,
         )
+        if not written:
+            logger.warning("[charge] CallLog 写入失败（审计缺口）agent=%s tenant=%s", agent_key, tenant_id)
     except Exception as e:  # noqa: BLE001 - 旁路非阻断：计量异常绝不阻断主响应
         logger.warning("[charge] charge_call 失败(旁路): %s", e)
 
@@ -113,7 +120,7 @@ def _write_call_log(
     endpoint: Optional[str],
     trace_id: Optional[str],
     status_code: int,
-) -> None:
+) -> bool:
     db = SessionLocal()
     try:
         log = CallLog(
@@ -128,8 +135,10 @@ def _write_call_log(
         )
         db.add(log)
         db.commit()
+        return True
     except Exception as e:  # noqa: BLE001
         db.rollback()
         logger.warning("[charge] CallLog 写入失败(旁路): %s", e)
+        return False
     finally:
         db.close()
