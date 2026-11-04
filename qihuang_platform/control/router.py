@@ -31,7 +31,7 @@ from qihuang_platform.db.models import (
     MedCase, MedReport, HealthAssessment, HealthPlan,
     EduCoachSession, EduExamRecord, ConsultAttribution,
     AgentAddonSubscription,
-    UploadFile,
+    UploadFile, Order,
 )
 from qihuang_platform.billing.wallet import charge_addon_subscription, get_available_balance
 import bcrypt
@@ -935,11 +935,17 @@ async def get_usage(
 
         platform_cost = get_platform_self_growth_cost(period)
 
+        # 营收（预充值模式：充值订单总额 = 客户实收金额，与「平台成本」分列）
+        total_revenue = db.query(
+            func.coalesce(func.sum(Order.amount_cents), 0)
+        ).filter(Order.order_type == "recharge", Order.status == "PAID").scalar()
+
         return success(data={
             "period": period,
             "total_calls": total_calls,
             "total_tokens": total_tokens,
             "total_cost_cents": round(total_cost, 2),
+            "revenue_cents": int(total_revenue or 0),
             "d3_module_calls": d3_calls,
             "daily_breakdown": dict(sorted(daily.items())[-30:]),
             "by_agent": dict(sorted(by_agent.items(), key=lambda x: x[1]["tokens"], reverse=True)),
@@ -1936,9 +1942,11 @@ async def admin_dashboard(admin: dict = Depends(get_current_admin)):
                 "target_short_id": (log.target_id or "")[-4:],
             })
 
-        # 近7天调用趋势
+        # 近7天调用趋势（按场景真实聚合：MED→医疗 / EDU→培训 / RETAIL+HQ→大健康）
         trend_dates = []
         trend_values = []
+        trend_scenes = {"大健康": [], "医疗": [], "培训": []}
+        _scene_cn = {"med": "医疗", "edu": "培训", "retail": "大健康", "hq": "大健康"}
         for i in range(6, -1, -1):
             day = now - timedelta(days=i)
             day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -1948,6 +1956,17 @@ async def admin_dashboard(admin: dict = Depends(get_current_admin)):
             ).count()
             trend_dates.append(day.strftime("%m/%d"))
             trend_values.append(cnt)
+            scene_rows = db.query(
+                func.lower(Tenant.scene), func.count(CallLog.id)
+            ).join(CallLog, CallLog.tenant_id == Tenant.id).filter(
+                CallLog.timestamp >= day_start, CallLog.timestamp < day_end
+            ).group_by(func.lower(Tenant.scene)).all()
+            day_cnt = {"大健康": 0, "医疗": 0, "培训": 0}
+            for sc, c in scene_rows:
+                cn = _scene_cn.get((sc or "").lower(), "大健康")
+                day_cnt[cn] += c
+            for k in trend_scenes:
+                trend_scenes[k].append(day_cnt[k])
 
 
         # 场景分布（按租户 scene 字段真实聚合；func.lower 归一化大小写，避免 HEALTH/health 分裂）
@@ -1973,7 +1992,7 @@ async def admin_dashboard(admin: dict = Depends(get_current_admin)):
             "revenue": {"total_cents": total_revenue},
             "kg": {"pending": kg_pending},
             "recent_ops": recent_ops if recent_ops else [],
-            "trend": {"dates": trend_dates, "values": trend_values},
+            "trend": {"dates": trend_dates, "values": trend_values, "scenes": trend_scenes},
             "services": services,
             "scene_distribution": scene_distribution,
         })

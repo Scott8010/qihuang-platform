@@ -198,9 +198,9 @@ export async function fetchDashboard(): Promise<{
       revenueCents,
       callTrend: (d.trend?.dates || []).map((date: string, i: number) => ({
         day: date,
-        大健康: Math.round((d.trend?.values[i] || 0) * 0.5),
-        医疗: Math.round((d.trend?.values[i] || 0) * 0.3),
-        培训: Math.round((d.trend?.values[i] || 0) * 0.2),
+        大健康: d.trend?.scenes?.大健康?.[i] ?? 0,
+        医疗: d.trend?.scenes?.医疗?.[i] ?? 0,
+        培训: d.trend?.scenes?.培训?.[i] ?? 0,
       })),
       sceneDist,
       alerts,
@@ -524,7 +524,7 @@ export async function fetchBillingStats(): Promise<{
       totalCalls: d.total_calls || 0,
       totalTokens: d.total_tokens || 0,
       cost: Math.round((d.total_cost_cents || 0) / 100),
-      revenue: 0,
+      revenue: Math.round((d.revenue_cents || 0) / 100),
     };
   } catch { return { totalCalls: 0, totalTokens: 0, cost: 0, revenue: 0 }; }
 }

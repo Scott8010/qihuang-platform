@@ -338,7 +338,7 @@ export interface DashboardData {
   kg?: { pending: number };
   reviews?: { id: string; item_type?: string; type?: string; name?: string; entity_name?: string; clause_text?: string; title?: string; item_id_in_kg?: string; confidence?: number; conf?: number; source?: string; _src?: string; reviewer_role?: string; reviewer?: string; content?: any }[];
   recent_ops?: { time: string; user: string; action: string; target: string }[];
-  trend?: { dates: string[]; values: number[] };
+  trend?: { dates: string[]; values: number[]; scenes?: { 大健康: number[]; 医疗: number[]; 培训: number[] } };
   services?: { name: string; key?: string; status: string; latency_ms?: number; uptime?: string; ok?: boolean }[];
   recent_calls?: { endpoint?: string; method?: string; status_code?: number; latency_ms?: number; timestamp?: string; path?: string }[];
   scene_distribution?: Record<string, number>;
