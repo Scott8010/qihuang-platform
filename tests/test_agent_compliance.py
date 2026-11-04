@@ -251,7 +251,7 @@ def test_router_scan_and_feedback(tmp_env):
     assert data["material_id"].startswith("MAT-")
     assert data["state"] == "违规拦截"
     assert data["store_id"] == "store_Z"
-    assert data["tenant_id"] == "t1"  # 中间件注入
+    assert data["tenant_id"] == "tenant_default"  # 中间件注入
 
     mid = data["material_id"]
     r2 = client.post("/api/v1/agent/compliance/feedback", json={
@@ -286,7 +286,7 @@ def test_router_feedback_requires_admin(tmp_env):
 
 
 async def _set_tenant(request, call_next):
-    request.state.tenant_id = "t1"
+    request.state.tenant_id = "tenant_default"  # 用 seed 里真实存在的租户，避免计费写库外键违规
     request.state.user_id = "test_user"
     return await call_next(request)
 
