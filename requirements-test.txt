@@ -23,6 +23,7 @@ coverage>=7.6.0
 
 # 数据库驱动（CI 环境 PostgreSQL + Redis）
 psycopg2-binary>=2.9.0
+psycopg[binary]>=3.1.0    # sqlalchemy 2.x 新版默认走 psycopg3 方言，需显式补装
 redis>=5.0.0
 
 # FastAPI 表单解析（testclient 需要）

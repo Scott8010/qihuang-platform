@@ -19,9 +19,14 @@ logger = logging.getLogger("gateway.auth")
 
 # ---- 配置 ----
 # 生产：JWT 签名密钥必须由环境变量 QH_JWT_SECRET 注入（强随机 ≥32 bytes）。
-# 未设置时回退到内置开发默认值并打告警——禁止无密钥直接把可伪造 token 放上生产。
+# QH_ENV=production 且未注入密钥 → 直接拒绝启动，杜绝"可伪造 token 放上生产"。
 JWT_SECRET = os.environ.get("QH_JWT_SECRET")
 if not JWT_SECRET:
+    if os.environ.get("QH_ENV", "").lower() in ("prod", "production"):
+        raise RuntimeError(
+            "生产环境(QH_ENV=production)必须设置 QH_JWT_SECRET（强随机 ≥32 字节），"
+            "拒绝启动以防止 JWT 被任意伪造。"
+        )
     warnings.warn(
         "QH_JWT_SECRET 未设置，使用内置默认 JWT 密钥（仅限开发/测试环境；"
         "生产必须设置强随机值，否则 token 可被任意伪造）",
