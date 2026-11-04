@@ -14,7 +14,7 @@ import hashlib
 from datetime import datetime, timezone
 from typing import Any
 
-from rules import GLOBAL_EXEMPT_CONTEXT, SEVERITY_ORDER, compiled_rules
+from .l0_rules import GLOBAL_EXEMPT_CONTEXT, SEVERITY_ORDER, compiled_rules
 
 # 否定/免责上下文窗口（字符数）
 _EXEMPT_LOOKBEHIND = 14  # 往前看：全局否定词 + 规则级豁免词
