@@ -12,11 +12,12 @@
 
 回写：通过 ComplianceStore 钉 material_id（钉业务实体，客观真实）。
 
-本模块不依赖任何外部 HTTP 服务，可本地离线验证（L0 规则已融合进 compliance 包内 l0_rules/l0_engine）。
+本模块不依赖任何外部 HTTP 服务，可本地离线验证（L0 规则从 COMPLIANCE_RULES_PATH 加载）。
 """
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import os
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
@@ -46,6 +47,35 @@ _HERE = os.path.dirname(__file__)
 DEFAULT_SEED = os.path.join(_HERE, "seed", "compliance_clauses.jsonl")
 DEFAULT_STORE = os.path.join(_HERE, "seed", "materials.jsonl")
 
+
+def _find_rules_dir() -> str | None:
+    """搜索 L0 规则引擎目录，按优先级返回第一个包含 rules.py 的路径。
+
+    搜索顺序：
+    1. 环境变量 COMPLIANCE_RULES_PATH（最高优先级）
+    2. 本仓库内置 guard/ 目录（随仓库提交，CI 可用）
+    3. 项目根目录 hb-compliance-guard/（向后兼容老部署）
+    4. 服务器部署路径 /root/qihuang_platform/hb-compliance-guard/
+    5. 本地开发路径（兜底）
+    """
+    env_path = os.getenv("COMPLIANCE_RULES_PATH")
+    candidates: list[str] = []
+    if env_path:
+        candidates.append(env_path)
+    candidates.extend([
+        os.path.join(_HERE, "guard"),                                          # 仓库内置（CI/新部署）
+        os.path.join(_HERE, "..", "..", "..", "hb-compliance-guard"),       # 项目根（旧布局兼容）
+        "/root/qihuang_platform/hb-compliance-guard",                           # 服务器旧路径
+        r"C:/Users/Administrator/WorkBuddy/HealthBridge/hb-compliance-guard",   # 本地开发
+    ])
+    for d in candidates:
+        if d and os.path.isfile(os.path.join(d, "rules.py")):
+            return d
+    return None
+
+
+# L0 规则引擎目录（自动搜索；env 覆盖；找不到则 None → 降级模式）
+RULES_DIR = _find_rules_dir()
 
 _SEVERITY_RANK = {SEVERITY_RED: 0, SEVERITY_ORANGE: 1, SEVERITY_YELLOW: 2}
 
@@ -79,17 +109,34 @@ class ComplianceEngineL2:
         self.llm_call = llm_call  # 注入式：测试可替换；缺省用生产 chat（降级链）
         self._rules_mod = None
 
-    # ───────── L0 规则引擎（懒加载，规则已融合进 compliance 包内） ─────────
+    # ───────── L0 规则引擎（懒加载） ─────────
     def _load_l0(self):
         if self._rules_mod is None:
-            # L0 规则引擎已融合进 compliance 包（l0_rules.py 规则 + l0_engine.py 扫描/判定），
-            # 直接包内 import，不再依赖独立的 guard 目录（老黄已要求删除独立 guard）。
-            import types
-            from qihuang_platform.agent.compliance import l0_engine
-            self._rules_mod = types.SimpleNamespace(
-                scan_text=l0_engine.scan_text,
-                judge_state=l0_engine.judge_state,
-            )
+            if RULES_DIR is None:
+                raise FileNotFoundError(
+                    "L0 规则引擎未找到（COMPLIANCE_RULES_PATH 未设置且候选路径均无 rules.py）"
+                )
+            # engine.py 含 scan_text/judge_state，其顶部 `from rules import ...`
+            # 自引用 —— 必须先以 "rules" 为名加载并注册 rules.py，再加载 engine.py，
+            # 顺序不可颠倒，否则自导入失败导致 L0 静默降级（所有文本都判「已通过」）。
+            import sys
+            rules_path = os.path.join(RULES_DIR, "rules.py")
+            engine_path = os.path.join(RULES_DIR, "engine.py")
+            # 1) 先加载 rules.py 并临时注册为 "rules"
+            r_spec = importlib.util.spec_from_file_location("rules", rules_path)
+            r_mod = importlib.util.module_from_spec(r_spec)
+            sys.modules["rules"] = r_mod
+            r_spec.loader.exec_module(r_mod)
+            # 2) 再加载 engine.py（此时 from rules import ... 可正常解析）
+            e_spec = importlib.util.spec_from_file_location("hb_compliance_engine", engine_path)
+            e_mod = importlib.util.module_from_spec(e_spec)
+            sys.modules["hb_compliance_engine"] = e_mod
+            e_spec.loader.exec_module(e_mod)
+            # 3) 清理 sys.modules：engine.py 的 from rules import 已在加载时绑定名称，
+            #    运行时不再依赖 sys.modules["rules"]；移除避免全局命名空间污染
+            sys.modules.pop("rules", None)
+            sys.modules.pop("hb_compliance_engine", None)
+            self._rules_mod = e_mod
         return self._rules_mod
 
     # ───────── 主分析 ─────────
@@ -167,7 +214,7 @@ class ComplianceEngineL2:
         # L0 规则缺失时如实标记降级（数据真实性原则：不伪造判定）
         if not l0_ok:
             body["degraded"] = True
-            body["degraded_reason"] = "L0 规则引擎加载失败（compliance.l0_engine）"
+            body["degraded_reason"] = "L0 规则引擎未加载（COMPLIANCE_RULES_PATH 缺失）"
         return body
 
     # ───────── L2 推理 ─────────
