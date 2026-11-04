@@ -32,13 +32,20 @@ let _identity: AdminIdentity | null = (() => {
 export function getIdentity(): AdminIdentity | null { return _identity; }
 export function getUserId(): string { return _identity?.user_id || ""; }
 
+/** 带超时的 fetch：后端挂起时自动中断，防 UI 永久转圈（H2 修复） */
+function fetchWithTimeout(input: string, init: RequestInit = {}, timeoutMs = 30000): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  return fetch(input, { ...init, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(init?.headers as Record<string, string> || {}),
   };
   if (_token) headers["Authorization"] = `Bearer ${_token}`;
-  const res = await fetch(path, { ...init, headers });
+  const res = await fetchWithTimeout(path, { ...init, headers });
   if (res.status === 401) { _token = ""; localStorage.removeItem("qh_admin_token"); }
   return res.json();
 }
@@ -59,7 +66,7 @@ async function mutate<T = any>(
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (_token) headers["Authorization"] = `Bearer ${_token}`;
   try {
-    const res = await fetch(path, {
+    const res = await fetchWithTimeout(path, {
       method, headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
@@ -80,28 +87,32 @@ async function mutate<T = any>(
 // ═══ 认证 ═══
 
 export async function login(username: string, password?: string) {
-  const res = await post<{
-    code: number;
-    data: {
-      access_token: string; user_id: string; username: string;
-      display_name: string; tenant_id: string; roles: string[]; auth_source: string;
-    };
-  }>("/admin/v1/login", { username, password });
-  if (res?.code === 0 && res.data?.access_token) {
-    _token = res.data.access_token;
-    localStorage.setItem("qh_admin_token", _token);
-    _identity = {
-      user_id: res.data.user_id,
-      username: res.data.username,
-      display_name: res.data.display_name || res.data.username,
-      tenant_id: res.data.tenant_id,
-      roles: res.data.roles || [],
-      auth_source: res.data.auth_source,
-    };
-    localStorage.setItem("qh_admin_user", JSON.stringify(_identity));
-    return true;
+  try {
+    const res = await post<{
+      code: number;
+      data: {
+        access_token: string; user_id: string; username: string;
+        display_name: string; tenant_id: string; roles: string[]; auth_source: string;
+      };
+    }>("/admin/v1/login", { username, password });
+    if (res?.code === 0 && res.data?.access_token) {
+      _token = res.data.access_token;
+      localStorage.setItem("qh_admin_token", _token);
+      _identity = {
+        user_id: res.data.user_id,
+        username: res.data.username,
+        display_name: res.data.display_name || res.data.username,
+        tenant_id: res.data.tenant_id,
+        roles: res.data.roles || [],
+        auth_source: res.data.auth_source,
+      };
+      localStorage.setItem("qh_admin_user", JSON.stringify(_identity));
+      return true;
+    }
+    return false;
+  } catch {
+    return false; // 网络异常/超时不白屏，直接返回登录失败
   }
-  return false;
 }
 
 export function logout() {
@@ -312,7 +323,7 @@ export async function uploadFile(file: File, purpose = "license"): Promise<Mutat
   try {
     const headers: Record<string, string> = {};
     if (_token) headers["Authorization"] = `Bearer ${_token}`;
-    const res = await fetch("/admin/v1/upload", { method: "POST", headers, body: fd });
+    const res = await fetchWithTimeout("/admin/v1/upload", { method: "POST", headers, body: fd }, 60000);
     let j: any = {};
     try { j = await res.json(); } catch { /* 空响应体 */ }
     if (res.ok && j?.code === 0) return { ok: true, msg: j?.msg || "上传成功", data: j.data };
