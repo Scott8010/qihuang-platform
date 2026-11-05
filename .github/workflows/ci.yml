@@ -310,6 +310,58 @@ jobs:
             echo "OK: 前端 bundle $REF 完整 ($(wc -c < "$REF") bytes)"
           VERIFY
 
+  notify-failure:
+    # CI 失败告警：任何 job 失败即推送微信（PushPlus），防止"红 56 天无人知"
+    # 历史教训：2026-09-09 guard 误删导致 CI 连续红 56 天、多次业务提交全未部署，无人发现。
+    name: CI 失败告警
+    runs-on: ubuntu-latest
+    needs: [lint, test, deploy]
+    if: failure() && github.event_name == 'push'
+    steps:
+      - name: 推送失败告警到微信
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          GH_BRANCH: ${{ github.ref_name }}
+          GH_SHA: ${{ github.sha }}
+          GH_MSG: ${{ github.event.head_commit.message }}
+          GH_RUN_ID: ${{ github.run_id }}
+        run: |
+          if [ -z "$PUSHPLUS_TOKEN" ]; then
+            echo "WARN: 未配置 PUSHPLUS_TOKEN secret，跳过推送"
+            exit 0
+          fi
+          python3 - <<'PY'
+          import json, os, urllib.request
+
+          token = os.environ["PUSHPLUS_TOKEN"]
+          repo = os.environ.get("GH_REPO", "")
+          body = f"""仓库: {repo}
+          分支: {os.environ.get('GH_BRANCH','')}
+          提交: {os.environ.get('GH_SHA','')[:8]}
+          说明: {os.environ.get('GH_MSG','')}
+          详情: https://github.com/{repo}/actions/runs/{os.environ.get('GH_RUN_ID','')}
+
+          ⚠️ CI 红期间 deploy to prod 会被跳过，生产不会更新。请尽快处理。"""
+
+          payload = {
+              "token": token,
+              "title": "🔴 8602 CI 失败",
+              "content": body,
+              "template": "txt",
+          }
+          req = urllib.request.Request(
+              "http://www.pushplus.plus/send",
+              data=json.dumps(payload).encode("utf-8"),
+              headers={"Content-Type": "application/json"},
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=15) as r:
+                  print("push result:", r.read().decode("utf-8", "replace"))
+          except Exception as e:
+              print("push error:", e)
+          PY
+
   kg-dump:
     name: dump 8601 kg stats (prod, latest)
     runs-on: ubuntu-latest

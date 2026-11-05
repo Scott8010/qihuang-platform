@@ -1452,6 +1452,9 @@ async def monitor_overview(
     # 检查并生成告警
     monitor.check_and_alert()
     overview["active_alerts"] = list(monitor._alerts)[-10:]
+    # 合规 L0 规则引擎状态（安全组件：ok=false 表示内容审核已降级为全部放行）
+    _l0 = monitor.get_compliance_l0()
+    overview["compliance_l0"] = {k: v for k, v in _l0.items() if k != "_ts"}
     return success(data=overview)
 
 
