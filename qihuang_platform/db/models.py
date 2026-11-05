@@ -502,7 +502,7 @@ class AgentDef(Base):
     agent_key = Column(String(100), unique=True, nullable=False, index=True)
     name = Column(String(200), nullable=False)
     kind = Column(String(50), default="business_embedded")  # business_embedded / conversational
-    engine = Column(String(100))          # 驱动引擎标识，如 hb-compliance-guard
+    engine = Column(String(100))          # 驱动引擎标识，如 compliance-l0-guard / qihuang-*
     category = Column(String(50), default="general")  # 分组（中台面板用）
     router_prefix = Column(String(200))   # 挂载路径前缀
     capabilities = Column(JSON, default=list)  # 能力点列表，如 ["scan","feedback","dashboard"]

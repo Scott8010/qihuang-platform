@@ -6,7 +6,8 @@ Agent 中台（智能控制面）— 与 HB 业务平台平级，横切「底座
     - 以「可嵌入业务流的能力模块」形态存在（如内容送审工作台），回写钉在业务实体上，
       客观、可追溯、能反哺活态化 —— 不是对话窗口型 Agent。
 
-第一个能力：内容合规审核（compliance），由 hb-compliance-guard 纯引擎驱动。
+第一个能力：内容合规审核（compliance），由 compliance 包内 L0 规则引擎
+（agent/compliance/guard/，32 条 A~F 规则 + 四态判定）+ L1 条款库 + L2 语义推理驱动。
 新增能力只需在 registry 注册 + 在下方 include_router 即可。
 """
 from fastapi import APIRouter

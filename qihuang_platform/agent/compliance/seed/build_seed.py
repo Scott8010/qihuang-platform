@@ -1,8 +1,8 @@
 """
-种子生成器：把 hb-compliance-guard 的 32 条规则反演为权威合规条款（L1 底座种子）。
+种子生成器：把 compliance 包内 L0 规则引擎的 32 条规则反演为权威合规条款（L1 底座种子）。
 
 运行：python build_seed.py
-  - 从 COMPLIANCE_RULES_PATH（默认 HealthBridge guard/rules.py）读 RULES
+  - 从包内 guard/rules.py 读 RULES（可用 COMPLIANCE_RULES_PATH 覆盖）
   - 反演为 ComplianceClause，写入 seed/compliance_clauses.jsonl
   - 这是「横向建库标准范式」的首次落地：规则(判定式) -> 条款(权威溯源)，可复核可演化
 
@@ -15,9 +15,10 @@ import os
 import sys
 
 _HERE = os.path.dirname(__file__)
+# 默认读包内 L0 规则（agent/compliance/guard/rules.py），不再指向已废弃的 HealthBridge hb-compliance-guard
 _RULES_PATH = os.getenv(
     "COMPLIANCE_RULES_PATH",
-    r"C:/Users/Administrator/WorkBuddy/HealthBridge/hb-compliance-guard/rules.py",
+    os.path.join(_HERE, "..", "guard", "rules.py"),
 )
 _OUT = os.path.join(_HERE, "compliance_clauses.jsonl")
 

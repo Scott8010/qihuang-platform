@@ -17,7 +17,8 @@ BUILTIN_AGENTS: dict[str, dict[str, Any]] = {
     "compliance": {
         "name": "内容合规审核",
         "kind": "business_embedded",          # 融入业务流的能力模块，非对话窗口型
-        "engine": "hb-compliance-guard",       # 纯规则引擎（32 条 A~F 类规则，四态判定）
+        # 纯规则引擎（32 条 A~F 类规则 + 四态判定），实现在包内 agent/compliance/guard/
+        "engine": "compliance-l0-guard",
         "uses_llm": False,                      # 纯规则引擎，不调大模型（#474 固定积分/次计价）
         "router_prefix": "/api/v1/agent/compliance",
         "capabilities": ["scan", "feedback", "dashboard"],

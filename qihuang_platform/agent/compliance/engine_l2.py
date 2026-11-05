@@ -52,25 +52,25 @@ DEFAULT_STORE = os.path.join(_HERE, "seed", "materials.jsonl")
 
 
 def _find_rules_dir() -> str | None:
-    """搜索 L0 规则引擎目录，按优先级返回第一个包含 rules.py 的路径。
+    """定位 L0 规则引擎目录（第一个包含 rules.py 的路径）。
 
     搜索顺序：
-    1. 环境变量 COMPLIANCE_RULES_PATH（最高优先级）
-    2. 本仓库内置 guard/ 目录（随仓库提交，CI 可用）
-    3. 项目根目录 hb-compliance-guard/（向后兼容老部署）
-    4. 服务器部署路径 /root/qihuang_platform/hb-compliance-guard/
-    5. 本地开发路径（兜底）
+    1. 环境变量 COMPLIANCE_RULES_PATH（显式覆盖，最高优先级）
+    2. 本包内置 guard/ 目录（随仓库提交，CI/生产主路径）✅ 正常情况就是这个
+
+    ⚠️ 已移除的三类历史候选路径（2026-11-05 清理）：
+      - 项目根 hb-compliance-guard/（独立旧服务，2026-09-08 已废弃）
+      - /root/qihuang_platform/hb-compliance-guard（服务器旧路径）
+      - 本地开发硬编码 Windows 绝对路径
+    移除原因：这些是**已删除的独立 guard 服务**的残留路径。若本机/服务器上残留同名
+    旧目录，会被误当规则源加载 → 读到过期规则（比失效更隐蔽的错误）。
+    L0 的唯一真值源是包内 guard/（见 guard/README.md）。
     """
     env_path = os.getenv("COMPLIANCE_RULES_PATH")
     candidates: list[str] = []
     if env_path:
         candidates.append(env_path)
-    candidates.extend([
-        os.path.join(_HERE, "guard"),                                          # 仓库内置（CI/新部署）
-        os.path.join(_HERE, "..", "..", "..", "hb-compliance-guard"),       # 项目根（旧布局兼容）
-        "/root/qihuang_platform/hb-compliance-guard",                           # 服务器旧路径
-        r"C:/Users/Administrator/WorkBuddy/HealthBridge/hb-compliance-guard",   # 本地开发
-    ])
+    candidates.append(os.path.join(_HERE, "guard"))  # 包内置（唯一真值源）
     for d in candidates:
         if d and os.path.isfile(os.path.join(d, "rules.py")):
             return d
