@@ -18,9 +18,12 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import logging
 import os
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
+
+logger = logging.getLogger("compliance.l0")
 
 from qihuang_platform.agent.compliance.kb import ComplianceKB, JsonlBackend
 from qihuang_platform.agent.compliance.llm_client import (
@@ -76,6 +79,69 @@ def _find_rules_dir() -> str | None:
 
 # L0 规则引擎目录（自动搜索；env 覆盖；找不到则 None → 降级模式）
 RULES_DIR = _find_rules_dir()
+
+# L0 自检冒烟样本：必须命中 RED（若规则库空转/未加载，此断言会失败）
+_L0_SMOKE_TEXT = "本店包治百病、药到病除，根治一切慢性病"
+_L0_SMOKE_EXPECTED_STATE = "违规拦截"
+
+
+def verify_l0() -> dict:
+    """L0 规则引擎健康自检（启动时 / 健康检查调用）。
+
+    合规审核是安全组件：失效必须**显性暴露**，不能静默 fail-open。
+    本函数独立重新加载规则（不走实例缓存），做三重校验：
+      1. 规则目录可定位（RULES_DIR 非 None 且含 rules.py/engine.py）
+      2. 规则库非空（rule_count > 0）
+      3. 冒烟命中（RED 样本必须判「违规拦截」，防规则空转）
+
+    返回 {ok, rules_dir, rule_count, sample_state, error}
+    """
+    import sys
+
+    info: dict = {
+        "ok": False,
+        "rules_dir": RULES_DIR,
+        "rule_count": 0,
+        "sample_state": None,
+        "error": None,
+    }
+    try:
+        if RULES_DIR is None:
+            raise FileNotFoundError(
+                "L0 规则引擎目录未找到（agent/compliance/guard/rules.py 不存在，"
+                "或 COMPLIANCE_RULES_PATH 指向无效路径）"
+            )
+        rules_path = os.path.join(RULES_DIR, "rules.py")
+        engine_path = os.path.join(RULES_DIR, "engine.py")
+        r_spec = importlib.util.spec_from_file_location("rules", rules_path)
+        r_mod = importlib.util.module_from_spec(r_spec)
+        sys.modules["rules"] = r_mod
+        r_spec.loader.exec_module(r_mod)
+        e_spec = importlib.util.spec_from_file_location("hb_compliance_engine", engine_path)
+        e_mod = importlib.util.module_from_spec(e_spec)
+        sys.modules["hb_compliance_engine"] = e_mod
+        e_spec.loader.exec_module(e_mod)
+
+        info["rule_count"] = int(r_mod.rule_count())
+        if info["rule_count"] <= 0:
+            raise RuntimeError("L0 规则库为空（rule_count=0）")
+
+        hits = e_mod.scan_text(_L0_SMOKE_TEXT)
+        state = e_mod.judge_state(hits)
+        info["sample_state"] = state
+        if state != _L0_SMOKE_EXPECTED_STATE:
+            raise RuntimeError(
+                f"L0 冒烟未拦截：样本应判「{_L0_SMOKE_EXPECTED_STATE}」，实际「{state}」"
+                f"（命中={[h.get('rule_id') for h in hits]}）"
+            )
+        info["ok"] = True
+    except Exception as e:  # noqa: BLE001
+        info["error"] = f"{type(e).__name__}: {e}"
+        logger.error(
+            "[compliance] L0 规则引擎自检失败 → 合规审核将失效(全部放行)！原因: %s",
+            info["error"],
+        )
+    return info
 
 _SEVERITY_RANK = {SEVERITY_RED: 0, SEVERITY_ORANGE: 1, SEVERITY_YELLOW: 2}
 
@@ -177,10 +243,16 @@ class ComplianceEngineL2:
             rules = self._load_l0()
             l0_hits = rules.scan_text(analysis_text)
             judge = rules.judge_state
-        except Exception:
+        except Exception as e:  # noqa: BLE001
             l0_hits = []
             judge = self._judge_fallback
             l0_ok = False
+            # 安全组件失效必须显性暴露：打 ERROR 日志（不阻断主响应，但必须可被监控捕获）
+            logger.error(
+                "[compliance] L0 规则引擎加载失败，本次审核降级为「仅 L2/全部放行」！"
+                " institution=%s 原因=%s: %s",
+                institution_id, type(e).__name__, e,
+            )
 
         # L1
         clauses = await self.kb.retrieve(analysis_text, top_k=8)
@@ -214,7 +286,10 @@ class ComplianceEngineL2:
         # L0 规则缺失时如实标记降级（数据真实性原则：不伪造判定）
         if not l0_ok:
             body["degraded"] = True
-            body["degraded_reason"] = "L0 规则引擎未加载（COMPLIANCE_RULES_PATH 缺失）"
+            body["degraded_reason"] = (
+                "L0 规则引擎未加载（agent/compliance/guard/rules.py 缺失或加载失败），"
+                "本次审核仅覆盖 L2 语义层，硬红线未生效"
+            )
         return body
 
     # ───────── L2 推理 ─────────

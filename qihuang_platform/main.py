@@ -8,6 +8,7 @@ Phase 1: RBAC + 管理端MVP [NEXT]
 """
 import os
 import sys
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -44,6 +45,9 @@ load_dotenv(BASE_DIR / ".env")
 
 PLATFORM_PORT = int(os.getenv("PLATFORM_PORT", "8602"))
 PLATFORM_HOST = os.getenv("PLATFORM_HOST", "0.0.0.0")
+
+# 合规 L0 规则引擎自检结果（lifespan 启动时写入，/platform/health 暴露）
+_L0_HEALTH: dict | None = None
 
 # ─── 生命周期 ───
 @asynccontextmanager
@@ -163,6 +167,37 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[Platform] 活态化调度启动失败: {e}")
 
+    # ─── 合规 L0 规则引擎启动自检（安全组件：失效必须显性暴露，禁止静默 fail-open）───
+    # 背景：2026-09-09 guard 目录被误删，导致 L0 静默降级、所有内容一律放行且无人知情。
+    # 处置：启动即自检（规则可定位 + 规则非空 + RED 冒烟必拦），失败打 ERROR 并暴露到健康检查；
+    #      设 QH_COMPLIANCE_STRICT=1 时直接拒绝启动（生产强约束）。
+    global _L0_HEALTH
+    try:
+        from qihuang_platform.agent.compliance.engine_l2 import verify_l0
+        _L0_HEALTH = verify_l0()
+        if _L0_HEALTH.get("ok"):
+            print(
+                f"[Platform] 合规 L0 规则引擎就绪"
+                f"（{_L0_HEALTH['rule_count']} 条规则，冒烟={_L0_HEALTH['sample_state']}）"
+            )
+        else:
+            _msg = (
+                f"[Platform] ⚠️ 合规 L0 规则引擎自检失败，内容审核将全部放行！"
+                f"原因：{_L0_HEALTH.get('error')}"
+            )
+            print(_msg)
+            logging.getLogger("platform").error(_msg)
+            if os.getenv("QH_COMPLIANCE_STRICT", "").strip().lower() in ("1", "true", "yes", "on"):
+                raise RuntimeError(
+                    "合规 L0 规则引擎不可用（QH_COMPLIANCE_STRICT=1 强制拒绝启动）："
+                    + str(_L0_HEALTH.get("error"))
+                )
+    except RuntimeError:
+        raise
+    except Exception as e:
+        _L0_HEALTH = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+        print(f"[Platform] 合规 L0 自检异常: {e}")
+
     print(f"[Platform] Phase 0 — 骨架就绪，等待 Phase 1 挂载路由")
     yield
     print("[Platform] 平台已关闭")
@@ -241,14 +276,20 @@ async def no_cache_admin_console(request: Request, call_next):
 
 @app.get("/platform/health")
 async def platform_health():
-    """平台健康检查"""
+    """平台健康检查
+
+    含合规 L0 规则引擎状态：l0.ok=false 表示内容审核已降级为「全部放行」，
+    必须立即处理（历史事故：2026-09-09 guard 误删导致静默失效 56 天）。
+    """
+    l0 = _L0_HEALTH or {"ok": None, "error": "尚未自检（lifespan 未执行）"}
     return {
         "service": "岐黄智脑商业化平台",
         "version": "0.1.0-alpha",
         "phase": "Phase 0 - 环境与契约就绪",
-        "status": "ok",
+        "status": "ok" if l0.get("ok") is not False else "degraded",
         "port": PLATFORM_PORT,
         "existing_api": "http://localhost:8601",
+        "compliance_l0": l0,
     }
 
 

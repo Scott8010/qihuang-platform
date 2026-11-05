@@ -66,6 +66,34 @@ def make_fake_llm(violations):
     return fake
 
 
+# ════════════════ L0 引擎健康自检（防 guard 缺失静默失效）════════════════
+# 回归背景：2026-09-09 commit 79a7d8d 把 agent/compliance/guard/ 当"废弃目录"删除，
+# 导致 L0 规则引擎加载失败 → analyze() 走 except 降级 → 所有内容判「已通过」，
+# 且系统不报错、看板正常，静默失效 56 天（生产因 CI 恰好停摆而侥幸未受影响）。
+# 以下两个测试是该事故的守卫：规则目录/规则库/冒烟任一项失效，CI 立即红。
+def test_l0_engine_loadable():
+    """L0 规则引擎必须可加载、规则非空、RED 冒烟样本必拦。"""
+    from qihuang_platform.agent.compliance.engine_l2 import verify_l0
+
+    info = verify_l0()
+    assert info["ok"] is True, f"L0 自检失败（内容审核将全部放行）: {info.get('error')}"
+    assert info["rules_dir"], "L0 规则目录未定位"
+    assert info["rule_count"] >= 32, f"L0 规则数异常偏少（应为 32 条 A~F）: {info['rule_count']}"
+    assert info["sample_state"] == "违规拦截", (
+        f"RED 冒烟样本未拦截（规则空转），实际 state={info['sample_state']}"
+    )
+
+
+def test_l0_verify_reports_failure_without_crash(monkeypatch):
+    """规则目录不可用时，verify_l0 必须返回 ok=False 而非抛异常崩溃。"""
+    from qihuang_platform.agent.compliance import engine_l2
+
+    monkeypatch.setattr(engine_l2, "RULES_DIR", None)
+    info = engine_l2.verify_l0()
+    assert info["ok"] is False, "RULES_DIR 为 None 时自检应报 ok=False"
+    assert info["error"], "自检失败必须带 error 说明（供健康检查暴露）"
+
+
 # ════════════════ L1 底座 ════════════════
 def test_kb_seed_count(tmp_env):
     kb = ComplianceKB(JsonlBackend(tmp_env["seed"]))
