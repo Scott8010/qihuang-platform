@@ -96,7 +96,7 @@ async function mutate<T = any>(
 
 // ═══ 认证 ═══
 
-export async function login(username: string, password?: string) {
+export async function login(username: string, password: string) {
   try {
     const res = await post<{
       code: number;

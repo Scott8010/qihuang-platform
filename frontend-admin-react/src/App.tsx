@@ -96,7 +96,9 @@ export default function App() {
 
   const doLogin = async () => {
     setLoginErr("");
-    const ok = await login(loginUser, loginPass || undefined);
+    if (!loginUser.trim()) { setLoginErr("请输入管理员账号"); return; }
+    if (!loginPass) { setLoginErr("请输入密码"); return; } // 密码必填：后端 password 为必填字段，不传会 422
+    const ok = await login(loginUser, loginPass);
     if (ok) {
       setAuthed(true);
       setPage(isPlatformAdmin(getIdentity()) ? "dashboard" : "myhome");
@@ -160,7 +162,7 @@ export default function App() {
               <input
                 type={showPass ? "text" : "password"} value={loginPass}
                 onChange={(e) => setLoginPass(e.target.value)}
-                placeholder="密码（可选）"
+                placeholder="请输入密码"
                 onKeyDown={(e) => e.key === "Enter" && doLogin()}
                 className="w-full px-4 py-3 pr-11 rounded-lg border text-[16px] outline-none"
                 style={{ borderColor: C.border }}
