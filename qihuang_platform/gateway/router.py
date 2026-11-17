@@ -441,7 +441,9 @@ def _db_admin_login(username: str, password: str):
     db = next(get_db())
     try:
         rbac = RBACService(db)
-        u = rbac.get_user_by_username("tenant_default", username)
+        # username 全局唯一：真实租户下的管理员（机构/租户管理员）tenant_id 不是
+        # tenant_default，必须跨租户查找，否则合法租户管理员会被误判为账号密码错误。
+        u = rbac.get_user_by_username_any_tenant(username)
         if not u:
             return None
         if (u.status or "active") != "active":

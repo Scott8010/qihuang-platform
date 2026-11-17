@@ -169,6 +169,15 @@ class RBACService:
     def get_user_by_username(self, tenant_id: str, username: str) -> Optional[User]:
         return self.db.query(User).filter_by(tenant_id=tenant_id, username=username).first()
 
+    def get_user_by_username_any_tenant(self, username: str) -> Optional[User]:
+        """按用户名跨租户查找（username 在 User 表全局唯一）。
+
+        管理端登录必须用这个：真实租户下建的管理员账号（如机构管理员）
+        tenant_id 不是 tenant_default，若限定 tenant_default 会被误判为
+        「账号或密码错误」，导致合法租户管理员无法登录控制台。
+        """
+        return self.db.query(User).filter_by(username=username).first()
+
     def verify_password(self, user: User, password: str) -> bool:
         return bcrypt.checkpw(password.encode(), user.password_hash.encode())
 
