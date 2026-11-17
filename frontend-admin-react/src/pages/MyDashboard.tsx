@@ -36,8 +36,9 @@ export default function MyDashboard({ go }: { go: (p: string) => void }) {
         fetchAgentUsage(tenantId, 30),
         fetchApiKeys(tenantId),
       ]);
-      // 套餐/用户数：tenants-extended 返回全量，前端只取自己那条，不外泄别家
-      const all = await fetchTenantExtended(200);
+      // 套餐/用户数：tenants-extended 返回全量，前端只取自己那条，不外泄别家。
+      // 注意 page_size 后端上限 100，传 200 会 422 导致套餐永远"读取中"。
+      const all = await fetchTenantExtended(100);
       const mine = all.find((t) => t.id === tenantId);
       if (!alive) return;
       setWallet(w);
@@ -60,7 +61,7 @@ export default function MyDashboard({ go }: { go: (p: string) => void }) {
     ? Math.min(100, Math.round((myPlan.usedCalls / myPlan.quotaCalls) * 100)) : 0;
 
   const kpis = [
-    { label: "我的套餐", value: myPlan?.plan || "读取中", sub: "套餐决定可用的 Agent 能力", icon: Sparkles },
+    { label: "我的套餐", value: myPlan?.plan || (loading ? "读取中" : "—"), sub: "套餐决定可用的 Agent 能力", icon: Sparkles },
     { label: "本月调用量", value: usage.totalCalls.toLocaleString("zh-CN"), sub: myPlan && myPlan.quotaCalls > 0 ? `配额 ${myPlan.quotaCalls.toLocaleString("zh-CN")} · 已用 ${quotaPct}%` : "按积分计费", icon: Zap },
     { label: "积分余额", value: wallet ? wallet.total.toLocaleString("zh-CN") : "—", sub: wallet ? `基础 ${wallet.base} · 叠加 ${wallet.addon}` : "钱包数据", icon: Wallet },
     { label: "我的团队", value: String(myPlan?.userCount ?? "—"), sub: `有效密钥 ${keyCount} 把`, icon: Users },
