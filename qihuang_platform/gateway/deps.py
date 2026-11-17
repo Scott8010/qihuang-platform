@@ -64,6 +64,13 @@ async def get_current_user(
     request.state.org_id = payload.get("org_id")
     request.state.roles = roles
 
+    # 2026-11-17 #404加固配套：auth.get_user() 从 DB 读到的 roles 常为空（角色经
+    # JWT 下发），导致下游 _assert_same_tenant 用 user.get("roles") 判 super_admin
+    # 失效、把超管的合法跨租户操作误判为 404。统一用 token 内 roles 覆盖返回体，
+    # 与 request.state.roles / get_current_admin 的判定口径保持一致。
+    if isinstance(user, dict):
+        user["roles"] = roles
+        user["tenant_id"] = token_tenant
     return user
 
 

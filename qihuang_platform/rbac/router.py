@@ -470,6 +470,8 @@ async def assign_role(
     target_user = rbac.get_user(req.user_id)
     if not target_user:
         raise HTTPException(404, detail=error("NOT_FOUND", "用户不存在"))
+    # 2026-11-17 #404加固：防跨租户越权（非 super_admin 只能操作本租户用户）
+    _assert_same_tenant(target_user, user)
     role = rbac.get_role_by_name(target_user.tenant_id, req.role_name)
     if not role:
         raise HTTPException(404, detail=error("NOT_FOUND", f"角色 {req.role_name} 不存在"))
@@ -489,7 +491,13 @@ async def revoke_role(
     user: dict = Depends(get_current_admin),
     rbac: RBACService = Depends(get_rbac),
 ):
-    role = rbac.get_role_by_name(user.get("tenant_id", "tenant_default"), req.role_name)
+    """摘掉用户角色（按目标用户所属租户定位角色，并校验同租户防越权）"""
+    target_user = rbac.get_user(req.user_id)
+    if not target_user:
+        raise HTTPException(404, detail=error("NOT_FOUND", "用户不存在"))
+    # 2026-11-17 #404加固：防跨租户越权（与 assign_role 对称）
+    _assert_same_tenant(target_user, user)
+    role = rbac.get_role_by_name(target_user.tenant_id, req.role_name)
     if role:
         rbac.remove_role(req.user_id, role.id)
     return success({"user_id": req.user_id, "role": req.role_name, "action": "revoked"})

@@ -4,6 +4,7 @@ RBAC 权限服务层
 """
 from typing import Optional, List
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 import bcrypt
 import re
 import uuid
@@ -29,6 +30,53 @@ def resolve_tenant_code(db: Session, preferred: str = None) -> str:
     while db.query(Tenant).filter_by(code=code).first():
         code = base + "_" + uuid.uuid4().hex[:3].upper()
     return code
+
+
+# 新租户开户自动继承的业务角色（不含 super_admin）。
+# super_admin 是跨租户提权开关（gateway/deps.py 中 is_super 判定），
+# 绝不能下放到普通业务租户，否则该租户管理员可自我提权跨租户访问。
+INHERITED_PRESET_ROLES = (
+    "tenant_admin", "org_admin", "doctor", "teacher", "student",
+    "health_user", "edu_researcher", "api_consumer",
+)
+
+
+def seed_roles_for_tenant(db: Session, tenant_id: str) -> int:
+    """为租户克隆预置业务角色 + 对应权限（幂等，可重复执行）。
+
+    以 tenant_default 的同名系统角色为模板，复制角色行与 role_permission 关联。
+    排除 super_admin（跨租户提权开关，仅平台默认租户持有）。
+    Permission 为全局表，perm_id 直接复用，不复制权限本体。
+
+    返回本次新建的角色数（已存在则跳过，返回 0）。
+    """
+    if tenant_id == "tenant_default":
+        return 0
+    src_roles = (
+        db.query(Role)
+        .filter(Role.tenant_id == "tenant_default",
+                Role.name.in_(INHERITED_PRESET_ROLES))
+        .all()
+    )
+    created = 0
+    for src in src_roles:
+        exists = db.query(Role).filter_by(tenant_id=tenant_id, name=src.name).first()
+        if exists:
+            continue
+        role = Role(
+            id=_uid(), tenant_id=tenant_id, org_id=None,
+            name=src.name, display_name=src.display_name,
+            description=src.description, is_system=True,
+        )
+        db.add(role)
+        db.flush()
+        for rp in db.query(RolePermission).filter_by(role_id=src.id).all():
+            db.add(RolePermission(
+                role_id=role.id, perm_id=rp.perm_id, data_scope=rp.data_scope,
+            ))
+        created += 1
+    db.flush()
+    return created
 
 
 def validate_password(pwd: str) -> tuple[bool, str]:
@@ -76,7 +124,12 @@ class RBACService:
         )
         self.db.add(org)
         self.db.flush()
-        self._log_audit(t.id, None, "CREATE_TENANT", "TENANT", t.id, {"name": name})
+        # 2026-11-17 #404根治：新租户自动继承 8 个业务角色+权限（排除 super_admin）。
+        # 此前 create_tenant 只建 tenant/org，角色全靠 seed_preset_data 在
+        # tenant_default 下落种 → 新租户天然无角色，分配 org_admin 报 404。
+        seeded = seed_roles_for_tenant(self.db, t.id)
+        self._log_audit(t.id, None, "CREATE_TENANT", "TENANT", t.id,
+                        {"name": name, "seeded_roles": seeded})
         self.db.commit()
         return t
 
@@ -176,13 +229,21 @@ class RBACService:
         return self.db.query(Role).filter_by(tenant_id=tenant_id).all()
 
     def assign_role(self, user_id: str, role_id: str, org_id: str = None):
-        """给用户分配角色"""
-        existing = self.db.query(UserRole).filter_by(
-            user_id=user_id, role_id=role_id, org_id=org_id
-        ).first()
-        if not existing:
-            self.db.add(UserRole(user_id=user_id, role_id=role_id, org_id=org_id))
-            self.db.commit()
+        """给用户分配角色（幂等：重复分配不报错）"""
+        q = self.db.query(UserRole).filter(
+            UserRole.user_id == user_id, UserRole.role_id == role_id,
+        )
+        # filter_by(org_id=None) 会生成 `= NULL` 永不命中 → 重复分配撞主键 500。
+        # 显式用 IS NULL / = value 才能正确判重。
+        q = q.filter(UserRole.org_id.is_(None)) if org_id is None \
+            else q.filter(UserRole.org_id == org_id)
+        if not q.first():
+            try:
+                self.db.add(UserRole(user_id=user_id, role_id=role_id, org_id=org_id))
+                self.db.commit()
+            except IntegrityError:
+                # 并发下仍撞唯一键时视为已分配，幂等返回
+                self.db.rollback()
 
     def remove_role(self, user_id: str, role_id: str):
         """移除用户角色"""

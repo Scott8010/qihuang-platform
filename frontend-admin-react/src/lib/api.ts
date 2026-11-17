@@ -76,7 +76,9 @@ async function mutate<T = any>(
     if (res.ok && (j?.code === 0 || j?.code === undefined)) {
       return { ok: true, msg: j?.msg || "操作成功", data: j?.data };
     }
-    const msg = j?.detail?.msg || j?.detail?.message || j?.msg
+    // 全局 HTTPException handler 将错误提升为顶层 {code,message}；
+    // 部分端点仍走 detail.msg/detail.message。两种结构都要兜住，否则报 HTTP 码看不懂。
+    const msg = j?.detail?.msg || j?.detail?.message || j?.msg || j?.message
       || (typeof j?.detail === "string" ? j.detail : "") || `请求失败（HTTP ${res.status}）`;
     return { ok: false, msg };
   } catch (e: any) {
