@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from qihuang_platform.agent.deps import require_agent_in_plan
 from qihuang_platform.agent.tongue import engine
 from qihuang_platform.gateway.deps import get_current_principal
-from qihuang_platform.gateway.response import success
+from qihuang_platform.gateway.response import success, error
 from qihuang_platform.billing.wallet import charge_agent
 
 router = APIRouter()
@@ -47,4 +47,14 @@ async def tongue_analyze(
     )
     # 多模态：真实视觉 token（含图片 token）来自 vision_chat_json usage；未配置视觉则 tokens=0（未真调 LLM）
     charge_agent(tenant_id, "tongue", uses_llm=True, token_used=tokens, is_multimodal=True, endpoint="/api/v1/agent/tongue/analyze")
+
+    # 上游视觉故障时不再"code=0 假成功"（租户 P0 建议②）。
+    # 兼容策略：保留 data.mode=image_error/image_pending 供现有租户兜底判定，
+    # 额外加 degraded 标识 + 顶层非 0 code 供新客户端一眼识别平台侧故障。
+    mode = data.get("mode")
+    if mode in ("image_error", "image_pending") and data.get("provided"):
+        data["degraded"] = True
+        # image_error=上游调用失败(5003 LLM_DOWN)；image_pending=未配置模型(5002)
+        return error("LLM_DOWN" if mode == "image_error" else "SERVICE_UNAVAILABLE",
+                     message=f"舌象视觉分析不可用（{mode}），平台侧故障或配置缺失", data=data)
     return success(data=data)
