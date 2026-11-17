@@ -13,7 +13,15 @@ import type {
 
 // ═══ 基础 ═══
 
-let _token = localStorage.getItem("qh_admin_token") || "";
+// 会话级登录态加固：历史版本把 token 存在 localStorage（关浏览器/收藏重进仍免登录，
+// 有被他人直接打开管理页的风险）。升级后登录态只存 sessionStorage——关闭标签页即失效，
+// 从收藏重新进入必须重新输入账号密码。此处一次性清除旧残留，避免 token 长期留在磁盘。
+try {
+  localStorage.removeItem("qh_admin_token");
+  localStorage.removeItem("qh_admin_user");
+} catch { /* 隐私模式等场景下 localStorage 不可用，忽略即可 */ }
+
+let _token = sessionStorage.getItem("qh_admin_token") || "";
 export function getToken() { return _token; }
 
 /** 登录成功后保留的基础身份（后端 /admin/v1/login data 字段），供改密等端点使用 */
@@ -26,7 +34,7 @@ export interface AdminIdentity {
   auth_source: string;
 }
 let _identity: AdminIdentity | null = (() => {
-  try { const s = localStorage.getItem("qh_admin_user"); return s ? (JSON.parse(s) as AdminIdentity) : null; }
+  try { const s = sessionStorage.getItem("qh_admin_user"); return s ? (JSON.parse(s) as AdminIdentity) : null; }
   catch { return null; }
 })();
 export function getIdentity(): AdminIdentity | null { return _identity; }
@@ -46,7 +54,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   };
   if (_token) headers["Authorization"] = `Bearer ${_token}`;
   const res = await fetchWithTimeout(path, { ...init, headers });
-  if (res.status === 401) { _token = ""; localStorage.removeItem("qh_admin_token"); }
+  if (res.status === 401) { _token = ""; sessionStorage.removeItem("qh_admin_token"); }
   return res.json();
 }
 
@@ -70,7 +78,7 @@ async function mutate<T = any>(
       method, headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-    if (res.status === 401) { _token = ""; localStorage.removeItem("qh_admin_token"); }
+    if (res.status === 401) { _token = ""; sessionStorage.removeItem("qh_admin_token"); }
     let j: any = {};
     try { j = await res.json(); } catch { /* 空响应体 */ }
     if (res.ok && (j?.code === 0 || j?.code === undefined)) {
@@ -99,7 +107,7 @@ export async function login(username: string, password?: string) {
     }>("/admin/v1/login", { username, password });
     if (res?.code === 0 && res.data?.access_token) {
       _token = res.data.access_token;
-      localStorage.setItem("qh_admin_token", _token);
+      sessionStorage.setItem("qh_admin_token", _token);
       _identity = {
         user_id: res.data.user_id,
         username: res.data.username,
@@ -108,7 +116,7 @@ export async function login(username: string, password?: string) {
         roles: res.data.roles || [],
         auth_source: res.data.auth_source,
       };
-      localStorage.setItem("qh_admin_user", JSON.stringify(_identity));
+      sessionStorage.setItem("qh_admin_user", JSON.stringify(_identity));
       return true;
     }
     return false;
@@ -119,8 +127,8 @@ export async function login(username: string, password?: string) {
 
 export function logout() {
   _token = "";
-  localStorage.removeItem("qh_admin_token");
-  localStorage.removeItem("qh_admin_user");
+  sessionStorage.removeItem("qh_admin_token");
+  sessionStorage.removeItem("qh_admin_user");
   _identity = null;
 }
 
@@ -483,9 +491,14 @@ export async function resetUserPassword(userId: string, password?: string) {
 
 // ═══ API 密钥 ═══
 
-export async function fetchApiKeys(): Promise<ApiKey[]> {
+export async function fetchApiKeys(tenantId?: string): Promise<ApiKey[]> {
   try {
-    const r = await get<{ code: number; data: { items?: any[] } }>("/admin/v1/api-keys/");
+    // tenantId 传入时显式按租户过滤：租户管理员视图只能看到自己的密钥，
+    // 避免 /admin/v1/api-keys/ 不传参时返回全平台密钥（越权缺口，前端先兜住）。
+    const path = tenantId
+      ? `/admin/v1/api-keys/?tenant_id=${encodeURIComponent(tenantId)}`
+      : "/admin/v1/api-keys/";
+    const r = await get<{ code: number; data: { items?: any[] } }>(path);
     const items = r?.data?.items || [];
     return items.map((k: any) => ({
       id: k.id || k.app_key || "",

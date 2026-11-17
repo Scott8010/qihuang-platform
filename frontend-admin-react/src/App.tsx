@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Building2, ShieldCheck, KeyRound, BarChart3,
   BookOpenCheck, Activity, Search, Bell, Sprout, ChevronDown, LogOut,
   Users as UsersIcon, Eye, EyeOff, Lock, Bot, CreditCard, Boxes,
-  ChevronRight,
+  ChevronRight, Home, FileText,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { C } from "@/lib/types";
@@ -20,13 +20,17 @@ import AgentCenter from "@/pages/AgentCenter";
 import PlanUpgrade from "@/pages/PlanUpgrade";
 import CapabilityCenter from "@/pages/CapabilityCenter";
 import Ledger from "@/pages/Ledger";
+import MyDashboard from "@/pages/MyDashboard";
+import MyKeys from "@/pages/MyKeys";
+import MyUsage from "@/pages/MyUsage";
 
 type NavChild = { id: string; label: string; desc?: string };
 type NavItem =
   | { id: string; label: string; icon: LucideIcon; desc?: string }
   | { id: string; label: string; icon: LucideIcon; children: NavChild[] };
 
-const nav: NavItem[] = [
+/** 平台方（super_admin）全量菜单 */
+const adminNav: NavItem[] = [
   { id: "dashboard", label: "运营总览", icon: LayoutDashboard },
   { id: "agents", label: "Agent 中台", icon: Bot },
   { id: "tenants", label: "租户管理", icon: Building2 },
@@ -47,6 +51,18 @@ const nav: NavItem[] = [
   { id: "monitor", label: "监控运维", icon: Activity },
   { id: "planupgrade", label: "套餐升级", icon: CreditCard },
 ];
+
+/** 租户管理员（tenant_admin/org_admin）精简菜单：只看与自己相关的 */
+const tenantNav: NavItem[] = [
+  { id: "myhome", label: "我的总览", icon: Home },
+  { id: "mykeys", label: "我的密钥", icon: KeyRound },
+  { id: "myusage", label: "用量账单", icon: FileText },
+];
+
+/** 是否平台超管：只有 super_admin 看全量菜单，其余管理员看租户精简视图 */
+function isPlatformAdmin(identity: { roles?: string[] } | null): boolean {
+  return !!identity?.roles?.includes("super_admin");
+}
 
 export default function App() {
   const [authed, setAuthed] = useState(false);
@@ -70,14 +86,21 @@ export default function App() {
   const [cpBusy, setCpBusy] = useState(false);
 
   useEffect(() => {
-    if (getToken()) setAuthed(true);
+    if (getToken()) {
+      setAuthed(true);
+      // 恢复会话时按身份落到默认页，避免租户停在无权访问的页面
+      setPage(isPlatformAdmin(getIdentity()) ? "dashboard" : "myhome");
+    }
     setChecking(false);
   }, []);
 
   const doLogin = async () => {
     setLoginErr("");
     const ok = await login(loginUser, loginPass || undefined);
-    if (ok) { setAuthed(true); } else { setLoginErr("登录失败，请检查账号或密码"); }
+    if (ok) {
+      setAuthed(true);
+      setPage(isPlatformAdmin(getIdentity()) ? "dashboard" : "myhome");
+    } else { setLoginErr("登录失败，请检查账号或密码"); }
   };
 
   const doLogout = () => {
@@ -168,7 +191,14 @@ export default function App() {
   }
 
   const identity = getIdentity();
-  const current = nav.flatMap((n) => ("children" in n ? [n, ...n.children] : [n])).find((n) => n.id === page)!;
+  const platformAdmin = isPlatformAdmin(identity);
+  // 一套平台两套菜单：超管全量，租户只看精简视图
+  const nav = platformAdmin ? adminNav : tenantNav;
+  const navIds = nav.flatMap((n) => ("children" in n ? [n, ...n.children] : [n])).map((n) => n.id);
+  // 越权兜底：若当前页不在本角色菜单里（如手改 state/旧缓存），强制回默认页
+  const defaultPage = platformAdmin ? "dashboard" : "myhome";
+  const effectivePage = navIds.includes(page) ? page : defaultPage;
+  const current = nav.flatMap((n) => ("children" in n ? [n, ...n.children] : [n])).find((n) => n.id === effectivePage) || nav[0];
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: C.bg, color: C.ink }}>
@@ -180,15 +210,15 @@ export default function App() {
           </div>
           <div>
             <div className="font-bold text-[17px] tracking-wide" style={{ color: C.primary }}>岐黄智脑</div>
-            <div className="text-[13px]" style={{ color: C.light }}>运营控制台 · V1.2</div>
+            <div className="text-[13px]" style={{ color: C.light }}>{platformAdmin ? "运营控制台 · V1.2" : "客户工作台 · V1.2"}</div>
           </div>
         </div>
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          <div className="px-3 pt-2 pb-1 text-[13px] font-medium" style={{ color: C.light }}>运营管理</div>
+          <div className="px-3 pt-2 pb-1 text-[13px] font-medium" style={{ color: C.light }}>{platformAdmin ? "运营管理" : "我的工作台"}</div>
           {nav.map((n) => {
             if ("children" in n) {
               const open = !!expanded[n.id];
-              const childActive = n.children.some((c) => c.id === page);
+              const childActive = n.children.some((c) => c.id === effectivePage);
               return (
                 <div key={n.id} className="space-y-0.5">
                   <button
@@ -210,7 +240,7 @@ export default function App() {
                   {open && (
                     <div className="pl-9 space-y-0.5">
                       {n.children.map((c) => {
-                        const cActive = page === c.id;
+                        const cActive = effectivePage === c.id;
                         return (
                           <button
                             key={c.id}
@@ -232,7 +262,7 @@ export default function App() {
                 </div>
               );
             }
-            const active = page === n.id;
+            const active = effectivePage === n.id;
             return (
               <button
                 key={n.id}
@@ -268,18 +298,25 @@ export default function App() {
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 bg-white border-b flex items-center gap-4 px-6 shrink-0" style={{ borderColor: C.border }}>
           <h1 className="text-[19px] font-semibold" style={{ color: C.primary }}>{current.label}</h1>
+          {!platformAdmin && (
+            <span className="text-[12px] px-2 py-0.5 rounded-full" style={{ background: "#FBF4E4", color: C.gold }}>客户视角</span>
+          )}
           <div className="flex-1" />
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: C.light }} />
-            <input
-              placeholder="搜索租户 / 用户 / 密钥"
-              className="pl-9 pr-4 py-2 text-[15px] rounded-lg border outline-none w-64"
-              style={{ borderColor: C.border, background: C.bg }}
-            />
-          </div>
-          <button className="relative p-2 rounded-lg hover:bg-gray-50">
-            <Bell className="w-5 h-5" style={{ color: C.mid }} />
-          </button>
+          {platformAdmin && (
+            <>
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: C.light }} />
+                <input
+                  placeholder="搜索租户 / 用户 / 密钥"
+                  className="pl-9 pr-4 py-2 text-[15px] rounded-lg border outline-none w-64"
+                  style={{ borderColor: C.border, background: C.bg }}
+                />
+              </div>
+              <button className="relative p-2 rounded-lg hover:bg-gray-50">
+                <Bell className="w-5 h-5" style={{ color: C.mid }} />
+              </button>
+            </>
+          )}
           <div className="relative">
             <button
               className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-lg hover:bg-gray-50"
@@ -315,18 +352,24 @@ export default function App() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-6">
-          {page === "dashboard" && <Dashboard go={setPage} />}
-          {page === "agents" && <AgentCenter />}
-          {page === "tenants" && <Tenants go={setPage} />}
-          {page === "users" && <Users />}
-          {page === "roles" && <Roles />}
-          {page === "keys" && <ApiKeys />}
-          {page === "billing" && <Billing />}
-          {page === "capability" && <CapabilityCenter />}
-          {page === "content" && <Content />}
-          {page === "monitor" && <Monitor />}
-          {page === "planupgrade" && <PlanUpgrade />}
-          {page === "ledger" && <Ledger />}
+          {/* 租户精简视图（仅非超管可见，数据按 tenant_id 过滤） */}
+          {!platformAdmin && effectivePage === "myhome" && <MyDashboard go={setPage} />}
+          {!platformAdmin && effectivePage === "mykeys" && <MyKeys />}
+          {!platformAdmin && effectivePage === "myusage" && <MyUsage />}
+
+          {/* 平台方全量视图（仅 super_admin） */}
+          {platformAdmin && effectivePage === "dashboard" && <Dashboard go={setPage} />}
+          {platformAdmin && effectivePage === "agents" && <AgentCenter />}
+          {platformAdmin && effectivePage === "tenants" && <Tenants go={setPage} />}
+          {platformAdmin && effectivePage === "users" && <Users />}
+          {platformAdmin && effectivePage === "roles" && <Roles />}
+          {platformAdmin && effectivePage === "keys" && <ApiKeys />}
+          {platformAdmin && effectivePage === "billing" && <Billing />}
+          {platformAdmin && effectivePage === "capability" && <CapabilityCenter />}
+          {platformAdmin && effectivePage === "content" && <Content />}
+          {platformAdmin && effectivePage === "monitor" && <Monitor />}
+          {platformAdmin && effectivePage === "planupgrade" && <PlanUpgrade />}
+          {platformAdmin && effectivePage === "ledger" && <Ledger />}
         </main>
       </div>
 

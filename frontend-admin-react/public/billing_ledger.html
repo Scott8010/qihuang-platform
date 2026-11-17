@@ -217,7 +217,7 @@ function renderRecentTable(elId, recent){
 
 async function load(){
   const statusEl=document.getElementById("status");
-  const token=localStorage.getItem("qh_admin_token");
+  const token=sessionStorage.getItem("qh_admin_token");
   if(!token){
     statusEl.className="status err";
     statusEl.innerHTML="未检测到管理员登录态。请先打开 <b>岐黄智脑控制台</b> 登录一次，再回到本页面刷新。";
