@@ -110,7 +110,7 @@ export default function MyDashboard({ go }: { go: (p: string) => void }) {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-[16px]" style={{ color: C.primary }}>本月用量配额</CardTitle>
-              <Button variant="outline" size="sm" onClick={() => go("usage")} className="text-[13px]">
+              <Button variant="outline" size="sm" onClick={() => go("myusage")} className="text-[13px]">
                 用量明细 <ArrowRight className="w-3.5 h-3.5 ml-1" />
               </Button>
             </div>
@@ -164,7 +164,7 @@ export default function MyDashboard({ go }: { go: (p: string) => void }) {
               </div>
             </div>
             <div className="text-[13px] mb-3" style={{ color: C.mid }}>你的服务器用密钥 + HMAC 签名调用 AI 能力。</div>
-            <Button variant="outline" size="sm" onClick={() => go("keys")} className="w-full text-[13px]" style={{ borderColor: C.primary, color: C.primary }}>
+            <Button variant="outline" size="sm" onClick={() => go("mykeys")} className="w-full text-[13px]" style={{ borderColor: C.primary, color: C.primary }}>
               管理我的密钥
             </Button>
           </CardContent>
@@ -172,7 +172,7 @@ export default function MyDashboard({ go }: { go: (p: string) => void }) {
       </div>
 
       <div className="rounded-lg p-3 text-[12px]" style={{ background: "#FBF4E4", border: "1px solid #ecd9a8", color: C.gold }}>
-        💡 本页只展示本机构数据。需要更多能力可在「套餐升级」查看，或联系平台方为你的租户单独加授权（addon）。
+        💡 本页只展示本机构数据。需要更多能力或调整套餐，请联系平台方为你的租户配置授权（addon）。
       </div>
     </div>
   );
