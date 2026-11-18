@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   LayoutDashboard, Building2, ShieldCheck, KeyRound, BarChart3,
   BookOpenCheck, Activity, Search, Bell, Sprout, ChevronDown, LogOut,
   Users as UsersIcon, Eye, EyeOff, Lock, Bot, CreditCard, Boxes,
-  ChevronRight, Home, FileText, HelpCircle, Ticket, ScrollText,
+  ChevronRight, ChevronLeft, Home, FileText, HelpCircle, Ticket, ScrollText,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { C } from "@/lib/types";
@@ -72,10 +72,28 @@ function isPlatformAdmin(identity: { roles?: string[] } | null): boolean {
   return !!identity?.roles?.includes("super_admin");
 }
 
+/* ---- 浏览器历史接管：hash 路由 + 后退拦截 ----
+ * 平台是纯 state 切页，URL 不变时浏览器历史只有一条 /admin/，
+ * 用户一按后退就退到进平台之前的页面（看起来像"退出平台"）。
+ * 这里给每个页面配 #/xxx hash 并写入历史，后退变成平台内翻页；
+ * 退到平台外（hash 丢失）时在 popstate 里拦回，避免误退出。 */
+const hashOf = (page: string) => `#/${page}`;
+const pageFromLocation = () => {
+  const h = window.location.hash || "";
+  return h.startsWith("#/") ? h.slice(2) : "";
+};
+const idsOfNav = (nav: NavItem[]) =>
+  nav.flatMap((n) => ("children" in n ? [n, ...n.children] : [n])).map((n) => n.id);
+
 export default function App() {
   const [authed, setAuthed] = useState(false);
   const [checking, setChecking] = useState(true);
   const [page, setPage] = useState("dashboard");
+  const [navDepth, setNavDepth] = useState(0);
+  // 让事件回调拿到最新的菜单上下文（避免用过期闭包）
+  const navRef = useRef({ allowed: [] as string[], defaultPage: "dashboard", page: "dashboard", authed: false });
+  // 当前平台内历史序号（写入 history.state，前进/后退都能据此还原按钮状态）
+  const histIdxRef = useRef(0);
   const [loginUser, setLoginUser] = useState("");
   const [loginPass, setLoginPass] = useState("");
   const [loginErr, setLoginErr] = useState("");
@@ -94,13 +112,70 @@ export default function App() {
   const [cpBusy, setCpBusy] = useState(false);
 
   useEffect(() => {
-    if (getToken()) {
+    const id = getIdentity();
+    const allowed = idsOfNav(isPlatformAdmin(id) ? adminNav : tenantNav);
+    const defaultPage = isPlatformAdmin(id) ? "dashboard" : "myhome";
+    const hasToken = !!getToken();
+    navRef.current = { allowed, defaultPage, page: defaultPage, authed: hasToken };
+
+    if (hasToken) {
       setAuthed(true);
-      // 恢复会话时按身份落到默认页，避免租户停在无权访问的页面
-      setPage(isPlatformAdmin(getIdentity()) ? "dashboard" : "myhome");
+      // 从 hash 恢复上次所在页；非法/越权页兜底到默认页
+      const fromHash = pageFromLocation();
+      const target = allowed.includes(fromHash) ? fromHash : defaultPage;
+      setPage(target);
+      navRef.current.page = target;
+      // 刷新时沿用历史里已有的序号（没有则回到 0），保证返回按钮状态正确
+      const prevState = window.history.state as { qhIdx?: number } | null;
+      const idx = prevState && typeof prevState.qhIdx === "number" ? prevState.qhIdx : 0;
+      histIdxRef.current = idx;
+      setNavDepth(idx);
+      window.history.replaceState({ qhPage: target, qhIdx: idx }, "", hashOf(target));
     }
     setChecking(false);
+
+    // 浏览器后退/前进：从 hash 解析目标页，合法则切页；退到平台外则拦回
+    const onPop = (ev: PopStateEvent) => {
+      if (!navRef.current.authed) return; // 登录页的后退交给浏览器默认行为
+      const { allowed: allow, page: cur } = navRef.current;
+      const fromHash = pageFromLocation();
+      if (fromHash && allow.includes(fromHash)) {
+        navRef.current.page = fromHash;
+        setPage(fromHash);
+        // 用 state 里的序号还原深度（前进后退都准），无 state 则按位移估算
+        const st = ev.state as { qhIdx?: number } | null;
+        if (st && typeof st.qhIdx === "number") {
+          histIdxRef.current = st.qhIdx;
+          setNavDepth(st.qhIdx);
+        } else {
+          histIdxRef.current = Math.max(0, histIdxRef.current - 1);
+          setNavDepth(histIdxRef.current);
+        }
+      } else {
+        // 后退把 hash 退没了（试图退出平台）→ 用 replace 拉回当前页，不产生新历史
+        try {
+          window.history.replaceState({ qhPage: cur, qhIdx: histIdxRef.current }, "", hashOf(cur));
+        } catch {
+          // 跨域历史条目不允许改 URL：忽略，浏览器会按默认行为处理
+        }
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
   }, []);
+
+  /** 平台内跳页：写入历史 + 同步 state（所有菜单/按钮都走这里） */
+  const go = (next: string) => {
+    const { allowed, defaultPage } = navRef.current;
+    const target = allowed.includes(next) ? next : defaultPage;
+    const cur = navRef.current.page;
+    if (target === cur) return; // 同页不重复入栈
+    window.history.pushState({ qhPage: target, qhIdx: histIdxRef.current + 1 }, "", hashOf(target));
+    histIdxRef.current += 1;
+    navRef.current.page = target;
+    setPage(target);
+    setNavDepth(histIdxRef.current);
+  };
 
   const doLogin = async () => {
     setLoginErr("");
@@ -108,8 +183,17 @@ export default function App() {
     if (!loginPass) { setLoginErr("请输入密码"); return; } // 密码必填：后端 password 为必填字段，不传会 422
     const ok = await login(loginUser, loginPass);
     if (ok) {
+      const id = getIdentity();
+      const allowed = idsOfNav(isPlatformAdmin(id) ? adminNav : tenantNav);
+      const defaultPage = isPlatformAdmin(id) ? "dashboard" : "myhome";
       setAuthed(true);
-      setPage(isPlatformAdmin(getIdentity()) ? "dashboard" : "myhome");
+      navRef.current = { allowed, defaultPage, page: defaultPage, authed: true };
+      setPage(defaultPage);
+      setNavDepth(0);
+      histIdxRef.current = 0;
+      // 登录成功：push 出平台第一页，把裸 /admin/ 留作"哨兵"历史。
+      // 这样即使在平台首页按后退，也只是退到哨兵（hash 丢失）→ 被 onPop 拦回，不会退出平台。
+      window.history.pushState({ qhPage: defaultPage, qhIdx: 0 }, "", hashOf(defaultPage));
     } else { setLoginErr("登录失败，请检查账号或密码"); }
   };
 
@@ -117,7 +201,11 @@ export default function App() {
     logout();
     setAuthed(false);
     setPage("dashboard");
+    setNavDepth(0);
     setMenuOpen(false);
+    navRef.current.authed = false;
+    // 退出后清掉 hash，回到干净的登录页
+    window.history.replaceState({}, "", window.location.pathname);
   };
 
   const onForgot = () => {
@@ -254,7 +342,7 @@ export default function App() {
                         return (
                           <button
                             key={c.id}
-                            onClick={() => setPage(c.id)}
+                            onClick={() => go(c.id)}
                             className="w-full text-left px-3 py-2 rounded-lg text-[15px] transition-colors"
                             style={{
                               background: cActive ? C.soft : "transparent",
@@ -276,7 +364,7 @@ export default function App() {
             return (
               <button
                 key={n.id}
-                onClick={() => setPage(n.id)}
+                onClick={() => go(n.id)}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[16px] transition-colors"
                 style={{
                   background: active ? C.soft : "transparent",
@@ -307,6 +395,17 @@ export default function App() {
       {/* 主区域 */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 bg-white border-b flex items-center gap-4 px-6 shrink-0" style={{ borderColor: C.border }}>
+          {/* 平台内返回：仅在有上级页面时显示，点了等同于浏览器后退但不会退出平台 */}
+          {navDepth > 0 && (
+            <button
+              onClick={() => window.history.back()}
+              title="返回上一页"
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-gray-50 text-[14px]"
+              style={{ color: C.mid }}
+            >
+              <ChevronLeft className="w-[18px] h-[18px]" style={{ color: C.primary }} /> 返回
+            </button>
+          )}
           <h1 className="text-[19px] font-semibold" style={{ color: C.primary }}>{current.label}</h1>
           <div className="flex-1" />
           {platformAdmin && (
@@ -374,7 +473,7 @@ export default function App() {
 
         <main className="flex-1 overflow-y-auto p-6">
           {/* 租户精简视图（仅非超管可见，数据按 tenant_id 过滤） */}
-          {!platformAdmin && effectivePage === "myhome" && <MyDashboard go={setPage} />}
+          {!platformAdmin && effectivePage === "myhome" && <MyDashboard go={go} />}
           {!platformAdmin && effectivePage === "mykeys" && <MyKeys />}
           {!platformAdmin && effectivePage === "myusage" && <MyUsage />}
           {!platformAdmin && effectivePage === "mytickets" && <MyTickets />}
@@ -382,9 +481,9 @@ export default function App() {
           {!platformAdmin && effectivePage === "myhelp" && <MyHelp />}
 
           {/* 平台方全量视图（仅 super_admin） */}
-          {platformAdmin && effectivePage === "dashboard" && <Dashboard go={setPage} />}
+          {platformAdmin && effectivePage === "dashboard" && <Dashboard go={go} />}
           {platformAdmin && effectivePage === "agents" && <AgentCenter />}
-          {platformAdmin && effectivePage === "tenants" && <Tenants go={setPage} />}
+          {platformAdmin && effectivePage === "tenants" && <Tenants go={go} />}
           {platformAdmin && effectivePage === "users" && <Users />}
           {platformAdmin && effectivePage === "roles" && <Roles />}
           {platformAdmin && effectivePage === "keys" && <ApiKeys />}
