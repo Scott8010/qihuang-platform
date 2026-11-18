@@ -268,6 +268,28 @@ class AuditLog(Base):
     created_at = Column(DateTime, default=_now)
 
 
+class SupportTicket(Base):
+    """平台工单（租户向平台提交申请/咨询，平台处理留痕）
+
+    2026-11-18 客户工作台新增：租户管理员在「平台工单」提交问题，平台超管
+    在工单列表处理。tenant_id 为强制归属字段，所有列表接口按 token 租户收窄。
+    """
+    __tablename__ = "support_ticket"
+    id = Column(String(36), primary_key=True, default=_uid)
+    ticket_no = Column(String(32), unique=True, nullable=False, index=True)
+    tenant_id = Column(String(36), ForeignKey("tenant.id"), nullable=False, index=True)
+    user_id = Column(String(36), index=True)
+    category = Column(String(50), default="咨询")
+    title = Column(String(200), nullable=False)
+    content = Column(Text, nullable=False)
+    priority = Column(String(20), default="normal")  # low/normal/urgent
+    status = Column(String(20), default="open", index=True)  # open/processing/resolved/closed
+    handler_id = Column(String(36))
+    handler_note = Column(Text)
+    created_at = Column(DateTime, default=_now, index=True)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+
 # ═══════════════════════════════════════════════════════════
 # 3. 业务数据域 (9表)
 # ═══════════════════════════════════════════════════════════

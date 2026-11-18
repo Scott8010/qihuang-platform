@@ -30,6 +30,7 @@ export interface AdminIdentity {
   username: string;
   display_name: string;
   tenant_id: string;
+  tenant_name?: string;   // 所属机构显示名（后端 /admin/v1/login 下发）
   roles: string[];
   auth_source: string;
 }
@@ -102,7 +103,7 @@ export async function login(username: string, password: string) {
       code: number;
       data: {
         access_token: string; user_id: string; username: string;
-        display_name: string; tenant_id: string; roles: string[]; auth_source: string;
+        display_name: string; tenant_id: string; tenant_name?: string; roles: string[]; auth_source: string;
       };
     }>("/admin/v1/login", { username, password });
     if (res?.code === 0 && res.data?.access_token) {
@@ -113,6 +114,7 @@ export async function login(username: string, password: string) {
         username: res.data.username,
         display_name: res.data.display_name || res.data.username,
         tenant_id: res.data.tenant_id,
+        tenant_name: res.data.tenant_name || "",
         roles: res.data.roles || [],
         auth_source: res.data.auth_source,
       };
@@ -1402,4 +1404,76 @@ export async function fetchCapabilityStats(): Promise<CapabilityStats | null> {
     const r = await get<{ code: number; data: CapabilityStats }>("/admin/v1/template-center/stats");
     return r?.data || null;
   } catch (e) { console.error("fetchCapabilityStats", e); return null; }
+}
+
+// ═══ 客户工作台：平台工单 + 使用日志（2026-11-18）═══
+// 后端在 qihuang_platform/control/router.py，列表一律按 token 租户强制收窄。
+
+export interface TicketItem {
+  id: string; ticket_no: string; tenant_id: string; user_id: string;
+  category: string; title: string; content: string; priority: string;
+  status: string; handler_id: string | null; handler_note: string | null;
+  created_at: string | null; updated_at: string | null;
+}
+
+export interface CallLogItem {
+  id: string; trace_id: string; endpoint: string; method: string;
+  status_code: number; latency_ms: number; tokens_used: number;
+  cost_cents: number; app_key: string; timestamp: string | null;
+}
+
+interface Paged<T> { items: T[]; pagination?: { total: number; page: number; page_size: number } }
+function pageTotal<T>(p?: Paged<T>): number { return p?.pagination?.total ?? p?.items?.length ?? 0; }
+
+/** GET /admin/v1/my/tickets — 本租户提交的工单 */
+export async function fetchMyTickets(status?: string, page = 1, pageSize = 20): Promise<{ items: TicketItem[]; total: number }> {
+  try {
+    const qs = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+    if (status) qs.set("status", status);
+    const r = await get<{ code: number; data: Paged<TicketItem> }>(`/admin/v1/my/tickets?${qs}`);
+    if (r?.code !== 0) return { items: [], total: 0 };
+    return { items: r.data?.items || [], total: pageTotal(r.data) };
+  } catch (e) { console.error("fetchMyTickets error", e); return { items: [], total: 0 }; }
+}
+
+/** POST /admin/v1/my/tickets — 向平台提交工单（归属自动取当前租户） */
+export async function createMyTicket(body: {
+  title: string; content: string; category?: string; priority?: string;
+}): Promise<MutateResult<TicketItem>> {
+  return mutate<TicketItem>("POST", "/admin/v1/my/tickets", body);
+}
+
+/** GET /admin/v1/tickets — 平台侧工单列表（超管全量；非超管仅本租户） */
+export async function fetchPlatformTickets(status?: string, tenantId?: string): Promise<{ items: TicketItem[]; total: number }> {
+  try {
+    const qs = new URLSearchParams({ page: "1", page_size: "100" });
+    if (status) qs.set("status", status);
+    if (tenantId) qs.set("tenant_id", tenantId);
+    const r = await get<{ code: number; data: Paged<TicketItem> }>(`/admin/v1/tickets?${qs}`);
+    if (r?.code !== 0) return { items: [], total: 0 };
+    return { items: r.data?.items || [], total: pageTotal(r.data) };
+  } catch (e) { console.error("fetchPlatformTickets error", e); return { items: [], total: 0 }; }
+}
+
+/** POST /admin/v1/tickets/{id}/reply — 平台处理工单（仅超管） */
+export async function replyTicket(id: string, status: "processing" | "resolved" | "closed", note: string): Promise<MutateResult<TicketItem>> {
+  return mutate<TicketItem>("POST", `/admin/v1/tickets/${encodeURIComponent(id)}/reply`, { status, note });
+}
+
+/** GET /admin/v1/my/call-logs — 本租户 API 调用明细 */
+export async function fetchMyCallLogs(params?: {
+  days?: number; endpoint?: string; status_code?: number; page?: number; page_size?: number;
+}): Promise<{ items: CallLogItem[]; total: number }> {
+  try {
+    const qs = new URLSearchParams({
+      days: String(params?.days ?? 7),
+      page: String(params?.page ?? 1),
+      page_size: String(params?.page_size ?? 20),
+    });
+    if (params?.endpoint) qs.set("endpoint", params.endpoint);
+    if (params?.status_code !== undefined) qs.set("status_code", String(params.status_code));
+    const r = await get<{ code: number; data: Paged<CallLogItem> }>(`/admin/v1/my/call-logs?${qs}`);
+    if (r?.code !== 0) return { items: [], total: 0 };
+    return { items: r.data?.items || [], total: pageTotal(r.data) };
+  } catch (e) { console.error("fetchMyCallLogs error", e); return { items: [], total: 0 }; }
 }

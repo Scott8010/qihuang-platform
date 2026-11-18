@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import func
 import logging
 
-from qihuang_platform.gateway.deps import get_current_admin, get_scoped_tenant_id
+from qihuang_platform.gateway.deps import get_current_admin, get_scoped_tenant_id, is_super_admin
 from qihuang_platform.agent.refine_llm import refine_review_content
 from qihuang_platform.control.kg_bridge import write_review_to_kg
 from qihuang_platform.gateway.response import success, error, paginated, fail
@@ -31,7 +31,7 @@ from qihuang_platform.db.models import (
     MedCase, MedReport, HealthAssessment, HealthPlan,
     EduCoachSession, EduExamRecord, ConsultAttribution,
     AgentAddonSubscription,
-    UploadFile, Order,
+    UploadFile, Order, SupportTicket,
 )
 from qihuang_platform.billing.wallet import charge_addon_subscription, get_available_balance
 import bcrypt
@@ -1631,7 +1631,11 @@ async def list_audit_logs(
     db = SessionLocal()
     try:
         q = db.query(AuditLog)
-        if tenant_id:
+        # 租户/admin 管理员强制只看本租户；超管可看全量或按 tenant_id 下钻。
+        scope = get_scoped_tenant_id(request, admin)
+        if scope is not None:
+            q = q.filter(AuditLog.tenant_id == scope)
+        elif tenant_id:
             q = q.filter_by(tenant_id=tenant_id)
         if user_id:
             q = q.filter_by(user_id=user_id)
@@ -1663,6 +1667,186 @@ async def list_audit_logs(
             } for a in items],
             total=total, page=page, page_size=page_size,
         )
+    finally:
+        db.close()
+
+
+# ═══════════════════════════════════════════
+# 5b. 客户工作台：平台工单 + 使用日志（2026-11-18）
+#     所有列表接口一律用 get_scoped_tenant_id 按 token 租户强制收窄，
+#     客户端传 tenant_id 只能缩小范围、绝不能扩大范围。
+# ═══════════════════════════════════════════
+
+class TicketCreateRequest(BaseModel):
+    title: str = Field(..., min_length=2, max_length=200)
+    content: str = Field(..., min_length=2, max_length=4000)
+    category: str = Field("咨询", max_length=50)
+    priority: str = Field("normal", max_length=20)
+
+
+class TicketReplyRequest(BaseModel):
+    status: str = Field(..., description="processing / resolved / closed")
+    note: str = Field("", max_length=2000)
+
+
+def _iso(v):
+    return v.isoformat() if v else None
+
+
+def _ticket_dict(t: SupportTicket) -> dict:
+    return {
+        "id": t.id, "ticket_no": t.ticket_no, "tenant_id": t.tenant_id,
+        "user_id": t.user_id, "category": t.category, "title": t.title,
+        "content": t.content, "priority": t.priority, "status": t.status,
+        "handler_id": t.handler_id, "handler_note": t.handler_note,
+        "created_at": _iso(t.created_at), "updated_at": _iso(t.updated_at),
+    }
+
+
+@router.post("/my/tickets", summary="提交平台工单（租户）")
+async def create_my_ticket(
+    body: TicketCreateRequest,
+    request: Request,
+    admin: dict = Depends(get_current_admin),
+):
+    scope = get_scoped_tenant_id(request, admin)
+    if not scope:
+        raise HTTPException(403, detail=error("FORBIDDEN", "缺少租户上下文，无法提交工单"))
+    priority = body.priority if body.priority in ("low", "normal", "urgent") else "normal"
+    db = SessionLocal()
+    try:
+        t = SupportTicket(
+            id=_uid(),
+            ticket_no="TK" + datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S") + _uid().replace("-", "")[:6].upper(),
+            tenant_id=scope,
+            user_id=getattr(request.state, "user_id", None),
+            category=(body.category or "咨询").strip() or "咨询",
+            title=body.title.strip(), content=body.content.strip(),
+            priority=priority, status="open",
+        )
+        db.add(t)
+        db.commit()
+        db.refresh(t)
+        return success(_ticket_dict(t))
+    except Exception as e:
+        db.rollback()
+        logging.exception("create_my_ticket failed")
+        raise HTTPException(500, detail=error("TICKET_CREATE_FAILED", "工单提交失败，请稍后再试"))
+    finally:
+        db.close()
+
+
+@router.get("/my/tickets", summary="我的工单列表（租户）")
+async def list_my_tickets(
+    request: Request,
+    status: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    admin: dict = Depends(get_current_admin),
+):
+    scope = get_scoped_tenant_id(request, admin)
+    if not scope:
+        raise HTTPException(403, detail=error("FORBIDDEN", "缺少租户上下文，无法查看工单"))
+    db = SessionLocal()
+    try:
+        q = db.query(SupportTicket).filter(SupportTicket.tenant_id == scope)
+        if status:
+            q = q.filter(SupportTicket.status == status)
+        total = q.count()
+        items = q.order_by(SupportTicket.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+        return paginated([_ticket_dict(t) for t in items], total=total, page=page, page_size=page_size)
+    finally:
+        db.close()
+
+
+@router.get("/tickets", summary="平台工单列表（超管全量 / 管理员仅本租户）")
+async def list_tickets(
+    request: Request,
+    tenant_id: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    admin: dict = Depends(get_current_admin),
+):
+    scope = get_scoped_tenant_id(request, admin)
+    db = SessionLocal()
+    try:
+        q = db.query(SupportTicket)
+        if scope is not None:
+            q = q.filter(SupportTicket.tenant_id == scope)
+        elif tenant_id:
+            q = q.filter(SupportTicket.tenant_id == tenant_id)
+        if status:
+            q = q.filter(SupportTicket.status == status)
+        total = q.count()
+        items = q.order_by(SupportTicket.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+        return paginated([_ticket_dict(t) for t in items], total=total, page=page, page_size=page_size)
+    finally:
+        db.close()
+
+
+@router.post("/tickets/{ticket_id}/reply", summary="平台处理工单（仅超管）")
+async def reply_ticket(
+    ticket_id: str,
+    body: TicketReplyRequest,
+    request: Request,
+    admin: dict = Depends(get_current_admin),
+):
+    if not is_super_admin(admin):
+        raise HTTPException(403, detail=error("FORBIDDEN", "仅平台管理员可处理工单"))
+    if body.status not in ("processing", "resolved", "closed"):
+        raise HTTPException(400, detail=error("INVALID_STATUS", "工单状态不合法"))
+    db = SessionLocal()
+    try:
+        t = db.query(SupportTicket).filter(SupportTicket.id == ticket_id).first()
+        if not t:
+            raise HTTPException(404, detail=error("NOT_FOUND", "工单不存在"))
+        t.status = body.status
+        t.handler_id = getattr(request.state, "user_id", None)
+        t.handler_note = (body.note or "").strip() or None
+        t.updated_at = _now()
+        db.commit()
+        db.refresh(t)
+        return success(_ticket_dict(t))
+    finally:
+        db.close()
+
+
+@router.get("/my/call-logs", summary="我的使用日志（按租户强制过滤）")
+async def list_my_call_logs(
+    request: Request,
+    days: int = Query(7, ge=1, le=90),
+    endpoint: Optional[str] = Query(None, description="接口路径关键字"),
+    status_code: Optional[int] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    admin: dict = Depends(get_current_admin),
+):
+    scope = get_scoped_tenant_id(request, admin)
+    if not scope:
+        raise HTTPException(403, detail=error("FORBIDDEN", "缺少租户上下文，无法查看使用日志"))
+    db = SessionLocal()
+    try:
+        q = db.query(CallLog).filter(CallLog.tenant_id == scope)
+        q = q.filter(CallLog.timestamp >= datetime.now(timezone.utc) - timedelta(days=days))
+        if endpoint:
+            q = q.filter(CallLog.endpoint.like(f"%{endpoint}%"))
+        if status_code is not None:
+            q = q.filter(CallLog.status_code == status_code)
+        total = q.count()
+        rows = q.order_by(CallLog.timestamp.desc()).offset((page - 1) * page_size).limit(page_size).all()
+        items = []
+        for c in rows:
+            key = c.app_key or ""
+            items.append({
+                "id": c.id, "trace_id": c.trace_id or "",
+                "endpoint": c.endpoint or "", "method": c.method or "",
+                "status_code": c.status_code, "latency_ms": round(c.latency_ms or 0, 1),
+                "tokens_used": c.tokens_used or 0, "cost_cents": c.cost_cents or 0,
+                "app_key": (key[:6] + "***" if len(key) > 6 else key),
+                "timestamp": _iso(c.timestamp),
+            })
+        return paginated(items, total=total, page=page, page_size=page_size)
     finally:
         db.close()
 

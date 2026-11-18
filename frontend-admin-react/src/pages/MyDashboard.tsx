@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -20,10 +19,16 @@ export default function MyDashboard({ go }: { go: (p: string) => void }) {
   const [loading, setLoading] = useState(true);
   const identity = getIdentity();
   const tenantId = identity?.tenant_id || "";
-  const orgName = identity?.display_name || identity?.username || "我的机构";
+  // 机构名来自登录响应（后端读 tenant 表），不是登录人姓名；角色按中文展示。
+  const userName = identity?.display_name || identity?.username || "管理员";
+  const orgName = identity?.tenant_name || "我的机构";
+  const roleName = (identity?.roles || []).includes("super_admin") ? "平台超级管理员"
+    : (identity?.roles || []).includes("tenant_admin") ? "租户管理员"
+    : (identity?.roles || []).includes("org_admin") ? "机构管理员"
+    : (identity?.roles || []).includes("admin") ? "管理员" : "管理员";
 
   const [wallet, setWallet] = useState<{ base: number; addon: number; total: number } | null>(null);
-  const [usage, setUsage] = useState<{ totalCalls: number; usage: { agent_key: string; name: string; calls: number }[] }>({ totalCalls: 0, usage: [] });
+  const [totalCalls, setTotalCalls] = useState(0);
   const [keyCount, setKeyCount] = useState(0);
   const [myPlan, setMyPlan] = useState<{ plan: string; quotaCalls: number; usedCalls: number; userCount: number } | null>(null);
 
@@ -42,7 +47,7 @@ export default function MyDashboard({ go }: { go: (p: string) => void }) {
       const mine = all.find((t) => t.id === tenantId);
       if (!alive) return;
       setWallet(w);
-      setUsage({ totalCalls: u.totalCalls, usage: u.usage });
+      setTotalCalls(u.totalCalls);
       setKeyCount(k.filter((x) => x.status === "ACTIVE").length);
       if (mine) {
         setMyPlan({
@@ -62,7 +67,7 @@ export default function MyDashboard({ go }: { go: (p: string) => void }) {
 
   const kpis = [
     { label: "我的套餐", value: myPlan?.plan || (loading ? "读取中" : "—"), sub: "套餐决定可用的 Agent 能力", icon: Sparkles },
-    { label: "本月调用量", value: usage.totalCalls.toLocaleString("zh-CN"), sub: myPlan && myPlan.quotaCalls > 0 ? `配额 ${myPlan.quotaCalls.toLocaleString("zh-CN")} · 已用 ${quotaPct}%` : "按积分计费", icon: Zap },
+    { label: "本月调用量", value: totalCalls.toLocaleString("zh-CN"), sub: myPlan && myPlan.quotaCalls > 0 ? `配额 ${myPlan.quotaCalls.toLocaleString("zh-CN")} · 已用 ${quotaPct}%` : "按积分计费", icon: Zap },
     { label: "积分余额", value: wallet ? wallet.total.toLocaleString("zh-CN") : "—", sub: wallet ? `基础 ${wallet.base} · 叠加 ${wallet.addon}` : "钱包数据", icon: Wallet },
     { label: "我的团队", value: String(myPlan?.userCount ?? "—"), sub: `有效密钥 ${keyCount} 把`, icon: Users },
   ];
@@ -75,13 +80,12 @@ export default function MyDashboard({ go }: { go: (p: string) => void }) {
         </div>
       )}
 
-      {/* 欢迎条 */}
+      {/* 欢迎条：只讲「你是谁、属于哪家机构」，不展示内部隔离口径 */}
       <div className="rounded-xl p-5 flex items-center justify-between" style={{ background: C.soft, border: `1px solid ${C.border}` }}>
         <div>
-          <div className="text-[18px] font-bold" style={{ color: C.primary }}>你好，{orgName}</div>
-          <div className="text-[13px] mt-1" style={{ color: C.mid }}>这是与你机构相关的数据——其他租户的信息你看不到。</div>
+          <div className="text-[18px] font-bold" style={{ color: C.primary }}>你好，{userName}</div>
+          <div className="text-[13px] mt-1" style={{ color: C.mid }}>{orgName} · {roleName}</div>
         </div>
-        <Badge style={{ background: C.primary, color: "#fff" }}>客户视角</Badge>
       </div>
 
       {/* KPI */}
@@ -123,29 +127,17 @@ export default function MyDashboard({ go }: { go: (p: string) => void }) {
                   <span>共 {myPlan.quotaCalls.toLocaleString("zh-CN")} 次</span>
                 </div>
                 <Progress value={quotaPct} />
-                <div className="text-[12px] mt-2" style={{ color: C.light }}>配额为本月调用上限，用尽返回 2001 QUOTA_EXCEEDED</div>
+                <div className="text-[12px] mt-2" style={{ color: C.light }}>
+                  本月次数已用 {quotaPct}%，需要更多次数可联系平台方调整套餐。
+                </div>
               </>
             ) : (
-              <div className="text-[14px] py-6 text-center" style={{ color: C.light }}>
-                当前套餐按积分计费，无按月调用上限
+              <div className="text-[14px] py-4 text-center" style={{ color: C.light }}>
+                当前套餐按实际用量结算，本月没有调用次数上限
               </div>
             )}
-
-            {/* 我的 Agent 用量 TOP */}
-            <div className="mt-5">
-              <div className="text-[14px] font-medium mb-2" style={{ color: C.primary }}>近 30 天各能力调用</div>
-              {usage.usage.length === 0 ? (
-                <div className="text-[13px]" style={{ color: C.light }}>暂无调用数据</div>
-              ) : (
-                <div className="space-y-2">
-                  {usage.usage.slice(0, 6).map((a) => (
-                    <div key={a.agent_key} className="flex items-center justify-between text-[13px]">
-                      <span style={{ color: C.mid }}>{a.name || a.agent_key}</span>
-                      <span className="font-medium" style={{ color: C.ink }}>{a.calls.toLocaleString("zh-CN")} 次</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+            <div className="text-[13px] mt-4 pt-3 border-t" style={{ borderColor: C.border, color: C.mid }}>
+              想看每次调用的时间、接口和消耗，点右上角「用量明细」。
             </div>
           </CardContent>
         </Card>
@@ -171,9 +163,6 @@ export default function MyDashboard({ go }: { go: (p: string) => void }) {
         </Card>
       </div>
 
-      <div className="rounded-lg p-3 text-[12px]" style={{ background: "#FBF4E4", border: "1px solid #ecd9a8", color: C.gold }}>
-        💡 本页只展示本机构数据。需要更多能力或调整套餐，请联系平台方为你的租户配置授权（addon）。
-      </div>
     </div>
   );
 }

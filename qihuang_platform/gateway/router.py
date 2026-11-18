@@ -468,7 +468,17 @@ def _db_admin_login(username: str, password: str):
         role_names = rbac.get_user_effective_roles(u.id)
         if not (ADMIN_ROLE_WHITELIST & set(role_names)):
             raise HTTPException(403, detail=error("ADMIN_FORBIDDEN", "该账号无管理端访问权限"))
-        return u, role_names
+        # 客户工作台要显示「所属机构」：租户显示名取自 tenant 表（不是登录人名）。
+        # 查不到时回退租户 ID，绝不把登录人的 display_name 冒充机构名。
+        from qihuang_platform.db.models import Tenant
+        tenant_name = u.tenant_id
+        try:
+            t = db.query(Tenant).filter(Tenant.id == u.tenant_id).first()
+            if t:
+                tenant_name = t.display_name or t.name or u.tenant_id
+        except Exception:
+            pass
+        return u, role_names, tenant_name
     finally:
         db.close()
 
@@ -492,7 +502,7 @@ async def admin_login(req: AdminLoginRequest):
         hit = None  # 库不可用 → 落到应急通道
 
     if hit:
-        u, role_names = hit
+        u, role_names, tenant_name = hit
         org_id = u.org_id or "org_default"
         register_user(u.id, u.tenant_id, org_id, role_names)
         access_token = create_access_token(u.id, u.tenant_id, org_id, role_names)
@@ -506,6 +516,7 @@ async def admin_login(req: AdminLoginRequest):
             "username": u.username,
             "display_name": u.display_name or u.username,
             "tenant_id": u.tenant_id,
+            "tenant_name": tenant_name,
             "roles": role_names,
             "auth_source": "database",
         })
@@ -533,6 +544,7 @@ async def admin_login(req: AdminLoginRequest):
         "username": user_id,
         "display_name": "应急管理员",
         "tenant_id": tenant_id,
+        "tenant_name": "平台运营方",
         "roles": roles,
         "auth_source": "env_fallback",
     })

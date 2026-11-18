@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Building2, ShieldCheck, KeyRound, BarChart3,
   BookOpenCheck, Activity, Search, Bell, Sprout, ChevronDown, LogOut,
   Users as UsersIcon, Eye, EyeOff, Lock, Bot, CreditCard, Boxes,
-  ChevronRight, Home, FileText,
+  ChevronRight, Home, FileText, HelpCircle, Ticket, ScrollText,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { C } from "@/lib/types";
@@ -23,6 +23,10 @@ import Ledger from "@/pages/Ledger";
 import MyDashboard from "@/pages/MyDashboard";
 import MyKeys from "@/pages/MyKeys";
 import MyUsage from "@/pages/MyUsage";
+import MyTickets from "@/pages/MyTickets";
+import MyLogs from "@/pages/MyLogs";
+import MyHelp from "@/pages/MyHelp";
+import PlatformTickets from "@/pages/PlatformTickets";
 
 type NavChild = { id: string; label: string; desc?: string };
 type NavItem =
@@ -48,6 +52,7 @@ const adminNav: NavItem[] = [
   },
   { id: "capability", label: "能力中心", icon: Boxes },
   { id: "content", label: "内容管控", icon: BookOpenCheck },
+  { id: "tickets", label: "工单管理", icon: Ticket },
   { id: "monitor", label: "监控运维", icon: Activity },
   { id: "planupgrade", label: "套餐升级", icon: CreditCard },
 ];
@@ -57,6 +62,9 @@ const tenantNav: NavItem[] = [
   { id: "myhome", label: "我的总览", icon: Home },
   { id: "mykeys", label: "我的密钥", icon: KeyRound },
   { id: "myusage", label: "用量账单", icon: FileText },
+  { id: "mytickets", label: "平台工单", icon: Ticket },
+  { id: "mylogs", label: "使用日志", icon: ScrollText },
+  { id: "myhelp", label: "使用说明", icon: HelpCircle },
 ];
 
 /** 是否平台超管：只有 super_admin 看全量菜单，其余管理员看租户精简视图 */
@@ -300,9 +308,6 @@ export default function App() {
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 bg-white border-b flex items-center gap-4 px-6 shrink-0" style={{ borderColor: C.border }}>
           <h1 className="text-[19px] font-semibold" style={{ color: C.primary }}>{current.label}</h1>
-          {!platformAdmin && (
-            <span className="text-[12px] px-2 py-0.5 rounded-full" style={{ background: "#FBF4E4", color: C.gold }}>客户视角</span>
-          )}
           <div className="flex-1" />
           {platformAdmin && (
             <>
@@ -330,10 +335,24 @@ export default function App() {
             </button>
             {menuOpen && (
               <div
-                className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border py-1 z-40"
+                className="absolute right-0 mt-2 w-60 bg-white rounded-xl shadow-lg border py-1 z-40"
                 style={{ borderColor: C.border }}
                 onMouseLeave={() => setMenuOpen(false)}
               >
+                {/* 我的账号：一眼看清登录人、所属机构、管理角色 */}
+                <div className="px-4 py-3 border-b" style={{ borderColor: C.border }}>
+                  <div className="text-[15px] font-medium" style={{ color: C.ink }}>
+                    {identity?.display_name || identity?.username || "管理员"}
+                  </div>
+                  <div className="text-[12px] mt-1" style={{ color: C.mid }}>
+                    {identity?.tenant_name || "—"}
+                  </div>
+                  <div className="text-[12px]" style={{ color: C.light }}>
+                    {platformAdmin ? "平台超级管理员"
+                      : (identity?.roles || []).includes("tenant_admin") ? "租户管理员"
+                      : (identity?.roles || []).includes("org_admin") ? "机构管理员" : "管理员"}
+                  </div>
+                </div>
                 <button
                   className="w-full flex items-center gap-2 px-4 py-2.5 text-[15px] text-left hover:bg-gray-50"
                   style={{ color: C.mid }}
@@ -358,6 +377,9 @@ export default function App() {
           {!platformAdmin && effectivePage === "myhome" && <MyDashboard go={setPage} />}
           {!platformAdmin && effectivePage === "mykeys" && <MyKeys />}
           {!platformAdmin && effectivePage === "myusage" && <MyUsage />}
+          {!platformAdmin && effectivePage === "mytickets" && <MyTickets />}
+          {!platformAdmin && effectivePage === "mylogs" && <MyLogs />}
+          {!platformAdmin && effectivePage === "myhelp" && <MyHelp />}
 
           {/* 平台方全量视图（仅 super_admin） */}
           {platformAdmin && effectivePage === "dashboard" && <Dashboard go={setPage} />}
@@ -369,6 +391,7 @@ export default function App() {
           {platformAdmin && effectivePage === "billing" && <Billing />}
           {platformAdmin && effectivePage === "capability" && <CapabilityCenter />}
           {platformAdmin && effectivePage === "content" && <Content />}
+          {platformAdmin && effectivePage === "tickets" && <PlatformTickets />}
           {platformAdmin && effectivePage === "monitor" && <Monitor />}
           {platformAdmin && effectivePage === "planupgrade" && <PlanUpgrade />}
           {platformAdmin && effectivePage === "ledger" && <Ledger />}
