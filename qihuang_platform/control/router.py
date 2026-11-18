@@ -1618,6 +1618,7 @@ async def capacity_forecast(admin: dict = Depends(get_current_admin)):
 
 @router.get("/audit-logs", summary="审计日志查询")
 async def list_audit_logs(
+    request: Request,
     tenant_id: Optional[str] = Query(None),
     user_id: Optional[str] = Query(None),
     action: Optional[str] = Query(None),
