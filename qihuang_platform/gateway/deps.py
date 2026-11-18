@@ -190,6 +190,39 @@ async def get_current_admin(
 admin_required = get_current_admin
 
 
+# ========== 租户数据范围收窄（防越权） ==========
+
+def is_super_admin(user: dict) -> bool:
+    """统一超管判定口径：token 内 roles 含 super_admin。
+
+    与 get_current_user / get_current_admin / list_users 判定保持一致，
+    避免各处各写一遍导致口径漂移（见 2026-11-17 超管误判 404 坑）。
+    """
+    return "super_admin" in ((user or {}).get("roles") or [])
+
+
+def get_scoped_tenant_id(request: Request, user: dict) -> Optional[str]:
+    """当前管理员可见的数据租户范围。
+
+    - super_admin：返回 None，表示不限租户（列表接口可看全平台）。
+      注意：get_current_user 允许超管用 X-Tenant-Id 切换上下文，但列表类
+      接口对超管保持全量语义，符合运营/排障需求。
+    - 其余管理员（tenant_admin/org_admin/admin）：强制返回 token 自带
+      tenant_id。列表接口必须用它过滤，禁止客户端传参越权看别家。
+
+    用法（列表接口）：
+        scope = get_scoped_tenant_id(request, user)
+        if scope is not None:
+            q = q.filter(Model.tenant_id == scope)
+    """
+    if is_super_admin(user):
+        return None
+    # 优先 token 自带 tenant_id（get_current_user 已注入 user["tenant_id"]），
+    # 回退 request.state（同源），再回退 None 也不放行——调用方须显式处理。
+    tid = (user or {}).get("tenant_id") or getattr(request.state, "tenant_id", None)
+    return tid
+
+
 # ========== 限流依赖 ==========
 
 class RateLimit:

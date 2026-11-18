@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from qihuang_platform.db.config import get_db, init_db
 from qihuang_platform.rbac.service import RBACService, validate_password
-from qihuang_platform.gateway.deps import get_current_user, get_current_admin
+from qihuang_platform.gateway.deps import get_current_user, get_current_admin, get_scoped_tenant_id
 from qihuang_platform.gateway.response import success, error
 from qihuang_platform.db.models import seed_preset_data, Plan, Subscription, UserRole, Role
 from qihuang_platform.billing.pricing_config import RECHARGE_PACKS, AGENT_ADDON_PRICE
@@ -117,12 +117,19 @@ async def create_tenant(
 
 @rbac_router.get("/tenants")
 async def list_tenants(
+    request: Request,
     user: dict = Depends(get_current_admin),
     rbac: RBACService = Depends(get_rbac),
     db: Session = Depends(get_db),
 ):
-    """列出所有租户（含当前套餐，与 /tenants-extended 对齐，修复列表套餐显示缺失）"""
+    """列出租户（含当前套餐，与 /tenants-extended 对齐）。
+
+    防越权（2026-11-18）：非 super_admin 仅返回本人所属租户。
+    """
     tenants = rbac.list_tenants()
+    scope = get_scoped_tenant_id(request, user)
+    if scope is not None:
+        tenants = [t for t in tenants if t.id == scope]
     # 批量拉取 active subscription -> plan，避免 N+1
     subs = db.query(Subscription).filter(Subscription.status == "active").all()
     plan_ids = {s.plan_id for s in subs}

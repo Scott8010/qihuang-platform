@@ -13,6 +13,7 @@ from qihuang_platform.gateway.auth import (
 )
 from qihuang_platform.gateway.deps import (
     get_current_user, get_current_api_key, get_current_admin, RateLimit,
+    get_scoped_tenant_id,
 )
 from qihuang_platform.gateway.response import success, error
 
@@ -342,17 +343,27 @@ async def create_api_key(
 
 @api_key_router.get("/")
 async def list_api_keys_endpoint(
+    request: Request,
     tenant_id: Optional[str] = Query(None),
     user: dict = Depends(get_current_admin),
 ):
-    """列出所有 API Key（需要管理员）—— 优先从 DB 读取，内存作为降级"""
+    """列出 API Key（需要管理员）—— 优先从 DB 读取，内存作为降级
+
+    防越权（2026-11-18）：非 super_admin 强制只看 token 自带租户的密钥，
+    忽略客户端传入的 tenant_id（此前传别家 ID 即可拖库别家密钥）。
+    """
     try:
         from qihuang_platform.db.config import SessionLocal
         from qihuang_platform.db.models import ApiKey as DBApiKey, Tenant
         db = SessionLocal()
         try:
             q = db.query(DBApiKey)
-            if tenant_id:
+            scope = get_scoped_tenant_id(request, user)
+            if scope is not None:
+                # 非超管：无视客户端 tenant_id 参数，强制锁定 token 租户
+                q = q.filter(DBApiKey.tenant_id == scope)
+            elif tenant_id:
+                # 超管：保留跨租户查看能力（运营/排障用）
                 q = q.filter(DBApiKey.tenant_id == tenant_id)
             keys = q.order_by(DBApiKey.created_at.desc()).all()
             items = []

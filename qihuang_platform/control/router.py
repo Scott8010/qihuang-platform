@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import func
 import logging
 
-from qihuang_platform.gateway.deps import get_current_admin
+from qihuang_platform.gateway.deps import get_current_admin, get_scoped_tenant_id
 from qihuang_platform.agent.refine_llm import refine_review_content
 from qihuang_platform.control.kg_bridge import write_review_to_kg
 from qihuang_platform.gateway.response import success, error, paginated, fail
@@ -2612,6 +2612,7 @@ async def renew_tenant(
 
 @router.get("/tenants-extended", summary="租户列表(扩展)")
 async def list_tenants_extended(
+    request: Request,
     scene: Optional[str] = Query(None, description="health/medical/edu"),
     search: Optional[str] = Query(None, description="按名称/ID搜索"),
     status: Optional[str] = Query(None, description="active/suspended/readonly/closed"),
@@ -2619,10 +2620,19 @@ async def list_tenants_extended(
     page_size: int = Query(20, ge=1, le=100),
     admin: dict = Depends(get_current_admin),
 ):
-    """P2-27: 租户列表（含机构数、用户数、订阅信息、3D开关、月用量）"""
+    """P2-27: 租户列表（含机构数、用户数、订阅信息、3D开关、月用量）
+
+    防越权（2026-11-18）：非 super_admin 强制只看 token 自带租户，
+    忽略任何搜索/分页夹带，禁止通过本接口探测别家租户。
+    """
     db = SessionLocal()
     try:
         q = db.query(Tenant)
+
+        # 非超管：强制锁定本租户（在其它过滤之前，杜绝绕过）
+        scope = get_scoped_tenant_id(request, admin)
+        if scope is not None:
+            q = q.filter(Tenant.id == scope)
 
         if scene:
             q = q.filter_by(scene=scene)
