@@ -50,6 +50,7 @@ from qihuang_platform.billing.reconcile import (
     ensure_usage_snapshot_for,
 )
 from qihuang_platform.agent.registry import list_agents, get_agent, set_agent_status, is_active
+from qihuang_platform.agent.deps import resolve_tenant_agent_access
 from qihuang_platform.agent import dashboard as agent_dashboard
 
 router = APIRouter(prefix="/admin/v1", tags=["管理端-全功能"])
@@ -1860,6 +1861,52 @@ async def list_my_call_logs(
         return paginated(items, total=total, page=page, page_size=page_size)
     finally:
         db.close()
+
+
+@router.get("/my/agents", summary="我的可用 Agent 能力（按租户强制过滤，门控同源）")
+async def my_agents(
+    request: Request,
+    admin: dict = Depends(get_current_admin),
+):
+    """机构端「我的能力」页唯一数据源。
+
+    安全铁律：用 get_scoped_tenant_id 强制收窄到 token 租户，不接受任何客户端 tenant_id 参数。
+    一致性铁律：可用范围直接来自 resolve_tenant_agent_access —— 与 require_agent_in_plan
+    （实际调用门控）共用同一解析链，页面能看到 = 真能调用，杜绝「看着能用、调不通」。
+
+    返回 available（可用，含中文名/说明/来源套餐或单加）+ locked（未开通，前端灰显占位）。
+    """
+    scope = get_scoped_tenant_id(request, admin)
+    if not scope:
+        raise HTTPException(403, detail=error("FORBIDDEN", "缺少租户上下文，无法查看能力清单"))
+    access = resolve_tenant_agent_access(scope)
+    registry = list_agents()
+    available: list[dict] = []
+    locked: list[dict] = []
+    for key, spec in registry.items():
+        if spec.get("status") != "active":
+            continue  # 平台已停用的能力两边都不展示
+        source = "addon" if key in access["addons"] else ("plan" if key in access["plan_agents"] else "locked")
+        item = {
+            "agent_key": key,
+            "name": spec.get("name") or key,
+            "desc": spec.get("desc") or "",
+            "category": spec.get("category") or "general",
+            "capabilities": spec.get("capabilities") or [],
+            "source": source,
+        }
+        (available if key in access["agents"] else locked).append(item)
+    # 可用项按套餐编排顺序排（与门控解析同序），未开通项按注册顺序
+    order = {k: i for i, k in enumerate(access["agents"])}
+    available.sort(key=lambda x: order.get(x["agent_key"], 999))
+    return success({
+        "tenant_id": scope,
+        "scene": access["scene"],
+        "plan": access["plan_display_name"] or access["plan_name"] or "",
+        "has_subscription": access["has_subscription"],
+        "available": available,
+        "locked": locked,
+    })
 
 
 @router.get("/my/billing-overview", summary="我的账单与配额总览（按租户强制过滤）")

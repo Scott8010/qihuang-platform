@@ -34,6 +34,46 @@ def _emit_perm_event(tenant_id, agent_key, result, reason, addons=None):
         pass
 
 
+def resolve_tenant_agent_access(tenant_id: str) -> dict:
+    """统一解析某租户当前可用的 Agent 范围——门控（require_agent_in_plan）与
+    机构端展示（GET /admin/v1/my/agents）共用同一真值源，杜绝「页面显示能用、实际调不通」。
+
+    判定链与 require_agent_in_plan 完全一致：
+      active 订阅 → 场景套餐编排（SCENE_PLAN_AGENTS，按 tenant.scene，缺省 MED）→
+      租户单加叠加（Tenant.extra.agent_addons，仅计启用态）→ 去重保序。
+
+    返回：has_subscription / scene / plan_name / plan_display_name /
+          plan_agents / addons / agents（最终可用 key 列表）
+    """
+    from qihuang_platform.db.config import SessionLocal
+    from qihuang_platform.db.models import Subscription, Plan, Tenant
+    from qihuang_platform.billing.plans import get_effective_agents
+
+    db = SessionLocal()
+    try:
+        sub = db.query(Subscription).filter_by(tenant_id=tenant_id, status="active").first()
+        tenant = db.query(Tenant).filter_by(id=tenant_id).first()
+        plan = db.query(Plan).filter_by(id=sub.plan_id).first() if sub else None
+        scene = getattr(tenant, "scene", None)
+        plan_agents = get_effective_agents(plan, scene) if plan else []
+        addons = [k for k in ((tenant.extra or {}).get("agent_addons", []) if tenant else []) if is_active(k)]
+        merged = list(plan_agents)
+        for k in addons:
+            if k not in merged:
+                merged.append(k)
+        return {
+            "has_subscription": bool(sub),
+            "scene": scene or "MED",
+            "plan_name": getattr(plan, "plan_name", None),
+            "plan_display_name": getattr(plan, "display_name", None),
+            "plan_agents": plan_agents,
+            "addons": addons,
+            "agents": merged,
+        }
+    finally:
+        db.close()
+
+
 def require_agent_in_plan(agent_key: str):
     """返回校验「当前租户套餐是否包含 agent_key」的依赖内函数（稳定可覆盖）。"""
     if agent_key in _DEP_CACHE:
@@ -56,56 +96,31 @@ def require_agent_in_plan(agent_key: str):
                 detail=error("AGENT_FORBIDDEN", f"Agent 能力「{agent_key}」已停用"),
             )
 
-        # 解析套餐权限
+        # 解析套餐权限：与机构端展示接口共用同一真值源（统一租户 Agent 范围解析）
         try:
-            from qihuang_platform.db.config import SessionLocal
-            from qihuang_platform.db.models import Subscription, Plan, Tenant
-            db = SessionLocal()
+            access = resolve_tenant_agent_access(tenant_id)
         except Exception as e:
             raise HTTPException(
                 status_code=403,
                 detail=error("AGENT_FORBIDDEN", f"套餐鉴权不可用：{e}"),
             )
-
-        try:
-            sub = (
-                db.query(Subscription)
-                .filter_by(tenant_id=tenant_id, status="active")
-                .first()
+        addons = access["addons"]
+        if not access["has_subscription"]:
+            _emit_perm_event(tenant_id, agent_key, "denied", "no_active_subscription")
+            raise HTTPException(
+                status_code=403,
+                detail=error("AGENT_FORBIDDEN", "租户无有效订阅，无法使用 Agent 能力"),
             )
-            if not sub:
-                _emit_perm_event(tenant_id, agent_key, "denied", "no_active_subscription")
-                raise HTTPException(
-                    status_code=403,
-                    detail=error("AGENT_FORBIDDEN", "租户无有效订阅，无法使用 Agent 能力"),
-                )
-            plan = db.query(Plan).filter_by(id=sub.plan_id).first()
-            tenant = db.query(Tenant).filter_by(id=tenant_id).first()
-            # 场景化动态取 agent：按租户 scene 从 SCENE_PLAN_AGENTS 取该场景该档编排，
-            # 取代套餐 features_json.agents 的静态兜底（#472）。scene 非法/缺省 fallback 到 MED。
-            from qihuang_platform.billing.plans import get_effective_agents
-            scene = getattr(tenant, "scene", None)
-            agents = get_effective_agents(plan, scene) if plan else []
-            # 租户级精准叠加：在场景编排基础上，叠加该租户额外授权的能力
-            # （Tenant.extra["agent_addons"]，去重保序，仅计启用态能力，防注入/停用项生效）
-            addons = (tenant.extra or {}).get("agent_addons", []) if tenant else []
-            addons = [k for k in addons if is_active(k)]
-            merged = list(agents)
-            for k in addons:
-                if k not in merged:
-                    merged.append(k)
-            if agent_key not in merged:
-                _emit_perm_event(tenant_id, agent_key, "denied", "not_in_plan", addons=addons)
-                raise HTTPException(
-                    status_code=403,
-                    detail=error(
-                        "AGENT_FORBIDDEN",
-                        f"当前套餐未包含 Agent 能力「{agent_key}」"
-                        + ("（含租户叠加项）" if addons else ""),
-                    ),
-                )
-        finally:
-            db.close()
+        if agent_key not in access["agents"]:
+            _emit_perm_event(tenant_id, agent_key, "denied", "not_in_plan", addons=addons)
+            raise HTTPException(
+                status_code=403,
+                detail=error(
+                    "AGENT_FORBIDDEN",
+                    f"当前套餐未包含 Agent 能力「{agent_key}」"
+                    + ("（含租户叠加项）" if addons else ""),
+                ),
+            )
         _emit_perm_event(tenant_id, agent_key, "allowed", "plan_includes_agent", addons=addons)
         return user
 

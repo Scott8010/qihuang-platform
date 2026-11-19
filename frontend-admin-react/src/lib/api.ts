@@ -1572,3 +1572,30 @@ export async function fetchMyBillingOverview(): Promise<BillingOverview | null> 
     return r.data;
   } catch { return null; }
 }
+
+/** 机构端可用 Agent 能力（收窄接口，与 require_agent_in_plan 门控同源） */
+export interface MyAgentItem {
+  agent_key: string;
+  name: string;
+  desc: string;
+  category: string;
+  capabilities: string[];
+  source: "plan" | "addon" | "locked";
+}
+export interface MyAgentsOverview {
+  tenant_id: string;
+  scene: string;
+  plan: string;
+  has_subscription: boolean;
+  available: MyAgentItem[];
+  locked: MyAgentItem[];
+}
+
+/** GET /admin/v1/my/agents — 我的可用能力清单（跨租户拿不到） */
+export async function fetchMyAgents(): Promise<MyAgentsOverview | null> {
+  try {
+    const r = await get<{ code: number; data: MyAgentsOverview }>("/admin/v1/my/agents");
+    if (r?.code !== 0 || !r?.data) return null;
+    return r.data;
+  } catch { return null; }
+}
