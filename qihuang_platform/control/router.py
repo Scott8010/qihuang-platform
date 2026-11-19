@@ -31,7 +31,7 @@ from qihuang_platform.db.models import (
     MedCase, MedReport, HealthAssessment, HealthPlan,
     EduCoachSession, EduExamRecord, ConsultAttribution,
     AgentAddonSubscription,
-    UploadFile, Order, SupportTicket,
+    UploadFile, Order, SupportTicket, Wallet,
 )
 from qihuang_platform.billing.wallet import charge_addon_subscription, get_available_balance
 from qihuang_platform.billing.quota import billable_call_filter, operation_call_filter
@@ -1858,6 +1858,146 @@ async def list_my_call_logs(
                 "timestamp": _iso(c.timestamp),
             })
         return paginated(items, total=total, page=page, page_size=page_size)
+    finally:
+        db.close()
+
+
+@router.get("/my/billing-overview", summary="我的账单与配额总览（按租户强制过滤）")
+async def my_billing_overview(
+    request: Request,
+    admin: dict = Depends(get_current_admin),
+):
+    """机构端「账单与配额」页唯一数据源。
+
+    安全铁律：全程用 get_scoped_tenant_id 强制收窄到 token 租户，
+    不接任何客户端 tenant_id 参数——机构管理员绝无可能看到别家账单。
+    口径铁律（2026-11-19 A）：消费只算 billable_call_filter() 真业务 AI 调用，
+    /admin/* /billing/* 后台请求不算钱；cost_cents 为真实扣费分（1积分=5分）。
+    发票记录后端无真实表，由前端明确标「待平台配置」占位，不在此造假。
+    """
+    scope = get_scoped_tenant_id(request, admin)
+    if not scope:
+        raise HTTPException(403, detail=error("FORBIDDEN", "缺少租户上下文，无法查看账单"))
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        # 近 6 个月起点（自然月，含本月）
+        y, m = now.year, now.month - 5
+        while m <= 0:
+            m += 12
+            y -= 1
+        six_start = datetime(y, m, 1, tzinfo=timezone.utc)
+
+        # ── 1. 钱包余额（积分）──
+        wallet = db.query(Wallet).filter_by(tenant_id=scope).first()
+        credits = {
+            "base": int(wallet.base_credits or 0) if wallet else 0,
+            "addon": int(wallet.addon_credits or 0) if wallet else 0,
+        }
+        credits["total"] = credits["base"] + credits["addon"]
+
+        # ── 2. 套餐 / 配额 / 到期 / 待生效升级（复用 tenants-extended 口径）──
+        sub = db.query(Subscription).filter_by(tenant_id=scope, status="active").first()
+        plan_name, plan_id, expires, quota = "", "", None, 0
+        if sub:
+            plan = db.query(Plan).filter_by(id=sub.plan_id).first()
+            if plan:
+                plan_name = plan.display_name or plan.plan_name
+                plan_id = plan.id
+                quota = int(plan.month_calls or 0)
+            expires = sub.end_date.isoformat() if sub.end_date else None
+        pend_sub = _scheduled_subscription(db, scope)
+        pending_plan, pending_date = None, None
+        if pend_sub:
+            pp = db.query(Plan).filter_by(id=pend_sub.plan_id).first()
+            if pp:
+                pending_plan = pp.display_name or pp.plan_name
+            pending_date = pend_sub.start_date.strftime("%Y-%m-%d") if pend_sub.start_date else None
+        used_calls = db.query(CallLog).filter(
+            CallLog.tenant_id == scope,
+            CallLog.timestamp >= month_start,
+            billable_call_filter(),
+        ).count()
+        plan_info = {
+            "name": plan_name, "plan_id": plan_id, "expires": expires,
+            "quota_calls": quota, "used_calls": used_calls,
+            "pending_plan": pending_plan, "pending_effective_date": pending_date,
+        }
+
+        # ── 3. 近 6 个月按月消费 + 本月费用构成（按 agent）──
+        month_rows = db.query(
+            CallLog.timestamp, CallLog.cost_cents, CallLog.endpoint,
+        ).filter(
+            CallLog.tenant_id == scope,
+            CallLog.timestamp >= six_start,
+            billable_call_filter(),
+        ).all()
+        monthly_map: dict[str, dict] = {}
+        cost_map: dict[str, dict] = {}
+        cur_period = now.strftime("%Y-%m")
+        month_cost = 0.0
+        month_calls = 0
+        month_tokens_est = 0
+        for ts, cents, endpoint in month_rows:
+            key = ts.strftime("%Y-%m") if ts else cur_period
+            c = float(cents or 0)
+            slot = monthly_map.setdefault(key, {"period": key, "cost_cents": 0.0, "calls": 0})
+            slot["cost_cents"] += c
+            slot["calls"] += 1
+            if key == cur_period:
+                month_cost += c
+                month_calls += 1
+            # endpoint → agent key：/api/v1/agent/{key}/... 或 agent:{key}
+            ek = "other"
+            ep = endpoint or ""
+            if ep.startswith("/api/v1/agent/"):
+                parts = ep.split("/")
+                # /api/v1/agent/{key}/... → ['', 'api', 'v1', 'agent', '{key}', ...]
+                ek = parts[4] if len(parts) > 4 and parts[4] else "other"
+            elif ep.startswith("agent:"):
+                ek = ep.split(":", 1)[1].split("/", 1)[0] or "other"
+            cslot = cost_map.setdefault(ek, {"agent": ek, "cost_cents": 0.0, "calls": 0})
+            cslot["cost_cents"] += c
+            cslot["calls"] += 1
+
+        # 补齐 6 个月中无数据的月份（成本 0，让柱状图连贯）
+        trend = []
+        yy, mm = now.year, now.month
+        periods = []
+        for _ in range(6):
+            periods.append(f"{yy:04d}-{mm:02d}")
+            mm -= 1
+            if mm == 0:
+                mm = 12
+                yy -= 1
+        for p in reversed(periods):
+            slot = monthly_map.get(p, {"period": p, "cost_cents": 0.0, "calls": 0})
+            trend.append({
+                "period": p,
+                "cost_cents": int(round(slot["cost_cents"])),
+                "calls": slot["calls"],
+            })
+        breakdown = sorted(
+            [{"agent": k, "cost_cents": int(round(v["cost_cents"])), "calls": v["calls"]}
+             for k, v in cost_map.items()],
+            key=lambda x: x["cost_cents"], reverse=True,
+        )
+
+        return success({
+            "tenant_id": scope,
+            "currency": "CNY",
+            "credits": credits,
+            "plan": plan_info,
+            "month": {
+                "period": cur_period,
+                "cost_cents": int(round(month_cost)),
+                "calls": month_calls,
+            },
+            "monthly_trend": trend,
+            "cost_breakdown": breakdown,
+            "invoice_note": "发票记录由平台财务统一开具，暂未开放自助查询，请联系客服。",
+        })
     finally:
         db.close()
 

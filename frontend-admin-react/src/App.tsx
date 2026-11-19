@@ -26,6 +26,7 @@ import MyKeys from "@/pages/MyKeys";
 import MyUsage from "@/pages/MyUsage";
 import MyTickets from "@/pages/MyTickets";
 import MyLogs from "@/pages/MyLogs";
+import MyBilling from "@/pages/MyBilling";
 import MyHelp from "@/pages/MyHelp";
 import MyContact from "@/pages/MyContact";
 import PlatformTickets from "@/pages/PlatformTickets";
@@ -62,6 +63,7 @@ const adminNav: NavItem[] = [
 /** 租户管理员（tenant_admin/org_admin）精简菜单：只看与自己相关的 */
 const tenantNav: NavItem[] = [
   { id: "myhome", label: "数据汇总", icon: Home },
+  { id: "mybilling", label: "账单与配额", icon: CreditCard },
   { id: "mykeys", label: "我的密钥", icon: KeyRound },
   { id: "myusage", label: "使用情况", icon: FileText },
   { id: "mytickets", label: "工单中心", icon: Ticket },
@@ -75,6 +77,7 @@ const tenantNav: NavItem[] = [
 const tenantGroups: { title: string; items: { id: string; label: string; icon: LucideIcon; badge?: "tickets" }[] }[] = [
   { title: "总览", items: [{ id: "myhome", label: "数据汇总", icon: LayoutDashboard }] },
   { title: "资源", items: [
+    { id: "mybilling", label: "账单与配额", icon: CreditCard },
     { id: "myusage", label: "使用情况", icon: Gauge },
     { id: "mykeys", label: "我的密钥", icon: KeyRound },
     { id: "mylogs", label: "使用日志", icon: ScrollText },
@@ -88,7 +91,7 @@ const tenantGroups: { title: string; items: { id: string; label: string; icon: L
 
 /** 机构端页面显示名（设计稿口径），与分组菜单保持一致 */
 const tenantDisplayLabel: Record<string, string> = {
-  myhome: "数据汇总", myusage: "使用情况", mykeys: "我的密钥",
+  myhome: "数据汇总", mybilling: "账单与配额", myusage: "使用情况", mykeys: "我的密钥",
   mylogs: "使用日志", mytickets: "工单中心",
   mysupport: "联系客服", myhelp: "平台使用说明",
 };
@@ -574,6 +577,7 @@ export default function App() {
         <main className="flex-1 overflow-y-auto p-6">
           {/* 租户精简视图（仅非超管可见，数据按 tenant_id 过滤） */}
           {!platformAdmin && effectivePage === "myhome" && <MyDashboard go={go} />}
+          {!platformAdmin && effectivePage === "mybilling" && <MyBilling />}
           {!platformAdmin && effectivePage === "mykeys" && <MyKeys />}
           {!platformAdmin && effectivePage === "myusage" && <MyUsage />}
           {!platformAdmin && effectivePage === "mytickets" && <MyTickets />}

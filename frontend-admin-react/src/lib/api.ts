@@ -1546,3 +1546,29 @@ export async function fetchTenantInsights(days = 30): Promise<{
     return { trend, ability, totalCalls: total, successRate: total ? Math.round((ok / total) * 100) : 0 };
   } catch (e) { console.error("fetchTenantInsights error", e); return empty; }
 }
+
+// ═══ 机构端账单与配额（my/billing-overview，后端按 token 租户强制收窄）═══
+
+export interface BillingOverview {
+  tenant_id: string;
+  currency: string;
+  credits: { base: number; addon: number; total: number };
+  plan: {
+    name: string; plan_id: string; expires: string | null;
+    quota_calls: number; used_calls: number;
+    pending_plan: string | null; pending_effective_date: string | null;
+  };
+  month: { period: string; cost_cents: number; calls: number };
+  monthly_trend: { period: string; cost_cents: number; calls: number }[];
+  cost_breakdown: { agent: string; cost_cents: number; calls: number }[];
+  invoice_note: string;
+}
+
+/** GET /admin/v1/my/billing-overview — 机构端账单总览（唯一数据源，跨租户拿不到） */
+export async function fetchMyBillingOverview(): Promise<BillingOverview | null> {
+  try {
+    const r = await get<{ code: number; data: BillingOverview }>("/admin/v1/my/billing-overview");
+    if (r?.code !== 0 || !r?.data) return null;
+    return r.data;
+  } catch { return null; }
+}
