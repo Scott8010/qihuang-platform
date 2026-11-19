@@ -1477,3 +1477,66 @@ export async function fetchMyCallLogs(params?: {
     return { items: r.data?.items || [], total: pageTotal(r.data) };
   } catch (e) { console.error("fetchMyCallLogs error", e); return { items: [], total: 0 }; }
 }
+
+// ═══ 租户门户看板数据（参考 tenant-portal 设计稿，全部走已收窄的真实接口）═══
+
+export interface TenantTrendPoint { date: string; calls: number }
+export interface TenantAbilitySlice { name: string; value: number; color: string; calls: number }
+
+/**
+ * 聚合本租户近 N 天的「按天调用趋势」+「按能力调用分布」。
+ * 数据源：/admin/v1/my/call-logs（后端按 token 租户强制收窄，跨租户拿不到）。
+ * 前端分页拉全后按日期/接口聚合；任何失败都返回空结构，页面显示「暂无数据」而非造假。
+ */
+export async function fetchTenantInsights(days = 30): Promise<{
+  trend: TenantTrendPoint[];
+  ability: TenantAbilitySlice[];
+  totalCalls: number;
+  successRate: number;
+}> {
+  const empty = { trend: [] as TenantTrendPoint[], ability: [] as TenantAbilitySlice[], totalCalls: 0, successRate: 0 };
+  try {
+    // 先探总数，再按 page_size=100 拉全（上限保护，避免异常大流量卡死）
+    const first = await fetchMyCallLogs({ days, page: 1, page_size: 100 });
+    if (!first.total) return empty;
+    const pages = Math.min(Math.ceil(first.total / 100), 20);
+    let items = [...first.items];
+    for (let p = 2; p <= pages; p++) {
+      const more = await fetchMyCallLogs({ days, page: p, page_size: 100 });
+      items = items.concat(more.items);
+    }
+
+    // 按天聚合（北京时间口径）
+    const byDay = new Map<string, number>();
+    const byAbility = new Map<string, number>();
+    let ok = 0;
+    const palette = ["#2E5A4C", "#3D7363", "#C8A45D", "#8A6A1F", "#6FA98F", "#A8C4B7"];
+    for (const it of items) {
+      const day = it.timestamp
+        ? new Date(new Date(it.timestamp).getTime() + 8 * 3600 * 1000).toISOString().slice(0, 10)
+        : "未知";
+      byDay.set(day, (byDay.get(day) || 0) + 1);
+      // 接口路径末段作为能力名，收敛过长路径
+      const raw = (it.endpoint || "其他").split("/").filter(Boolean).pop() || "其他";
+      const abilityName = raw.length > 16 ? raw.slice(0, 15) + "…" : raw;
+      byAbility.set(abilityName, (byAbility.get(abilityName) || 0) + 1);
+      if (it.status_code >= 200 && it.status_code < 400) ok += 1;
+    }
+
+    const trend = Array.from(byDay.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, calls]) => ({ date: date.slice(5), calls }));
+    const total = items.length;
+    const ability = Array.from(byAbility.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([name, calls], i) => ({
+        name,
+        calls,
+        value: total ? Math.round((calls / total) * 100) : 0,
+        color: palette[i % palette.length],
+      }));
+
+    return { trend, ability, totalCalls: total, successRate: total ? Math.round((ok / total) * 100) : 0 };
+  } catch (e) { console.error("fetchTenantInsights error", e); return empty; }
+}
