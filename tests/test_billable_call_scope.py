@@ -48,8 +48,10 @@ def test_call_logs_kind_filters_and_tenant_scope(client, ensure_admin_in_db):
     db = SessionLocal()
     try:
         admin_uid = db.query(User).filter(User.username == "admin").first().id
+        # PG 有 call_log.tenant_id 外键：Tenant 必须先落库，再写 CallLog
         for tid, name in ((tid_a, "口径甲"), (tid_b, "口径乙")):
             db.add(Tenant(id=tid, name=tid, display_name=name, status="active"))
+        db.commit()
         rows = _seed(tid_a, "A") + _seed(tid_b, "B")
         db.add_all(rows)
         db.commit()
@@ -95,6 +97,7 @@ def test_month_usage_counts_only_billable_calls():
     tid = "t-quota-" + uuid.uuid4().hex[:8]
     try:
         db.add(Tenant(id=tid, name=tid, display_name="配额口径", status="active"))
+        db.commit()  # PG 外键：Tenant 先落库
         db.add_all(_seed(tid, "Q"))
         db.commit()
         usage = _get_month_usage(db, tid)
@@ -113,6 +116,7 @@ def test_tenants_extended_usedcalls_only_billable(client, ensure_admin_in_db):
     try:
         admin_uid = db.query(User).filter(User.username == "admin").first().id
         db.add(Tenant(id=tid, name=tid, display_name="用量口径", status="active"))
+        db.commit()  # PG 外键：Tenant 先落库
         db.add_all(_seed(tid, "U"))
         db.commit()
     finally:
