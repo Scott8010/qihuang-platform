@@ -231,7 +231,7 @@ export default function MyDashboard({ go }: { go: (p: string) => void }) {
             </button>
             <button onClick={() => go("mytickets")} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left hover:opacity-80" style={{ background: C.bg }}>
               <Ticket className="w-4 h-4" style={{ color: C.primary }} />
-              <span className="flex-1 text-[14px]" style={{ color: C.ink }}>平台工单</span>
+              <span className="flex-1 text-[14px]" style={{ color: C.ink }}>工单中心</span>
               <span className="text-[13px] tabular" style={{ color: openTickets ? "#B03A2E" : C.mid }}>{openTickets}</span>
               <ArrowRight className="w-3.5 h-3.5" style={{ color: C.light }} />
             </button>
