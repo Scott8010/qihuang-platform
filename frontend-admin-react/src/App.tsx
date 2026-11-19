@@ -60,12 +60,12 @@ const adminNav: NavItem[] = [
 
 /** 租户管理员（tenant_admin/org_admin）精简菜单：只看与自己相关的 */
 const tenantNav: NavItem[] = [
-  { id: "myhome", label: "我的总览", icon: Home },
+  { id: "myhome", label: "数据看板", icon: Home },
   { id: "mykeys", label: "我的密钥", icon: KeyRound },
-  { id: "myusage", label: "用量账单", icon: FileText },
-  { id: "mytickets", label: "平台工单", icon: Ticket },
+  { id: "myusage", label: "使用情况", icon: FileText },
+  { id: "mytickets", label: "工单中心", icon: Ticket },
   { id: "mylogs", label: "使用日志", icon: ScrollText },
-  { id: "myhelp", label: "使用说明", icon: HelpCircle },
+  { id: "myhelp", label: "联系客服", icon: HelpCircle },
 ];
 
 /** 机构端分组菜单（参考 tenant-portal 设计稿布局）：总览 / 资源 / 支持。
