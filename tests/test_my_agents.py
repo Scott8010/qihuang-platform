@@ -10,7 +10,7 @@
 import uuid
 
 from qihuang_platform.db.config import SessionLocal
-from qihuang_platform.db.models import Tenant, Plan, Subscription, User
+from qihuang_platform.db.models import Tenant, Plan, Subscription, User, CallLog
 from qihuang_platform.billing.plans import SCENE_PLAN_AGENTS, seed_plans
 from qihuang_platform.gateway.auth import create_access_token
 from qihuang_platform.agent.deps import resolve_tenant_agent_access
@@ -45,8 +45,13 @@ def _seed_tenant(tid: str, scene: str, plan_name: str,
 
 
 def _cleanup(*tids: str):
+    """按外键依赖顺序清理：先子表后父表。
+    PG 强制 FK（本地 SQLite 不强制，易假绿）：调用 /admin/v1/my/agents 时中间件会自动
+    记一条 operation 类 call_log 引用测试租户，不先删 call_log 就删 tenant 会触发
+    call_log_tenant_id_fkey。铁律：造带 FK 的记录一律父表先落库、清理一律子表先删。"""
     db = SessionLocal()
     try:
+        db.query(CallLog).filter(CallLog.tenant_id.in_(tids)).delete(synchronize_session=False)
         db.query(Subscription).filter(Subscription.tenant_id.in_(tids)).delete(synchronize_session=False)
         db.query(Tenant).filter(Tenant.id.in_(tids)).delete(synchronize_session=False)
         db.commit()
