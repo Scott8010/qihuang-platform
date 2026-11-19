@@ -34,6 +34,7 @@ from qihuang_platform.db.models import (
     UploadFile, Order, SupportTicket,
 )
 from qihuang_platform.billing.wallet import charge_addon_subscription, get_available_balance
+from qihuang_platform.billing.quota import billable_call_filter, operation_call_filter
 import bcrypt
 from qihuang_platform.rbac.service import validate_password, resolve_tenant_code
 from qihuang_platform.gateway.monitor import monitor
@@ -1819,6 +1820,7 @@ async def list_my_call_logs(
     days: int = Query(7, ge=1, le=90),
     endpoint: Optional[str] = Query(None, description="接口路径关键字"),
     status_code: Optional[int] = Query(None),
+    kind: str = Query("business", description="business=真业务AI调用(默认) / operation=后台操作日志 / all=全部"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     admin: dict = Depends(get_current_admin),
@@ -1830,6 +1832,14 @@ async def list_my_call_logs(
     try:
         q = db.query(CallLog).filter(CallLog.tenant_id == scope)
         q = q.filter(CallLog.timestamp >= datetime.now(timezone.utc) - timedelta(days=days))
+        # 口径（2026-11-19 A）：默认只看真业务 AI 调用；operation 单独看后台浏览/结算请求。
+        # 两类都强制按 token 租户收窄，跨租户拿不到任何一条。
+        if kind == "operation":
+            q = q.filter(operation_call_filter())
+        elif kind == "all":
+            pass
+        else:  # business（默认，含未知值兜底）
+            q = q.filter(billable_call_filter())
         if endpoint:
             q = q.filter(CallLog.endpoint.like(f"%{endpoint}%"))
         if status_code is not None:
@@ -2856,9 +2866,12 @@ async def list_tenants_extended(
                     quota = plan.month_calls
                 expires = sub.end_date.isoformat() if sub.end_date else None
 
+            # 口径统一（2026-11-19 A）：usedCalls 只算真业务 AI 调用，
+            # 后台浏览(/admin/)与结算(/billing/)请求不计入客户用量。
             month_calls = db.query(CallLog).filter(
                 CallLog.tenant_id == t.id,
                 CallLog.timestamp >= month_start,
+                billable_call_filter(),
             ).count()
 
             # 待生效的预约升级（status=scheduled 且 start_date 在未来）

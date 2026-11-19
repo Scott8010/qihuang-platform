@@ -32,7 +32,7 @@ export default function MyUsage() {
     setLoading(true);
     const [all, w, u, lg] = await Promise.all([
       fetchTenantExtended(100), fetchWalletBalance(tenantId),
-      fetchAgentUsage(tenantId, d), fetchMyCallLogs({ days: d, page: 1, page_size: 100 }),
+      fetchAgentUsage(tenantId, d), fetchMyCallLogs({ days: d, page: 1, page_size: 100, kind: "business" }),
     ]);
     const mine = all.find((t) => t.id === tenantId);
     setQuota(mine ? {
@@ -63,8 +63,9 @@ export default function MyUsage() {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-lg p-3 text-[13px]" style={{ background: C.soft, border: `1px solid ${C.border}`, color: C.mid }}>
-        这里只统计<b style={{ color: C.primary }}>你自己的调用</b>。平台自身跑 AI 的成本由平台承担，不计入你的用量与账单。
+      <div className="rounded-lg p-3 text-[13px] leading-relaxed" style={{ background: C.soft, border: `1px solid ${C.border}`, color: C.mid }}>
+        这里的用量、配额与账单<b style={{ color: C.primary }}>只统计 AI 能力调用</b>（如健康顾问、舌诊等）。
+        登录、查看页面等<b style={{ color: C.primary }}>后台操作不计入</b>，可在左侧「使用日志 → 后台操作」单独查看。平台自身跑 AI 的成本由平台承担，也不计入你的账单。
       </div>
 
       {/* 配额概览卡 */}
@@ -124,7 +125,7 @@ export default function MyUsage() {
       <Card className="border shadow-sm" style={{ borderColor: C.border }}>
         <CardHeader className="space-y-3 pb-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <CardTitle className="text-[16px]" style={{ color: C.primary }}>调用明细</CardTitle>
+            <CardTitle className="text-[16px]" style={{ color: C.primary }}>AI 调用明细</CardTitle>
             <div className="flex items-center gap-2">
               <span className="text-[12px]" style={{ color: C.light }}>更新于 {refreshedAt}</span>
               <Button variant="outline" size="sm" onClick={refresh} disabled={spinning} className="text-[13px]" style={{ borderColor: C.border }}>

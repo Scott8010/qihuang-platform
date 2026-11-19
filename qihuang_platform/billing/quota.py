@@ -13,13 +13,46 @@
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, or_
 
 from qihuang_platform.db.models import (
     Subscription, CallLog, Plan,
 )
 from qihuang_platform.db.config import SessionLocal
 from qihuang_platform.gateway.response import success, error
+
+
+# ──────────────────────────────────────────────────────────────
+# 计费口径（2026-11-19 老板拍板 A）：配额/账单只算「真业务 AI 调用」
+# 真调用 endpoint: /api/v1/agent/{key}/...（路由层 charge_agent 写入）
+# 兼容兜底格式:   agent:{key}（charge.py 在调用方未传 endpoint 时的兜底）
+# 明确排除:       /admin/*（后台浏览/菜单/列表）、/billing/*（读钱包套餐）、
+#                /open/* 等管理/结算/开放接口 —— 这些是"操作日志"，不计费。
+# 统一由此函数生成过滤条件，quota/billing/control 三处共用，杜绝口径漂移。
+# ──────────────────────────────────────────────────────────────
+BILLABLE_ENDPOINT_FILTER = or_(
+    CallLog.endpoint.like("/api/v1/agent/%"),
+    CallLog.endpoint.like("agent:%"),
+)
+
+
+def billable_call_filter():
+    """返回可复用的"真业务调用"SQLAlchemy 过滤条件（每次调用生成新对象，防会话串用）。"""
+    return or_(
+        CallLog.endpoint.like("/api/v1/agent/%"),
+        CallLog.endpoint.like("agent:%"),
+    )
+
+
+def operation_call_filter():
+    """返回"操作日志"过滤条件：非真业务调用（后台浏览/结算/开放接口等）。"""
+    return or_(
+        CallLog.endpoint.is_(None),
+        and_(
+            CallLog.endpoint.notlike("/api/v1/agent/%"),
+            CallLog.endpoint.notlike("agent:%"),
+        ),
+    )
 
 
 # ──────────────────────────────────────────────────────────────
@@ -130,6 +163,7 @@ def _get_month_usage(session, tenant_id: str) -> Dict[str, int]:
                 CallLog.tenant_id == tenant_id,
                 CallLog.timestamp >= start,
                 CallLog.timestamp < end,
+                billable_call_filter(),  # 仅真业务 AI 调用；后台/结算请求不计入配额
             )
         )
         .one()

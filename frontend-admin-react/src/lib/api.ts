@@ -1460,15 +1460,20 @@ export async function replyTicket(id: string, status: "processing" | "resolved" 
   return mutate<TicketItem>("POST", `/admin/v1/tickets/${encodeURIComponent(id)}/reply`, { status, note });
 }
 
-/** GET /admin/v1/my/call-logs — 本租户 API 调用明细 */
+/** GET /admin/v1/my/call-logs — 本租户 API 调用明细
+ *  kind: business=真业务AI调用(默认) / operation=后台操作日志 / all=全部。
+ *  口径（2026-11-19 A）：配额/账单/用量只算 business；后台浏览归 operation 不计费。
+ */
 export async function fetchMyCallLogs(params?: {
   days?: number; endpoint?: string; status_code?: number; page?: number; page_size?: number;
+  kind?: "business" | "operation" | "all";
 }): Promise<{ items: CallLogItem[]; total: number }> {
   try {
     const qs = new URLSearchParams({
       days: String(params?.days ?? 7),
       page: String(params?.page ?? 1),
       page_size: String(params?.page_size ?? 20),
+      kind: params?.kind ?? "business",
     });
     if (params?.endpoint) qs.set("endpoint", params.endpoint);
     if (params?.status_code !== undefined) qs.set("status_code", String(params.status_code));
@@ -1485,7 +1490,8 @@ export interface TenantAbilitySlice { name: string; value: number; color: string
 
 /**
  * 聚合本租户近 N 天的「按天调用趋势」+「按能力调用分布」。
- * 数据源：/admin/v1/my/call-logs（后端按 token 租户强制收窄，跨租户拿不到）。
+ * 数据源：/admin/v1/my/call-logs?kind=business（后端按 token 租户强制收窄，跨租户拿不到）。
+ * 口径（2026-11-19 A）：只聚合真业务 AI 调用，后台浏览/结算请求不计入趋势与分布。
  * 前端分页拉全后按日期/接口聚合；任何失败都返回空结构，页面显示「暂无数据」而非造假。
  */
 export async function fetchTenantInsights(days = 30): Promise<{
@@ -1497,12 +1503,12 @@ export async function fetchTenantInsights(days = 30): Promise<{
   const empty = { trend: [] as TenantTrendPoint[], ability: [] as TenantAbilitySlice[], totalCalls: 0, successRate: 0 };
   try {
     // 先探总数，再按 page_size=100 拉全（上限保护，避免异常大流量卡死）
-    const first = await fetchMyCallLogs({ days, page: 1, page_size: 100 });
+    const first = await fetchMyCallLogs({ days, page: 1, page_size: 100, kind: "business" });
     if (!first.total) return empty;
     const pages = Math.min(Math.ceil(first.total / 100), 20);
     let items = [...first.items];
     for (let p = 2; p <= pages; p++) {
-      const more = await fetchMyCallLogs({ days, page: p, page_size: 100 });
+      const more = await fetchMyCallLogs({ days, page: p, page_size: 100, kind: "business" });
       items = items.concat(more.items);
     }
 

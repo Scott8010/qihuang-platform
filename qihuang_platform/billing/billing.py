@@ -23,6 +23,7 @@ from qihuang_platform.billing.order import (
     ensure_usage_snapshot, paid_orders_in_period,
     _serialize as serialize_order,
 )
+from qihuang_platform.billing.quota import billable_call_filter
 
 
 # ──────────────────────────────────────────────────────────────
@@ -126,7 +127,8 @@ def _get_period_usage(session, tenant_id: str, start: datetime, end: datetime) -
     返回 {total_calls, total_tokens, total_cost_cents}
     """
     # 调用次数（直接count行数）
-    # #B 修复：排除单加订阅费 CallLog（endpoint 含 addon_subscribe），它属订单/结算项，不是用量
+    # 口径（2026-11-19 A）：仅真业务 AI 调用；后台浏览(/admin/)与结算(/billing/)请求不计入账单。
+    # billable_call_filter() 已含 agent 前缀，天然排除 addon_subscribe 之外的所有非 agent 调用。
     total_calls = (
         session.query(func.count(CallLog.id))
         .filter(
@@ -134,6 +136,7 @@ def _get_period_usage(session, tenant_id: str, start: datetime, end: datetime) -
                 CallLog.tenant_id == tenant_id,
                 CallLog.timestamp >= start,
                 CallLog.timestamp < end,
+                billable_call_filter(),
                 CallLog.endpoint.notlike("%addon_subscribe"),
             )
         )
@@ -151,6 +154,7 @@ def _get_period_usage(session, tenant_id: str, start: datetime, end: datetime) -
                 CallLog.tenant_id == tenant_id,
                 CallLog.timestamp >= start,
                 CallLog.timestamp < end,
+                billable_call_filter(),
                 CallLog.endpoint.notlike("%addon_subscribe"),
             )
         )
@@ -512,6 +516,7 @@ def get_bill_detail(bill_id: str) -> dict:
                         CallLog.tenant_id == bill.tenant_id,
                         CallLog.timestamp >= start,
                         CallLog.timestamp < end,
+                        billable_call_filter(),  # 账单明细同样只列真业务 AI 调用
                     )
                 )
                 .group_by(CallLog.endpoint)
@@ -541,6 +546,7 @@ def get_bill_detail(bill_id: str) -> dict:
                         CallLog.tenant_id == bill.tenant_id,
                         CallLog.timestamp >= start,
                         CallLog.timestamp < end,
+                        billable_call_filter(),  # 账单明细同样只列真业务 AI 调用
                     )
                 )
                 .group_by(CallLog.is_3d)

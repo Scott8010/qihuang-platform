@@ -6,8 +6,17 @@ import { C } from "@/lib/types";
 import { fetchMyCallLogs, type CallLogItem } from "@/lib/api";
 import { bjTime } from "./MyTickets";
 
-/** 客户工作台「使用日志」：按租户查看 API 调用明细，并可导出表格。 */
+type Kind = "business" | "operation";
+
+/**
+ * 客户工作台「使用日志」：按租户查看调用明细，并可导出表格。
+ * 口径（2026-11-19 A）：
+ *   - AI 调用（business）：真业务调用，计入用量与账单。
+ *   - 后台操作（operation）：登录/查看页面/读钱包等，不计入用量与账单。
+ * 两路都走 my/call-logs，后端按 token 租户强制收窄，跨租户拿不到。
+ */
 export default function MyLogs() {
+  const [kind, setKind] = useState<Kind>("business");
   const [days, setDays] = useState(7);
   const [endpoint, setEndpoint] = useState("");
   const [statusCode, setStatusCode] = useState("");
@@ -23,13 +32,13 @@ export default function MyLogs() {
     fetchMyCallLogs({
       days, endpoint: endpoint.trim() || undefined,
       status_code: statusCode ? Number(statusCode) : undefined,
-      page, page_size: pageSize,
+      page, page_size: pageSize, kind,
     }).then((r) => {
       if (!alive) return;
       setItems(r.items); setTotal(r.total); setLoading(false);
     });
     return () => { alive = false; };
-  }, [days, endpoint, statusCode, page]);
+  }, [kind, days, endpoint, statusCode, page]);
 
   const exportCsv = () => {
     const head = ["时间(北京时间)", "接口", "方法", "状态码", "耗时(ms)", "Tokens", "费用(元)", "密钥"];
@@ -40,25 +49,43 @@ export default function MyLogs() {
     const csv = "\ufeff" + [head, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
-    a.href = url; a.download = `使用日志_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.href = url; a.download = `${kind === "business" ? "AI调用日志" : "后台操作日志"}_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click(); URL.revokeObjectURL(url);
   };
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const switchKind = (k: Kind) => { setKind(k); setPage(1); };
 
   return (
     <div className="space-y-5">
-      <div className="rounded-lg p-3 text-[13px]" style={{ background: C.soft, border: `1px solid ${C.border}`, color: C.mid }}>
-        这里只记录你的机构发起的调用。想查某个报错，可以按接口路径或状态码筛选，再把当前页导出成表格发给平台方。
+      <div className="rounded-lg p-3 text-[13px] leading-relaxed" style={{ background: C.soft, border: `1px solid ${C.border}`, color: C.mid }}>
+        <b style={{ color: C.primary }}>AI 调用</b>是真正用到能力、会计入用量与账单的记录；
+        <b style={{ color: C.primary }}>后台操作</b>是登录、查看页面、读钱包等请求，<b>不计入用量与账单</b>。
+        想查某个报错，可按接口路径或状态码筛选，再把当前页导出成表格发给平台方。
       </div>
 
       <Card className="border" style={{ borderColor: C.border }}>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <CardTitle className="text-[16px]" style={{ color: C.primary }}>调用明细</CardTitle>
+            <CardTitle className="text-[16px]" style={{ color: C.primary }}>
+              {kind === "business" ? "AI 调用明细" : "后台操作日志"}
+            </CardTitle>
             <Button variant="outline" size="sm" onClick={exportCsv} disabled={items.length === 0} className="text-[13px]">
               <Download className="w-3.5 h-3.5 mr-1" />导出当前页
             </Button>
+          </div>
+          {/* 口径切换 */}
+          <div className="flex rounded-lg p-0.5 mt-3 w-fit" style={{ background: C.bg }}>
+            <button onClick={() => switchKind("business")}
+              className="px-4 py-1.5 text-[13px] rounded-md"
+              style={kind === "business" ? { background: "#fff", color: C.primary, fontWeight: 600 } : { color: C.mid }}>
+              AI 调用 <span className="text-[11px]">(计入用量)</span>
+            </button>
+            <button onClick={() => switchKind("operation")}
+              className="px-4 py-1.5 text-[13px] rounded-md"
+              style={kind === "operation" ? { background: "#fff", color: C.primary, fontWeight: 600 } : { color: C.mid }}>
+              后台操作 <span className="text-[11px]">(不计入)</span>
+            </button>
           </div>
         </CardHeader>
         <CardContent>
@@ -87,7 +114,9 @@ export default function MyLogs() {
               <Loader2 className="w-4 h-4 animate-spin" />加载中…
             </div>
           ) : items.length === 0 ? (
-            <div className="py-12 text-center text-[14px]" style={{ color: C.light }}>这个时间段没有调用记录。</div>
+            <div className="py-12 text-center text-[14px]" style={{ color: C.light }}>
+              {kind === "business" ? "这个时间段没有 AI 调用记录。" : "这个时间段没有后台操作记录。"}
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-[13px]">
