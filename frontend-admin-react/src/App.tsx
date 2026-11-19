@@ -27,6 +27,7 @@ import MyUsage from "@/pages/MyUsage";
 import MyTickets from "@/pages/MyTickets";
 import MyLogs from "@/pages/MyLogs";
 import MyHelp from "@/pages/MyHelp";
+import MyContact from "@/pages/MyContact";
 import PlatformTickets from "@/pages/PlatformTickets";
 
 type NavChild = { id: string; label: string; desc?: string };
@@ -60,18 +61,19 @@ const adminNav: NavItem[] = [
 
 /** 租户管理员（tenant_admin/org_admin）精简菜单：只看与自己相关的 */
 const tenantNav: NavItem[] = [
-  { id: "myhome", label: "数据看板", icon: Home },
+  { id: "myhome", label: "数据汇总", icon: Home },
   { id: "mykeys", label: "我的密钥", icon: KeyRound },
   { id: "myusage", label: "使用情况", icon: FileText },
   { id: "mytickets", label: "工单中心", icon: Ticket },
   { id: "mylogs", label: "使用日志", icon: ScrollText },
-  { id: "myhelp", label: "联系客服", icon: HelpCircle },
+  { id: "mysupport", label: "联系客服", icon: Headset },
+  { id: "myhelp", label: "平台使用说明", icon: HelpCircle },
 ];
 
 /** 机构端分组菜单（参考 tenant-portal 设计稿布局）：总览 / 资源 / 支持。
  *  仅用于侧边栏渲染分组；权限判定仍走扁平 tenantNav，避免破坏 go()/history 逻辑。 */
 const tenantGroups: { title: string; items: { id: string; label: string; icon: LucideIcon; badge?: "tickets" }[] }[] = [
-  { title: "总览", items: [{ id: "myhome", label: "数据看板", icon: LayoutDashboard }] },
+  { title: "总览", items: [{ id: "myhome", label: "数据汇总", icon: LayoutDashboard }] },
   { title: "资源", items: [
     { id: "myusage", label: "使用情况", icon: Gauge },
     { id: "mykeys", label: "我的密钥", icon: KeyRound },
@@ -79,14 +81,16 @@ const tenantGroups: { title: string; items: { id: string; label: string; icon: L
   ] },
   { title: "支持", items: [
     { id: "mytickets", label: "工单中心", icon: Ticket, badge: "tickets" },
-    { id: "myhelp", label: "联系客服", icon: Headset },
+    { id: "mysupport", label: "联系客服", icon: Headset },
+    { id: "myhelp", label: "平台使用说明", icon: HelpCircle },
   ] },
 ];
 
 /** 机构端页面显示名（设计稿口径），与分组菜单保持一致 */
 const tenantDisplayLabel: Record<string, string> = {
-  myhome: "数据看板", myusage: "使用情况", mykeys: "我的密钥",
-  mylogs: "使用日志", mytickets: "工单中心", myhelp: "联系客服",
+  myhome: "数据汇总", myusage: "使用情况", mykeys: "我的密钥",
+  mylogs: "使用日志", mytickets: "工单中心",
+  mysupport: "联系客服", myhelp: "平台使用说明",
 };
 
 /** 是否平台超管：只有 super_admin 看全量菜单，其余管理员看租户精简视图 */
@@ -495,13 +499,7 @@ export default function App() {
           {platformAdmin ? (
             <h1 className="text-[19px] font-semibold" style={{ color: C.primary }}>{current.label}</h1>
           ) : (
-            <div className="min-w-0">
-              <div className="text-[12px]" style={{ color: C.light }}>
-                {tenantGroups.find((g) => g.items.some((i) => i.id === effectivePage))?.title || "总览"}
-                <span className="mx-1.5">/</span>{tenantDisplayLabel[effectivePage] || current.label}
-              </div>
-              <h1 className="text-[18px] font-semibold leading-tight" style={{ color: C.primary }}>{tenantDisplayLabel[effectivePage] || current.label}</h1>
-            </div>
+            <h1 className="text-[18px] font-semibold leading-tight" style={{ color: C.primary }}>{tenantDisplayLabel[effectivePage] || current.label}</h1>
           )}
           <div className="flex-1" />
           {!platformAdmin && (
@@ -580,6 +578,7 @@ export default function App() {
           {!platformAdmin && effectivePage === "myusage" && <MyUsage />}
           {!platformAdmin && effectivePage === "mytickets" && <MyTickets />}
           {!platformAdmin && effectivePage === "mylogs" && <MyLogs />}
+          {!platformAdmin && effectivePage === "mysupport" && <MyContact go={go} />}
           {!platformAdmin && effectivePage === "myhelp" && <MyHelp />}
 
           {/* 平台方全量视图（仅 super_admin） */}

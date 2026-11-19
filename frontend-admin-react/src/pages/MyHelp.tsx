@@ -11,12 +11,12 @@ export default function MyHelp() {
     {
       title: "这里能做什么",
       lines: [
-        "数据看板：看本机构的套餐、调用量、积分余额、调用趋势和能力分布。",
+        "数据汇总：看本机构的套餐、调用量、积分余额、调用趋势和能力分布。",
         "使用情况：看本月配额用了多少、各能力的调用次数、消耗和费用明细。",
         "我的密钥：管理服务器对接用的密钥，可查看、轮换或停用。",
         "工单中心：需要开通能力、调整套餐或遇到问题时，在这里提交给平台。",
         "使用日志：查看每一次调用的详细信息，也可以导出成表格。",
-        "联系客服：常见问题和联系方式都在这里。",
+        "联系客服：平台客服联系方式入口，配置真实信息后即可在这里查看。",
       ],
     },
     {
@@ -47,7 +47,7 @@ export default function MyHelp() {
   return (
     <div className="space-y-5">
       <div className="rounded-xl p-5" style={{ background: C.soft, border: `1px solid ${C.border}` }}>
-        <div className="text-[18px] font-bold" style={{ color: C.primary }}>使用说明</div>
+        <div className="text-[18px] font-bold" style={{ color: C.primary }}>平台使用说明</div>
         <div className="text-[13px] mt-1" style={{ color: C.mid }}>
           {orgName} · 这份说明用大白话讲清工作台怎么用，遇到不懂的地方随时找平台方。
         </div>

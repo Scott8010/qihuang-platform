@@ -13,7 +13,7 @@ import {
 } from "@/lib/api";
 
 /**
- * MyDashboard — 机构管理员登录后的「数据看板」（参考 tenant-portal 设计稿布局）。
+ * MyDashboard — 机构管理员登录后的「数据汇总」（参考 tenant-portal 设计稿布局）。
  * 布局：欢迎条 → 4 张 KPI 卡 → 调用趋势面积图 + 能力分布饼图 → 服务状态 + 快捷入口。
  * 数据全部来自本租户真实接口（后端按 token 租户强制收窄），平台自身成本不计入。
  */
@@ -93,7 +93,10 @@ export default function MyDashboard({ go }: { go: (p: string) => void }) {
       <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl p-5" style={{ background: C.soft, border: `1px solid ${C.border}` }}>
         <div>
           <div className="text-[20px] font-bold" style={{ color: C.primary }}>{greeting}，{userName}</div>
-          <div className="text-[13px] mt-1" style={{ color: C.mid }}>{orgName} · {roleName}</div>
+          <div className="text-[17px] mt-2 font-medium" style={{ color: C.mid }}>
+            <span className="font-bold" style={{ color: C.primary }}>{orgName}</span>
+            <span className="mx-2" style={{ color: C.light }}>·</span>{roleName}
+          </div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => go("myusage")} className="text-[13px]" style={{ borderColor: C.border, color: C.mid }}>
