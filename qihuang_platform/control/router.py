@@ -15,7 +15,7 @@ from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, Query, Body, Request, Header, HTTPException, UploadFile as FastAPIUploadFile, File, Form
 from pydantic import BaseModel, Field, field_validator, model_validator
-from sqlalchemy import func
+from sqlalchemy import func, or_, Integer
 import logging
 
 from qihuang_platform.gateway.deps import get_current_admin, get_scoped_tenant_id, is_super_admin
@@ -31,7 +31,7 @@ from qihuang_platform.db.models import (
     MedCase, MedReport, HealthAssessment, HealthPlan,
     EduCoachSession, EduExamRecord, ConsultAttribution,
     AgentAddonSubscription,
-    UploadFile, Order, SupportTicket, Wallet,
+    UploadFile, Order, SupportTicket, Wallet, PlatformNotice,
 )
 from qihuang_platform.billing.wallet import charge_addon_subscription, get_available_balance
 from qihuang_platform.billing.quota import billable_call_filter, operation_call_filter
@@ -1907,6 +1907,325 @@ async def my_agents(
         "available": available,
         "locked": locked,
     })
+
+
+# ═══════════════════════════════════════════════════════════
+# 平台公告与告警（2026-11-19 · 机构端真实数据，不造假）
+#   - 公告：PlatformNotice 表，超管发布，机构端按 token 租户收窄读
+#   - 告警：全部从真数据表实时算（配额/到期/工单/调用错误率），
+#     绝不使用 monitor/scaling-alerts 那批硬编码假数
+# ═══════════════════════════════════════════════════════════
+
+class NoticeCreateRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    content: str = Field(..., min_length=1)
+    category: str = Field("公告", description="维护/公告/告警")
+    audience: str = Field("all", description="all=全体 / tenant=指定租户")
+    target_tenant_id: Optional[str] = Field(None)
+    status: str = Field("published", description="published/draft")
+
+    @model_validator(mode="after")
+    def _check_audience(self):
+        if self.audience == "tenant" and not self.target_tenant_id:
+            raise ValueError("audience=tenant 时必须指定 target_tenant_id")
+        if self.audience not in ("all", "tenant"):
+            raise ValueError("audience 只能是 all 或 tenant")
+        if self.category not in ("维护", "公告", "告警"):
+            raise ValueError("category 只能是 维护/公告/告警")
+        if self.status not in ("published", "draft"):
+            raise ValueError("status 只能是 published 或 draft")
+        return self
+
+
+class NoticeStatusRequest(BaseModel):
+    status: str = Field(..., description="published/draft/withdrawn")
+
+
+def _notice_dict(n: PlatformNotice) -> dict:
+    return {
+        "id": n.id,
+        "title": n.title,
+        "content": n.content,
+        "category": n.category or "公告",
+        "audience": n.audience or "all",
+        "published_at": n.published_at.isoformat() if n.published_at else None,
+    }
+
+
+@router.post("/notices", summary="发布平台公告（超管）")
+async def create_notice(
+    payload: NoticeCreateRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    if not is_super_admin(admin):
+        raise HTTPException(403, detail=error("FORBIDDEN", "仅平台超管可发布公告"))
+    db = SessionLocal()
+    try:
+        n = PlatformNotice(
+            title=payload.title, content=payload.content,
+            category=payload.category, audience=payload.audience,
+            target_tenant_id=payload.target_tenant_id if payload.audience == "tenant" else None,
+            status=payload.status, author_id=admin.get("user_id"),
+        )
+        db.add(n)
+        db.commit()
+        db.refresh(n)
+        return success({"id": n.id, **_notice_dict(n)})
+    finally:
+        db.close()
+
+
+@router.get("/notices", summary="平台公告列表（超管，含未发布）")
+async def list_notices(
+    admin: dict = Depends(get_current_admin),
+    limit: int = Query(100, ge=1, le=200),
+):
+    if not is_super_admin(admin):
+        raise HTTPException(403, detail=error("FORBIDDEN", "仅平台超管可管理公告"))
+    db = SessionLocal()
+    try:
+        rows = db.query(PlatformNotice).order_by(
+            PlatformNotice.published_at.desc()
+        ).limit(limit).all()
+        return success({"items": [_notice_dict(n) for n in rows], "total": len(rows)})
+    finally:
+        db.close()
+
+
+@router.patch("/notices/{notice_id}/status", summary="公告上/下架（超管）")
+async def set_notice_status(
+    notice_id: str,
+    payload: NoticeStatusRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    if not is_super_admin(admin):
+        raise HTTPException(403, detail=error("FORBIDDEN", "仅平台超管可管理公告"))
+    if payload.status not in ("published", "draft", "withdrawn"):
+        raise HTTPException(400, detail=error("BAD_REQUEST", "status 只能是 published/draft/withdrawn"))
+    db = SessionLocal()
+    try:
+        n = db.query(PlatformNotice).filter_by(id=notice_id).first()
+        if not n:
+            raise HTTPException(404, detail=error("NOT_FOUND", "公告不存在"))
+        n.status = payload.status
+        db.commit()
+        return success({"id": n.id, "status": n.status})
+    finally:
+        db.close()
+
+
+def _build_tenant_alerts(db, scope: str, now: datetime) -> list[dict]:
+    """从真数据表实时算机构端告警，四类，全部可追溯到源表。
+
+    1. 配额将尽：复用 quota 口径（billable_call_filter + 套餐 month_calls）
+    2. 套餐到期：Subscription.end_date ≤ 30 天
+    3. 工单待处理：SupportTicket open/processing 条数
+    4. 近 30 分钟调用错误率：CallLog.status_code ≥ 400 占比 > 10%
+    """
+    from qihuang_platform.billing.quota import _get_month_usage
+    alerts: list[dict] = []
+
+    # 1. 配额将尽（与 check_and_warn 同源口径）
+    sub = db.query(Subscription).filter_by(tenant_id=scope, status="active").first()
+    if sub:
+        plan = db.query(Plan).filter_by(id=sub.plan_id).first()
+        if plan and int(plan.month_calls or 0) > 0:
+            used = _get_month_usage(db, scope)["used_calls"]
+            pct = round(used / int(plan.month_calls) * 100, 1)
+            if pct >= 100:
+                alerts.append({
+                    "id": "QUOTA", "type": "quota", "severity": "danger",
+                    "title": "本月调用配额已用尽",
+                    "detail": f"已用 {used}/{plan.month_calls} 次（{pct}%），AI 能力调用将受限，请联系客户经理扩容。",
+                    "timestamp": now.isoformat(),
+                })
+            elif pct >= 80:
+                alerts.append({
+                    "id": "QUOTA", "type": "quota", "severity": "warning",
+                    "title": "本月调用配额即将用尽",
+                    "detail": f"已用 {used}/{plan.month_calls} 次（{pct}%），建议关注用量或提前续费。",
+                    "timestamp": now.isoformat(),
+                })
+        # 2. 套餐到期
+        if sub.end_date:
+            try:
+                end = sub.end_date if sub.end_date.tzinfo is None else sub.end_date.replace(tzinfo=timezone.utc)
+                days = (end - now.replace(tzinfo=None)).days
+                if 0 <= days <= 30:
+                    alerts.append({
+                        "id": "EXPIRE", "type": "expiry",
+                        "severity": "danger" if days <= 7 else "warning",
+                        "title": "套餐即将到期",
+                        "detail": f"当前套餐将于 {sub.end_date.strftime('%Y-%m-%d')} 到期（剩余 {days} 天），请联系客户经理续费。",
+                        "timestamp": now.isoformat(),
+                    })
+            except Exception:
+                pass
+
+    # 3. 工单待处理
+    open_tickets = db.query(func.count(SupportTicket.id)).filter(
+        SupportTicket.tenant_id == scope,
+        SupportTicket.status.in_(["open", "processing"]),
+    ).scalar() or 0
+    if open_tickets > 0:
+        alerts.append({
+            "id": "TICKET", "type": "ticket", "severity": "info",
+            "title": "有工单待平台处理",
+            "detail": f"当前有 {open_tickets} 个工单处于待处理状态，可在「工单中心」查看进度。",
+            "timestamp": now.isoformat(),
+        })
+
+    # 4. 近 30 分钟调用错误率（DB 存 naive UTC，比较须同口径）
+    since = now.replace(tzinfo=None) - timedelta(minutes=30)
+    err_stat = db.query(
+        func.count(CallLog.id),
+        func.sum(func.cast(CallLog.status_code >= 400, Integer)),
+    ).filter(
+        CallLog.tenant_id == scope,
+        CallLog.timestamp >= since,
+        billable_call_filter(),
+    ).one()
+    total_recent = int(err_stat[0] or 0)
+    err_recent = int(err_stat[1] or 0)
+    if total_recent >= 5 and err_recent / total_recent > 0.1:
+        alerts.append({
+            "id": "ERRORS", "type": "error", "severity": "warning",
+            "title": "近期 AI 调用错误率偏高",
+            "detail": f"近 30 分钟 {total_recent} 次调用中 {err_recent} 次失败（{round(err_recent / total_recent * 100)}%），建议检查接入配置。",
+            "timestamp": now.isoformat(),
+        })
+
+    return alerts
+
+
+@router.get("/my/notices", summary="我的平台公告与告警（按租户强制过滤，全真数据）")
+async def my_notices(
+    request: Request,
+    admin: dict = Depends(get_current_admin),
+):
+    """机构端「平台公告与告警」页唯一数据源。
+
+    安全铁律：get_scoped_tenant_id 强制收窄到 token 租户，不接客户端 tenant_id。
+    公告：只返回 status=published 且 audience=all 或 target_tenant_id=本租户，
+          跨租户专属公告绝不可见。
+    告警：全部从真数据表实时算（见 _build_tenant_alerts），不用 monitor 的硬编码假数。
+    """
+    scope = get_scoped_tenant_id(request, admin)
+    if not scope:
+        raise HTTPException(403, detail=error("FORBIDDEN", "缺少租户上下文，无法查看公告"))
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        rows = db.query(PlatformNotice).filter(
+            PlatformNotice.status == "published",
+            or_(
+                PlatformNotice.audience == "all",
+                PlatformNotice.target_tenant_id == scope,
+            ),
+        ).order_by(PlatformNotice.published_at.desc()).limit(50).all()
+        return success({
+            "tenant_id": scope,
+            "announcements": [_notice_dict(n) for n in rows],
+            "alerts": _build_tenant_alerts(db, scope, now),
+        })
+    finally:
+        db.close()
+
+
+@router.get("/my/realtime-usage", summary="我的实时调用消耗（按租户强制过滤，全真数据）")
+async def my_realtime_usage(
+    request: Request,
+    admin: dict = Depends(get_current_admin),
+    minutes: int = Query(60, ge=5, le=1440, description="统计窗口（分钟）"),
+):
+    """机构端「实时消耗」页唯一数据源。
+
+    安全铁律：get_scoped_tenant_id 强制收窄到 token 租户，不接客户端 tenant_id。
+    口径铁律：只取 CallLog + billable_call_filter() 真业务 AI 调用，
+               与「使用情况」「账单与配额」完全同源；绝不返回 ECS CPU/内存假数。
+    返回：最近 N 分钟按分钟调用流 + 按 Agent 的 token/积分消耗明细 + 最近调用列表。
+    """
+    scope = get_scoped_tenant_id(request, admin)
+    if not scope:
+        raise HTTPException(403, detail=error("FORBIDDEN", "缺少租户上下文，无法查看实时消耗"))
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        since = now.replace(tzinfo=None) - timedelta(minutes=minutes)  # DB 存 naive UTC，比较须同口径（PG 亦然）
+        rows = db.query(
+            CallLog.timestamp, CallLog.endpoint, CallLog.tokens_used,
+            CallLog.cost_cents, CallLog.latency_ms, CallLog.status_code,
+        ).filter(
+            CallLog.tenant_id == scope,
+            CallLog.timestamp >= since,
+            billable_call_filter(),
+        ).all()
+
+        registry = list_agents()
+        # 按分钟分桶（Python 分桶，避开 PG/SQLite date_trunc 方言差异）
+        minute_map: dict[str, dict] = {}
+        agent_map: dict[str, dict] = {}
+        calls = tokens = 0
+        cost_cents = 0.0
+        latency_sum = latency_n = 0
+        recent: list[dict] = []
+        for ts, endpoint, tok, cents, lat, status in rows:
+            key = ts.strftime("%H:%M") if ts else "—"
+            slot = minute_map.setdefault(key, {"minute": key, "calls": 0, "tokens": 0, "cost_cents": 0.0})
+            slot["calls"] += 1
+            slot["tokens"] += int(tok or 0)
+            slot["cost_cents"] += float(cents or 0)
+            # endpoint → agent key
+            ek = "other"
+            ep = endpoint or ""
+            if ep.startswith("/api/v1/agent/"):
+                parts = ep.split("/")
+                ek = parts[4] if len(parts) > 4 and parts[4] else "other"
+            elif ep.startswith("agent:"):
+                ek = ep.split(":", 1)[1].split("/", 1)[0] or "other"
+            aslot = agent_map.setdefault(ek, {"agent": ek, "name": (registry.get(ek) or {}).get("name") or ek, "calls": 0, "tokens": 0, "cost_cents": 0.0})
+            aslot["calls"] += 1
+            aslot["tokens"] += int(tok or 0)
+            aslot["cost_cents"] += float(cents or 0)
+            calls += 1
+            tokens += int(tok or 0)
+            cost_cents += float(cents or 0)
+            if lat is not None:
+                latency_sum += float(lat)
+                latency_n += 1
+            recent.append({
+                "time": ts.isoformat() if ts else None,
+                "agent": ek,
+                "name": (registry.get(ek) or {}).get("name") or ek,
+                "tokens": int(tok or 0),
+                "cost_cents": int(round(float(cents or 0))),
+                "latency_ms": int(lat) if lat is not None else None,
+                "status_code": status,
+            })
+
+        timeline = [minute_map[k] for k in sorted(minute_map)]
+        breakdown = sorted(
+            [{"agent": v["agent"], "name": v["name"], "calls": v["calls"],
+              "tokens": v["tokens"], "cost_cents": int(round(v["cost_cents"]))}
+             for v in agent_map.values()],
+            key=lambda x: x["cost_cents"], reverse=True,
+        )
+        return success({
+            "tenant_id": scope,
+            "updated_at": now.isoformat(),
+            "window_minutes": minutes,
+            "summary": {
+                "calls": calls,
+                "tokens": tokens,
+                "cost_cents": int(round(cost_cents)),
+                "avg_latency_ms": int(latency_sum / latency_n) if latency_n else 0,
+            },
+            "timeline": timeline,
+            "by_agent": breakdown,
+            "recent": sorted(recent, key=lambda x: x["time"] or "", reverse=True)[:20],
+        })
+    finally:
+        db.close()
 
 
 @router.get("/my/billing-overview", summary="我的账单与配额总览（按租户强制过滤）")

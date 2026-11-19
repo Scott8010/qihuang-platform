@@ -4,7 +4,7 @@ import {
   BookOpenCheck, Activity, Search, Bell, Sprout, ChevronDown, LogOut,
   Users as UsersIcon, Eye, EyeOff, Lock, Bot, CreditCard, Boxes,
   ChevronRight, ChevronLeft, Home, FileText, HelpCircle, Ticket, ScrollText,
-  Gauge, Headset,
+  Gauge, Headset, BellRing,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { C } from "@/lib/types";
@@ -31,6 +31,9 @@ import MyBilling from "@/pages/MyBilling";
 import MyHelp from "@/pages/MyHelp";
 import MyContact from "@/pages/MyContact";
 import MyAgents from "@/pages/MyAgents";
+import MyNotices from "@/pages/MyNotices";
+import MyRealtime from "@/pages/MyRealtime";
+import AdminNotices from "@/pages/AdminNotices";
 import PlatformTickets from "@/pages/PlatformTickets";
 
 type NavChild = { id: string; label: string; desc?: string };
@@ -57,6 +60,7 @@ const adminNav: NavItem[] = [
   },
   { id: "capability", label: "能力中心", icon: Boxes },
   { id: "content", label: "内容管控", icon: BookOpenCheck },
+  { id: "notices", label: "公告发布", icon: BellRing },
   { id: "tickets", label: "工单管理", icon: Ticket },
   { id: "monitor", label: "监控运维", icon: Activity },
   { id: "planupgrade", label: "套餐升级", icon: CreditCard },
@@ -65,10 +69,12 @@ const adminNav: NavItem[] = [
 /** 租户管理员（tenant_admin/org_admin）精简菜单：只看与自己相关的 */
 const tenantNav: NavItem[] = [
   { id: "myhome", label: "数据汇总", icon: Home },
+  { id: "mynotices", label: "平台公告与告警", icon: BellRing },
   { id: "mybilling", label: "账单与配额", icon: CreditCard },
   { id: "mykeys", label: "我的密钥", icon: KeyRound },
   { id: "myagents", label: "我的能力", icon: Bot },
   { id: "myusage", label: "使用情况", icon: FileText },
+  { id: "myrealtime", label: "实时消耗", icon: Activity },
   { id: "mytickets", label: "工单中心", icon: Ticket },
   { id: "mylogs", label: "使用日志", icon: ScrollText },
   { id: "mysupport", label: "联系客服", icon: Headset },
@@ -78,10 +84,14 @@ const tenantNav: NavItem[] = [
 /** 机构端分组菜单（参考 tenant-portal 设计稿布局）：总览 / 资源 / 支持。
  *  仅用于侧边栏渲染分组；权限判定仍走扁平 tenantNav，避免破坏 go()/history 逻辑。 */
 const tenantGroups: { title: string; items: { id: string; label: string; icon: LucideIcon; badge?: "tickets" }[] }[] = [
-  { title: "总览", items: [{ id: "myhome", label: "数据汇总", icon: LayoutDashboard }] },
+  { title: "总览", items: [
+    { id: "myhome", label: "数据汇总", icon: LayoutDashboard },
+    { id: "mynotices", label: "平台公告与告警", icon: BellRing },
+  ] },
   { title: "资源", items: [
     { id: "mybilling", label: "账单与配额", icon: CreditCard },
     { id: "myusage", label: "使用情况", icon: Gauge },
+    { id: "myrealtime", label: "实时消耗", icon: Activity },
     { id: "mykeys", label: "我的密钥", icon: KeyRound },
     { id: "myagents", label: "我的能力", icon: Bot },
     { id: "mylogs", label: "使用日志", icon: ScrollText },
@@ -96,7 +106,7 @@ const tenantGroups: { title: string; items: { id: string; label: string; icon: L
 /** 机构端页面显示名（设计稿口径），与分组菜单保持一致 */
 const tenantDisplayLabel: Record<string, string> = {
   myhome: "数据汇总", mybilling: "账单与配额", myusage: "使用情况", mykeys: "我的密钥",
-  myagents: "我的能力",
+  myagents: "我的能力", mynotices: "平台公告与告警", myrealtime: "实时消耗",
   mylogs: "使用日志", mytickets: "工单中心",
   mysupport: "联系客服", myhelp: "平台使用说明",
 };
@@ -634,6 +644,8 @@ export default function App() {
           {!platformAdmin && effectivePage === "mybilling" && <MyBilling />}
           {!platformAdmin && effectivePage === "mykeys" && <MyKeys />}
           {!platformAdmin && effectivePage === "myagents" && <MyAgents />}
+          {!platformAdmin && effectivePage === "mynotices" && <MyNotices />}
+          {!platformAdmin && effectivePage === "myrealtime" && <MyRealtime />}
           {!platformAdmin && effectivePage === "myusage" && <MyUsage />}
           {!platformAdmin && effectivePage === "mytickets" && <MyTickets />}
           {!platformAdmin && effectivePage === "mylogs" && <MyLogs />}
@@ -650,6 +662,7 @@ export default function App() {
           {platformAdmin && effectivePage === "billing" && <Billing />}
           {platformAdmin && effectivePage === "capability" && <CapabilityCenter />}
           {platformAdmin && effectivePage === "content" && <Content />}
+          {platformAdmin && effectivePage === "notices" && <AdminNotices />}
           {platformAdmin && effectivePage === "tickets" && <PlatformTickets />}
           {platformAdmin && effectivePage === "monitor" && <Monitor />}
           {platformAdmin && effectivePage === "planupgrade" && <PlanUpgrade />}

@@ -1599,3 +1599,123 @@ export async function fetchMyAgents(): Promise<MyAgentsOverview | null> {
     return r.data;
   } catch { return null; }
 }
+
+// ═══ 机构端「平台公告与告警」+「实时消耗」（2026-11-19 · 全真数据）═══
+
+/** 平台公告（超管发布，按 token 租户收窄：全体或本租户专属，仅 published） */
+export interface NoticeItem {
+  id: string;
+  title: string;
+  content: string;
+  category: "维护" | "公告" | "告警";
+  audience: "all" | "tenant";
+  published_at: string | null;
+}
+
+/** 机构端告警（后端从真数据表实时算：配额/到期/工单/错误率） */
+export interface TenantAlert {
+  id: string;
+  type: "quota" | "expiry" | "ticket" | "error";
+  severity: "danger" | "warning" | "info";
+  title: string;
+  detail: string;
+  timestamp: string;
+}
+
+export interface MyNoticesOverview {
+  tenant_id: string;
+  announcements: NoticeItem[];
+  alerts: TenantAlert[];
+}
+
+/** GET /admin/v1/my/notices — 机构端公告与告警（跨租户拿不到） */
+export async function fetchMyNotices(): Promise<MyNoticesOverview | null> {
+  try {
+    const r = await get<{ code: number; data: MyNoticesOverview }>("/admin/v1/my/notices");
+    if (r?.code !== 0 || !r?.data) return null;
+    return r.data;
+  } catch { return null; }
+}
+
+/** 实时消耗：最近 N 分钟真业务 AI 调用（billable 口径，与 usage/billing 同源） */
+export interface RealtimeAgentRow {
+  agent: string;
+  name: string;
+  calls: number;
+  tokens: number;
+  cost_cents: number;
+}
+export interface RealtimeTimelineRow {
+  minute: string;
+  calls: number;
+  tokens: number;
+  cost_cents: number;
+}
+export interface RealtimeCallRow {
+  time: string | null;
+  agent: string;
+  name: string;
+  tokens: number;
+  cost_cents: number;
+  latency_ms: number | null;
+  status_code: number | null;
+}
+export interface RealtimeUsageOverview {
+  tenant_id: string;
+  updated_at: string;
+  window_minutes: number;
+  summary: { calls: number; tokens: number; cost_cents: number; avg_latency_ms: number };
+  timeline: RealtimeTimelineRow[];
+  by_agent: RealtimeAgentRow[];
+  recent: RealtimeCallRow[];
+}
+
+/** GET /admin/v1/my/realtime-usage — 机构端实时消耗（minutes=统计窗口，默认60分钟） */
+export async function fetchMyRealtimeUsage(minutes = 60): Promise<RealtimeUsageOverview | null> {
+  try {
+    const r = await get<{ code: number; data: RealtimeUsageOverview }>(`/admin/v1/my/realtime-usage?minutes=${minutes}`);
+    if (r?.code !== 0 || !r?.data) return null;
+    return r.data;
+  } catch { return null; }
+}
+
+/** 机构端发起工单（公告/告警里的"联系客户经理"入口用） */
+export async function createSupportTicket(payload: {
+  category: string; title: string; content: string; priority?: string;
+}): Promise<boolean> {
+  try {
+    const r = await post<{ code: number }>("/admin/v1/my/tickets", payload);
+    return r?.code === 0;
+  } catch { return false; }
+}
+
+// ═══ 超管端平台公告管理 ═══
+/** GET /admin/v1/notices — 超管公告列表（含草稿/下架） */
+export async function fetchAdminNotices(): Promise<NoticeItem[]> {
+  try {
+    const r = await get<{ code: number; data: { items: NoticeItem[] } }>("/admin/v1/notices");
+    if (r?.code !== 0 || !r?.data) return [];
+    return r.data.items || [];
+  } catch { return []; }
+}
+
+/** POST /admin/v1/notices — 发布公告 */
+export async function publishNotice(payload: {
+  title: string; content: string; category: string; audience: string;
+  target_tenant_id?: string; status?: string;
+}): Promise<boolean> {
+  try {
+    const r = await post<{ code: number }>("/admin/v1/notices", payload);
+    return r?.code === 0;
+  } catch { return false; }
+}
+
+/** PATCH /admin/v1/notices/{id}/status — 上/下架公告 */
+export async function setNoticeStatus(id: string, status: "published" | "draft" | "withdrawn"): Promise<boolean> {
+  try {
+    const r = await request<{ code: number }>(`/admin/v1/notices/${id}/status`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }),
+    });
+    return r?.code === 0;
+  } catch { return false; }
+}

@@ -290,6 +290,30 @@ class SupportTicket(Base):
     updated_at = Column(DateTime, default=_now, onupdate=_now)
 
 
+class PlatformNotice(Base):
+    """平台公告（超管发布，机构端可见）。
+
+    2026-11-19 机构端「平台公告与告警」新增：
+      - audience=all 全体可见；audience=tenant 仅 target_tenant_id 指定租户可见。
+      - category: 维护 / 公告 / 告警（对应前端三类标签色）。
+      - status: published 发布 / draft 草稿 / withdrawn 下架；机构端只认 published。
+      - published_at 为展示用发布时间（UTC），机构端前端统一转北京时间展示。
+    安全铁律：机构端列表接口按 token 租户收窄，只返回 audience=all 或本租户的已发布公告。
+    """
+    __tablename__ = "platform_notice"
+    id = Column(String(36), primary_key=True, default=_uid)
+    title = Column(String(200), nullable=False)
+    content = Column(Text, nullable=False)
+    category = Column(String(20), default="公告", index=True)  # 维护/公告/告警
+    audience = Column(String(20), default="all", index=True)   # all/tenant
+    target_tenant_id = Column(String(36), ForeignKey("tenant.id"), index=True)
+    status = Column(String(20), default="published", index=True)  # published/draft/withdrawn
+    published_at = Column(DateTime, default=_now, index=True)
+    author_id = Column(String(36))
+    created_at = Column(DateTime, default=_now)
+    updated_at = Column(DateTime, default=_now, onupdate=_now)
+
+
 # ═══════════════════════════════════════════════════════════
 # 3. 业务数据域 (9表)
 # ═══════════════════════════════════════════════════════════
