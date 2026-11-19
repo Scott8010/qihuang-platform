@@ -8,7 +8,8 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { C } from "@/lib/types";
-import { login, logout, getToken, changePassword, getIdentity, fetchMyTickets } from "@/lib/api";
+import { login, logout, getToken, changePassword, getIdentity, fetchMyTickets, fetchMyBillingOverview } from "@/lib/api";
+import type { BillingOverview } from "@/lib/api";
 import Dashboard from "@/pages/Dashboard";
 import Tenants from "@/pages/Tenants";
 import Roles from "@/pages/Roles";
@@ -129,6 +130,9 @@ export default function App() {
   const [showPass, setShowPass] = useState(false);
   // 机构端工单角标（未处理数）：仅机构管理员视图用，超管端不展示
   const [openTickets, setOpenTickets] = useState(0);
+  // 机构端左侧底部套餐状态卡：真实账单总览（收窄接口，跨租户拿不到）
+  const [billingOverview, setBillingOverview] = useState<BillingOverview | null>(null);
+  const [billingLoaded, setBillingLoaded] = useState(false);
 
   // 修改密码弹窗状态
   const [menuOpen, setMenuOpen] = useState(false);
@@ -162,14 +166,7 @@ export default function App() {
       histIdxRef.current = idx;
       setNavDepth(idx);
       window.history.replaceState({ qhPage: target, qhIdx: idx }, "", hashOf(target));
-      // 机构端拉未处理工单数做菜单角标（超管不看这个角标）
-      if (!isPlatformAdmin(id)) {
-        fetchMyTickets(undefined, 1, 100).then((r) => {
-          if (navRef.current.authed) {
-            setOpenTickets(r.items.filter((t) => !["resolved", "closed"].includes(t.status)).length);
-          }
-        });
-      }
+      // （机构端私有数据改由下方 [authed] effect 统一拉取，登录后与刷新都覆盖）
     }
     setChecking(false);
 
@@ -202,6 +199,22 @@ export default function App() {
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
+
+  /** 机构端私有数据：登录成功后与刷新恢复都拉一次（超管端不拉）。
+   *  工单角标 + 左侧套餐状态卡都走 my/ 收窄接口，后端按 token 租户钉死，跨租户拿不到。 */
+  useEffect(() => {
+    if (!authed || isPlatformAdmin(getIdentity())) return;
+    let alive = true;
+    fetchMyTickets(undefined, 1, 100).then((r) => {
+      if (alive) setOpenTickets(r.items.filter((t) => !["resolved", "closed"].includes(t.status)).length);
+    }).catch(() => { /* 角标拉不到不影响主流程 */ });
+    fetchMyBillingOverview().then((b) => {
+      if (alive) setBillingOverview(b);
+    }).catch(() => { /* 接口异常不造假，卡片走占位文案 */ }).finally(() => {
+      if (alive) setBillingLoaded(true);
+    });
+    return () => { alive = false; };
+  }, [authed]);
 
   /** 平台内跳页：写入历史 + 同步 state（所有菜单/按钮都走这里） */
   const go = (next: string) => {
@@ -337,6 +350,23 @@ export default function App() {
   const effectivePage = navIds.includes(page) ? page : defaultPage;
   const current = nav.flatMap((n) => ("children" in n ? [n, ...n.children] : [n])).find((n) => n.id === effectivePage) || nav[0];
 
+  // 左侧底部套餐状态卡：全部来自 my/billing-overview 真值，取不到就走占位，绝不造假数
+  const plan = billingOverview?.plan;
+  const expireDays = (() => {
+    if (!plan?.expires) return null;
+    const end = new Date(plan.expires.includes("T") ? plan.expires : plan.expires + "T00:00:00").getTime();
+    if (Number.isNaN(end)) return null;
+    return Math.ceil((end - Date.now()) / 86400000);
+  })();
+  const quotaPct = plan && plan.quota_calls > 0
+    ? Math.min(100, Math.round((plan.used_calls / plan.quota_calls) * 100)) : 0;
+  const planName = plan?.name ? (plan.name.includes("套餐") ? plan.name : `${plan.name}套餐`) : "当前套餐";
+  const expireBadge = expireDays === null ? null
+    : expireDays < 0 ? { text: `已到期 ${Math.abs(expireDays)} 天`, bg: "#FDECEA", fg: "#B03A2E" }
+    : expireDays === 0 ? { text: "今天到期", bg: "#FDECEA", fg: "#B03A2E" }
+    : expireDays <= 30 ? { text: `${expireDays} 天后到期`, bg: "#FDECEA", fg: "#B03A2E" }
+    : { text: `${expireDays} 天后到期`, bg: "#FBF0D9", fg: C.gold };
+
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: C.bg, color: C.ink }}>
       {/* 侧边栏 */}
@@ -457,23 +487,43 @@ export default function App() {
         </nav>
         )}
         <div className="p-4 border-t" style={{ borderColor: C.border }}>
-          {/* 机构端：设计稿风格的底部机构卡 + 运行标识 */}
+          {/* 机构端：底部套餐状态卡——套餐名 + 到期徽章 + 配额进度条，同源 my/billing-overview 真值 */}
           {!platformAdmin ? (
-            <>
-              <button
-                onClick={() => go("myusage")}
-                className="w-full text-left rounded-xl p-3.5 mb-2 hover:opacity-90"
-                style={{ background: C.soft, border: `1px solid ${C.border}` }}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[13px] font-medium" style={{ color: C.primary }}>{identity?.tenant_name || "我的机构"}</span>
-                  <span className="px-1.5 py-0.5 rounded text-[11px]" style={{ background: "#fff", color: C.mid }}>机构版</span>
-                </div>
+            <button
+              onClick={() => go("mybilling")}
+              className="w-full text-left rounded-xl p-3.5 mb-2 hover:opacity-90 transition-opacity"
+              style={{ background: C.soft, border: `1px solid ${C.border}` }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[12px] truncate" style={{ color: C.light }}>
+                  {identity?.tenant_name || "我的机构"}
+                </span>
+                <span className="px-1.5 py-0.5 rounded text-[11px] shrink-0" style={{ background: "#fff", color: C.mid }}>机构版</span>
+              </div>
+              {billingLoaded && plan ? (
+                <>
+                  <div className="flex items-center justify-between gap-2 mt-2">
+                    <span className="text-[15px] font-semibold truncate" style={{ color: C.primary }}>{planName}</span>
+                    {expireBadge && (
+                      <span className="px-2 py-0.5 rounded text-[11px] font-medium shrink-0"
+                        style={{ background: expireBadge.bg, color: expireBadge.fg }}>
+                        {expireBadge.text}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2.5 h-1.5 rounded-full overflow-hidden" style={{ background: "#D9E6DF" }}>
+                    <div className="h-full rounded-full" style={{ width: `${quotaPct}%`, background: C.primary }} />
+                  </div>
+                  <p className="mt-2 text-[12px] leading-relaxed" style={{ color: C.mid }}>
+                    已用资源配额 {quotaPct}%，续费或升级请联系客户经理
+                  </p>
+                </>
+              ) : (
                 <p className="mt-2 text-[12px] leading-relaxed" style={{ color: C.mid }}>
-                  查看套餐配额与用量明细，点此进入「使用情况」。
+                  {billingLoaded ? "套餐信息暂不可用，点此查看配额明细。" : "套餐信息读取中..."}
                 </p>
-              </button>
-            </>
+              )}
+            </button>
           ) : null}
           <div className="flex items-center gap-2 mb-1 text-[14px]" style={{ color: C.light }}>
             <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
