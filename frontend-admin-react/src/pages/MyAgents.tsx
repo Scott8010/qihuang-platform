@@ -1,23 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Bot, HeartPulse, PenLine, BookOpen, BarChart3, Sparkles, Lock, Loader2, Check,
+  Bot, HeartPulse, PenLine, BookOpen, BarChart3, Sparkles, Loader2, Check,
+  Search, LayoutGrid, X,
 } from "lucide-react";
 import { C } from "@/lib/types";
 import { fetchMyAgents, type MyAgentsOverview, type MyAgentItem } from "@/lib/api";
 
-/** 机构端「我的能力」——当前套餐可用的 Agent 清单。
+/** 机构端「我的能力」——应用市场风格的已开通 Agent 能力清单。
  *  数据源 /admin/v1/my/agents 与 require_agent_in_plan 门控同源：
- *  这里看到的能力 = 客户系统真能调用的能力，不造假、不漏展示。 */
+ *  这里看到的能力 = 客户系统真能调用的能力，不造假、不漏展示。
+ *  只展示已开通能力；分类/搜索为纯前端交互，不改动真实数据范围。 */
 
-const categoryIcon = (cat: string) => {
-  switch (cat) {
-    case "health": return HeartPulse;
-    case "content": return PenLine;
-    case "edu": return BookOpen;
-    case "business": return BarChart3;
-    case "mystic": return Sparkles;
-    default: return Bot;
-  }
+const categoryStyle: Record<string, { icon: typeof Bot; color: string; bg: string }> = {
+  health: { icon: HeartPulse, color: "#2E8B6B", bg: "#E6F4EE" },
+  content: { icon: PenLine, color: "#3B6FC4", bg: "#E8F0FE" },
+  edu: { icon: BookOpen, color: "#8A6A1F", bg: "#FBF4E4" },
+  business: { icon: BarChart3, color: "#B4682E", bg: "#FDF0E3" },
+  mystic: { icon: Sparkles, color: "#7B5EA7", bg: "#F3EDFB" },
+  general: { icon: Bot, color: "#2E5A4C", bg: "#EAF2EE" },
 };
 const categoryLabel: Record<string, string> = {
   health: "健康", content: "内容", edu: "教育", business: "经营", mystic: "文化", general: "通用",
@@ -36,6 +36,8 @@ const capLabel: Record<string, string> = {
 export default function MyAgents() {
   const [data, setData] = useState<MyAgentsOverview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [keyword, setKeyword] = useState("");
+  const [activeCat, setActiveCat] = useState("all");
 
   useEffect(() => {
     let alive = true;
@@ -45,6 +47,23 @@ export default function MyAgents() {
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
+
+  // 分类只从真实已开通能力里生成，不凭空造分类
+  const categories = useMemo(() => {
+    const set = new Set((data?.available || []).map((a) => a.category || "general"));
+    return ["all", ...Array.from(set)];
+  }, [data]);
+
+  // 搜索 + 分类过滤：纯前端收窄，绝不新增数据
+  const shown = useMemo(() => {
+    const kw = keyword.trim().toLowerCase();
+    return (data?.available || []).filter((a) => {
+      if (activeCat !== "all" && (a.category || "general") !== activeCat) return false;
+      if (!kw) return true;
+      return (a.name + " " + a.desc + " " + a.agent_key + " " + (a.capabilities || []).join(" "))
+        .toLowerCase().includes(kw);
+    });
+  }, [data, keyword, activeCat]);
 
   if (loading) {
     return (
@@ -62,108 +81,131 @@ export default function MyAgents() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* 概览条 */}
-      <div className="rounded-xl p-5" style={{ background: C.soft, border: `1px solid ${C.border}` }}>
-        <div className="flex items-center gap-2">
-          <Bot className="w-5 h-5" style={{ color: C.primary }} />
-          <span className="text-[17px] font-semibold" style={{ color: C.primary }}>我的能力</span>
-        </div>
-        <p className="text-[13px] mt-2 leading-relaxed" style={{ color: C.mid }}>
-          当前 <b style={{ color: C.primary }}>{data.plan || "—"}</b>
-          {" · "}{sceneLabel[data.scene] || data.scene} 场景，已开通
-          <b style={{ color: C.primary }}> {data.available.length} </b>项 Agent 能力。
-          下列范围与平台实际调用权限完全一致；如需加购未开通能力，请联系客户经理。
-        </p>
-        {!data.has_subscription && (
-          <div className="mt-3 rounded-lg px-3 py-2 text-[13px]" style={{ background: "#FDECEA", color: "#B03A2E" }}>
-            当前无有效订阅，暂未开通任何能力，请联系客户经理。
+    <div className="space-y-5">
+      {/* 顶部 Banner：应用市场头部 */}
+      <div className="rounded-2xl px-6 py-5 relative overflow-hidden"
+        style={{ background: "linear-gradient(120deg, #2E5A4C 0%, #3D7363 60%, #4E8B77 100%)" }}>
+        <div className="flex items-center justify-between gap-4 relative z-10">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-white/15">
+              <LayoutGrid className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-[20px] font-semibold text-white">能力市场</h1>
+              <p className="text-[13px] mt-1 text-white/80">
+                {data.plan || "当前套餐"} · {sceneLabel[data.scene] || data.scene} 场景 · 已开通
+                <b className="text-white mx-1">{data.available.length}</b>项能力
+              </p>
+            </div>
           </div>
-        )}
+          <div className="text-right text-white/85 text-[12px] leading-relaxed hidden sm:block">
+            下列能力与平台实际调用权限完全一致<br />看到的 = 能调用的
+          </div>
+        </div>
+        <div className="absolute -right-8 -top-10 w-40 h-40 rounded-full bg-white/5" />
+        <div className="absolute right-16 -bottom-16 w-32 h-32 rounded-full bg-white/5" />
       </div>
 
-      {/* 已开通能力 */}
-      <section>
-        <div className="flex items-center gap-2 mb-3">
-          <Check className="w-4 h-4" style={{ color: C.primary }} />
-          <h2 className="text-[16px] font-semibold" style={{ color: C.ink }}>已开通能力</h2>
-          <span className="px-2 py-0.5 rounded-full text-[12px]" style={{ background: C.soft, color: C.primary }}>
-            {data.available.length} 项
-          </span>
+      {/* 无订阅提示 */}
+      {!data.has_subscription && data.available.length === 0 && (
+        <div className="rounded-lg px-4 py-3 text-[13px]" style={{ background: "#FDECEA", color: "#B03A2E" }}>
+          当前无有效订阅，暂未开通任何能力，请联系客户经理。
         </div>
-        {data.available.length === 0 ? (
-          <div className="rounded-xl p-6 text-center text-[14px]" style={{ background: "#fff", border: `1px solid ${C.border}`, color: C.light }}>
-            暂无已开通能力
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-            {data.available.map((a: MyAgentItem) => {
-              const Icon = categoryIcon(a.category);
-              return (
-                <div key={a.agent_key} className="rounded-xl p-4 bg-white" style={{ border: `1px solid ${C.border}` }}>
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: C.soft }}>
-                      <Icon className="w-5 h-5" style={{ color: C.primary }} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[15px] font-semibold truncate" style={{ color: C.ink }}>{a.name}</span>
-                        <span className="px-1.5 py-0.5 rounded text-[11px] shrink-0"
-                          style={a.source === "addon"
-                            ? { background: "#FBF3DC", color: "#8A6A1F" }
-                            : { background: C.soft, color: C.primary }}>
-                          {a.source === "addon" ? "单独加购" : "套餐包含"}
-                        </span>
-                      </div>
-                      <div className="text-[12px] mt-0.5" style={{ color: C.light }}>
-                        {categoryLabel[a.category] || a.category} · {a.agent_key}
-                      </div>
-                      <p className="text-[13px] mt-2 leading-relaxed" style={{
-                        color: C.mid,
-                        display: "-webkit-box", WebkitLineClamp: 3,
-                        WebkitBoxOrient: "vertical", overflow: "hidden",
-                      }}>{a.desc}</p>
-                      {a.capabilities.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mt-3">
-                          {a.capabilities.slice(0, 4).map((cap) => (
-                            <span key={cap} className="px-1.5 py-0.5 rounded text-[11px]"
-                              style={{ background: C.bg, color: C.mid }}>
-                              {capLabel[cap] || cap}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      {/* 未开通能力（灰显占位，明确不造假） */}
-      {data.locked.length > 0 && (
-        <section>
-          <div className="flex items-center gap-2 mb-3">
-            <Lock className="w-4 h-4" style={{ color: C.light }} />
-            <h2 className="text-[16px] font-semibold" style={{ color: C.mid }}>未开通能力</h2>
-            <span className="px-2 py-0.5 rounded-full text-[12px]" style={{ background: C.bg, color: C.light }}>
-              {data.locked.length} 项
-            </span>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {data.locked.map((a) => (
-              <div key={a.agent_key} className="flex items-center gap-3 rounded-lg px-3 py-2.5"
-                style={{ background: C.bg, border: `1px dashed ${C.border}`, opacity: 0.75 }}>
-                <Lock className="w-4 h-4 shrink-0" style={{ color: C.light }} />
-                <span className="text-[13px] truncate" style={{ color: C.mid }}>{a.name}</span>
-                <span className="ml-auto text-[12px] shrink-0" style={{ color: C.light }}>未开通 · 联系客户经理</span>
-              </div>
-            ))}
-          </div>
-        </section>
       )}
+
+      {/* 工具条：搜索 + 分类 */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[200px] max-w-[340px]">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: C.light }} />
+          <input
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            placeholder="搜索能力名称、功能…"
+            className="w-full rounded-lg pl-9 pr-8 py-2 text-[13px] outline-none"
+            style={{ background: "#fff", border: `1px solid ${C.border}`, color: C.ink }}
+          />
+          {keyword && (
+            <button onClick={() => setKeyword("")} className="absolute right-2 top-1/2 -translate-y-1/2"
+              style={{ color: C.light }} title="清除搜索">
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {categories.map((cat) => (
+            <button key={cat} onClick={() => setActiveCat(cat)}
+              className="px-3 py-1.5 rounded-full text-[12px] transition-colors"
+              style={activeCat === cat
+                ? { background: C.primary, color: "#fff" }
+                : { background: "#fff", color: C.mid, border: `1px solid ${C.border}` }}>
+              {cat === "all" ? "全部" : (categoryLabel[cat] || cat)}
+            </button>
+          ))}
+        </div>
+        <span className="ml-auto text-[12px]" style={{ color: C.light }}>共 {shown.length} 项</span>
+      </div>
+
+      {/* 应用市场卡片网格 */}
+      {shown.length === 0 ? (
+        <div className="rounded-xl p-10 text-center text-[14px]" style={{ background: "#fff", border: `1px solid ${C.border}`, color: C.light }}>
+          {data.available.length === 0 ? "当前套餐暂无已开通能力" : "没有匹配的能力，试试其他关键词或分类"}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {shown.map((a: MyAgentItem) => {
+            const st = categoryStyle[a.category] || categoryStyle.general;
+            const Icon = st.icon;
+            return (
+              <div key={a.agent_key}
+                className="rounded-2xl p-5 bg-white transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                style={{ border: `1px solid ${C.border}` }}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: st.bg }}>
+                    <Icon className="w-6 h-6" style={{ color: st.color }} />
+                  </div>
+                  <span className="px-2 py-1 rounded-full text-[11px] shrink-0 inline-flex items-center gap-1"
+                    style={a.source === "addon"
+                      ? { background: "#FBF4E4", color: "#8A6A1F" }
+                      : { background: C.soft, color: C.primary }}>
+                    {a.source === "addon" ? "单独加购" : "套餐包含"}
+                  </span>
+                </div>
+
+                <div className="mt-4 flex items-center gap-2">
+                  <h3 className="text-[16px] font-semibold" style={{ color: C.ink }}>{a.name}</h3>
+                  <span className="inline-flex items-center gap-0.5 text-[11px]" style={{ color: C.primary }}>
+                    <Check className="w-3 h-3" />已开通
+                  </span>
+                </div>
+                <div className="text-[12px] mt-1" style={{ color: C.light }}>
+                  {categoryLabel[a.category] || a.category || "通用"}
+                </div>
+
+                <p className="text-[13px] mt-3 leading-relaxed" style={{
+                  color: C.mid, minHeight: 40,
+                  display: "-webkit-box", WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical", overflow: "hidden",
+                }}>{a.desc}</p>
+
+                {a.capabilities.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-4 pt-3" style={{ borderTop: `1px solid ${C.border}` }}>
+                    {a.capabilities.slice(0, 4).map((cap) => (
+                      <span key={cap} className="px-2 py-0.5 rounded text-[11px]"
+                        style={{ background: C.bg, color: C.mid }}>
+                        {capLabel[cap] || cap}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <p className="text-[12px] text-center" style={{ color: C.light }}>
+        如需开通更多能力，请联系客户经理调整套餐
+      </p>
     </div>
   );
 }
