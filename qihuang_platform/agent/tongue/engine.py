@@ -4,7 +4,7 @@
   - 复用共享视觉客户端 `agent/clients/vision.py`（fortune 户型图 / compliance 图片审核同款网关），
     仅新增一类"舌象结构化分析"prompt，不引入任何 CV 模型自研/ONNX 部署；
   - 视觉模型经 env 读取：GEO_VISION_API_BASE / GEO_VISION_API_KEY / GEO_VISION_MODEL
-    （生产已配 qwen-vl-plus@DashScope，与 fortune 同源）；
+    （生产已配 qwen3-vl-plus@DashScope，与 fortune 同源；旧 qwen-vl-plus 已下线）；
   - 输出对齐 15 类标签 + TongueAnalysis 字段（含 petechiae/texture/deviation/corrosion/peeling 5 新字段），
     返回结构 {engine, tongue, face, combined_syndrome}；
   - 铁律：未配置视觉模型 / 调用失败 → mode=image_pending / image_error，绝不回退造假数据
@@ -62,7 +62,7 @@ FACE_VISION_PROMPT = (
     "要求：只描述照片可见特征；不清晰或非人像时输出\"未识别\"占位并保持结构完整。"
 )
 
-_ENGINE_NAME = "qwen-vl-plus"  # 生产实际模型，engine 字段如实回显
+_ENGINE_NAME = "qwen3-vl-plus"  # env 未配 MODEL 时的兜底名（旧 qwen-vl-plus 已下线）；实际 engine 回显取 env 的 model
 
 # 视觉模型常输出的变体 → 契约枚举归一（2026-08-21 探针实测：qwen 会输出「厚苔」而枚举为「厚」）
 _ENUM_ALIASES = {
